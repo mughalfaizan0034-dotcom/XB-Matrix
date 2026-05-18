@@ -8,6 +8,17 @@ const nextConfig = {
   experimental: {
     typedRoutes: false,
   },
+  // Shared @xb/* packages use NodeNext-style `.js` extensions in imports so
+  // they compile cleanly to ESM for the api/worker (tsc-built). Webpack must
+  // resolve those `.js` specifiers back to `.ts` sources when transpiling the
+  // workspace packages.
+  webpack: (config) => {
+    config.resolve.extensionAlias = {
+      '.js': ['.ts', '.tsx', '.js'],
+      '.mjs': ['.mts', '.mjs'],
+    };
+    return config;
+  },
   ...(isStaticExport
     ? {
         output: 'export',
