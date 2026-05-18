@@ -86,6 +86,11 @@ jobs:
       - name: Render Cloud Run service definitions
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+          # Unique per workflow run+attempt. Cloud Run skips revision creation
+          # when the spec is byte-identical (image + env refs unchanged), so
+          # secret-only rotations would not be picked up. Stamping a unique
+          # annotation per deploy forces a fresh revision every time.
+          DEPLOY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
           ARTIFACT_REGISTRY: ${{ env.AR_HOST }}/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}
           GCS_UPLOADS_BUCKET: ${{ vars.GCS_UPLOADS_BUCKET }}
           GCS_REPORTS_BUCKET: ${{ vars.GCS_REPORTS_BUCKET }}

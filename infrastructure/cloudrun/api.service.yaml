@@ -19,6 +19,11 @@ spec:
   template:
     metadata:
       annotations:
+        # Unique per deploy. Cloud Run skips revision creation when the spec
+        # is byte-identical (image + env refs unchanged), so secret-only
+        # rotations would not get picked up. This annotation guarantees
+        # every deploy mints a new revision that re-resolves all secrets.
+        deploy.xb-matrix/deploy-id: '${DEPLOY_ID}'
         autoscaling.knative.dev/minScale: '0'
         autoscaling.knative.dev/maxScale: '20'
         run.googleapis.com/cpu-throttling: 'true'

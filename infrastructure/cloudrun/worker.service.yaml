@@ -16,6 +16,7 @@ spec:
   template:
     metadata:
       annotations:
+        deploy.xb-matrix/deploy-id: '${DEPLOY_ID}'
         autoscaling.knative.dev/minScale: '0'
         autoscaling.knative.dev/maxScale: '10'
         run.googleapis.com/cpu-throttling: 'false'
