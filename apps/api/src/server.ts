@@ -10,12 +10,14 @@ import { dbPlugin } from './plugins/db.js';
 import { redisPlugin } from './plugins/redis.js';
 import { auditContextPlugin } from './plugins/audit-context.js';
 import { resolverPlugin } from './plugins/resolver.js';
+import { authCookiePlugin } from './plugins/auth-cookie.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { requestIdPlugin } from './plugins/request-id.js';
 
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { organizationRoutes } from './routes/organizations.js';
+import { workspaceRoutes } from './routes/workspaces.js';
 
 export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   const app = Fastify({
@@ -33,13 +35,20 @@ export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
 
   app.decorate('config', config);
 
-  // Order matters: request-id first so every later plugin/log line has it.
+  // Order: request-id first so every later plugin/log line has it.
   await app.register(requestIdPlugin);
   await app.register(sensible);
   await app.register(helmet, { contentSecurityPolicy: false });
+
+  const allowed = new Set(config.auth.webOrigins);
   await app.register(cors, {
-    origin: (origin, cb) => cb(null, true),
     credentials: true,
+    origin: (origin, cb) => {
+      // Same-origin or non-browser requests (no Origin header) — allow.
+      if (!origin) return cb(null, true);
+      if (allowed.has(origin)) return cb(null, true);
+      cb(new Error(`origin not allowed: ${origin}`), false);
+    },
   });
   await app.register(cookie);
   await app.register(jwt, {
@@ -50,10 +59,13 @@ export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   await app.register(dbPlugin);
   await app.register(redisPlugin);
 
-  // Audit context must run BEFORE any route handler that hits the DB, so the
-  // app.* settings are set on the connection before queries execute.
+  // Audit context + resolver
   await app.register(auditContextPlugin);
   await app.register(resolverPlugin);
+
+  // Session: parse JWT cookie into req.actor (or null). Public routes ignore;
+  // protected routes call req.requireActor().
+  await app.register(authCookiePlugin);
 
   await app.register(errorHandlerPlugin);
 
@@ -61,6 +73,7 @@ export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   await app.register(healthRoutes, { prefix: '/health' });
   await app.register(authRoutes, { prefix: '/v1/auth' });
   await app.register(organizationRoutes, { prefix: '/v1/organizations' });
+  await app.register(workspaceRoutes, { prefix: '/v1/workspaces' });
 
   return app;
 }

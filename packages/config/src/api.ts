@@ -35,6 +35,17 @@ const ApiConfigSchema = z.object({
     jwtAudience: z.string().default('xb-matrix-api'),
     sessionCookieName: z.string().default('xbm_session'),
     sessionCookieDomain: z.string().optional(),
+    // Comma-separated allowed CORS origins. Browsers require an explicit
+    // origin (not `*`) when Access-Control-Allow-Credentials is true.
+    webOrigins: z
+      .string()
+      .default('http://localhost:3000,https://mughalfaizan0034-dotcom.github.io')
+      .transform((s) =>
+        s
+          .split(',')
+          .map((x) => x.trim())
+          .filter(Boolean),
+      ),
   }),
 
   ai: z.object({
@@ -78,6 +89,7 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
       jwtAudience: env.JWT_AUDIENCE,
       sessionCookieName: env.SESSION_COOKIE_NAME,
       sessionCookieDomain: env.SESSION_COOKIE_DOMAIN,
+      webOrigins: env.WEB_ORIGINS,
     },
     ai: {
       defaultProvider: env.AI_DEFAULT_PROVIDER,
