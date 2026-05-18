@@ -1,18 +1,30 @@
 import type { FastifyPluginAsync } from 'fastify';
 
 export const healthRoutes: FastifyPluginAsync = async (app) => {
-  // Liveness — process is up. No DB call.
+  // Liveness — process is up. No external dependency.
   app.get('/live', async () => ({ status: 'ok' }));
 
-  // Readiness — DB + Redis must respond. Used by Cloud Run startup probes.
+  // Readiness — Postgres is the only hard dependency for boot. Redis is
+  // optional: when unreachable we still serve traffic in degraded mode
+  // (cache/ratelimit absent, sessions still work via JWT). Cloud Run startup
+  // probes will accept the revision if PG is healthy.
   app.get('/ready', async (_req, res) => {
+    let pg: 'ok' | 'down' = 'down';
+    let redis: 'ok' | 'degraded' = 'degraded';
     try {
       await app.pg.query('SELECT 1');
-      const redisPong = await app.redis.ping();
-      return { status: 'ok', pg: 'ok', redis: redisPong === 'PONG' ? 'ok' : 'degraded' };
+      pg = 'ok';
     } catch (err) {
-      app.log.error({ err }, 'readiness check failed');
-      return res.status(503).send({ status: 'degraded' });
+      app.log.error({ err }, 'pg readiness check failed');
+      return res.status(503).send({ status: 'down', pg: 'down', redis });
     }
+    try {
+      if (app.redis.status === 'ready' && (await app.redis.ping()) === 'PONG') {
+        redis = 'ok';
+      }
+    } catch {
+      // intentional: redis is non-fatal
+    }
+    return { status: redis === 'ok' ? 'ok' : 'degraded', pg, redis };
   });
 };
