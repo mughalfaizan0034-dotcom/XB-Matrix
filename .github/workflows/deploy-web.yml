@@ -49,7 +49,10 @@ jobs:
           WEB_BASE_PATH: /XB-Matrix
           NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
           NEXT_PUBLIC_APP_NAME: xB Matrix
-        run: pnpm --filter @xb/web build
+        # `@xb/web...` (three dots) builds @xb/web's workspace dependencies
+        # first (types, config, auth) so Next.js can resolve their dist/ output.
+        # @xb/ui keeps src/ exports and is handled by Next's transpilePackages.
+        run: pnpm --filter @xb/web... build
 
       - name: Add .nojekyll
         run: touch apps/web/out/.nojekyll
