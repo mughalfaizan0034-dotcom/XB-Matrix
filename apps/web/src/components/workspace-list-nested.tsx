@@ -14,6 +14,7 @@ import {
 import {
   Archive,
   History,
+  Lock,
   MoreHorizontal,
   Pencil,
   Play,
@@ -50,8 +51,9 @@ export function WorkspaceListNested({ organization }: { organization: Organizati
 
   const archive = useWorkspaceTransition('archive');
   const reactivate = useWorkspaceTransition('reactivate');
-  const restore = useWorkspaceTransition('restore');
   const softDelete = useSoftDeleteWorkspace();
+
+  const parentActive = organization.organizationStatus === 'active';
 
   function buildMenu(w: Workspace): DropdownMenuItem[] {
     const items: DropdownMenuItem[] = [
@@ -71,6 +73,7 @@ export function WorkspaceListNested({ organization }: { organization: Organizati
         key: 'reactivate',
         label: 'Reactivate',
         icon: Play,
+        disabled: !parentActive,
         onSelect: () => simple(reactivate, w, 'Reactivated'),
         divider: true,
       });
@@ -171,9 +174,18 @@ export function WorkspaceListNested({ organization }: { organization: Organizati
             ? `${wsQ.data.length} workspace${wsQ.data.length === 1 ? '' : 's'}`
             : '…'}
         </p>
-        <Button size="sm" onClick={() => setShowNew(true)}>
-          <Plus className="mr-1 h-3.5 w-3.5" /> New workspace
-        </Button>
+        {parentActive ? (
+          <Button size="sm" onClick={() => setShowNew(true)}>
+            <Plus className="mr-1 h-3.5 w-3.5" /> New workspace
+          </Button>
+        ) : (
+          <span
+            className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground"
+            title={`Reactivate this organization to add workspaces`}
+          >
+            <Lock className="h-3 w-3" /> Workspace creation locked
+          </span>
+        )}
       </div>
 
       <DataTable
@@ -184,9 +196,15 @@ export function WorkspaceListNested({ organization }: { organization: Organizati
         emptyState={
           <div className="flex flex-col items-center gap-3 py-6">
             <span className="text-sm">No workspaces yet in this organization.</span>
-            <Button size="sm" variant="outline" onClick={() => setShowNew(true)}>
-              <Plus className="mr-1 h-3.5 w-3.5" /> Create the first workspace
-            </Button>
+            {parentActive ? (
+              <Button size="sm" variant="outline" onClick={() => setShowNew(true)}>
+                <Plus className="mr-1 h-3.5 w-3.5" /> Create the first workspace
+              </Button>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                Reactivate the organization first to add workspaces.
+              </span>
+            )}
           </div>
         }
       />

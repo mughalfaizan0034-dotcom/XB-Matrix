@@ -64,52 +64,60 @@ export default function SettingsPage() {
     setExpanded(() => new Set());
   }
 
+  const showToolbar = (orgs.data?.length ?? 0) > 1;
+
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Settings"
-        description="Tenants and operational configuration. Each organization expands to manage workspaces, users, permissions, audit, billing, and integrations."
-        actions={
-          isManager ? (
-            <Button onClick={() => setShowNewOrg(true)} size="sm">
-              <Plus className="mr-1 h-3.5 w-3.5" /> New organization
-            </Button>
-          ) : null
-        }
-      />
+    // Negative margins escape the main element's padding so the sticky
+    // header bar spans full width and pins to the top of the scroll area.
+    <div className="-mx-6 -mt-6 flex flex-col lg:-mx-8 lg:-mt-8">
+      <div className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
+        <div className="flex flex-col gap-4 px-6 pb-4 pt-6 lg:px-8 lg:pt-8">
+          <PageHeader
+            title="Settings"
+            description="Tenants and operational configuration. Each organization expands to manage workspaces, users, permissions, audit, billing, and integrations."
+            actions={
+              isManager ? (
+                <Button onClick={() => setShowNewOrg(true)} size="sm">
+                  <Plus className="mr-1 h-3.5 w-3.5" /> New organization
+                </Button>
+              ) : null
+            }
+          />
 
-      {orgs.data && orgs.data.length > 1 ? (
-        <div className="flex items-center gap-2">
-          <div className="relative max-w-sm flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="search"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filter organizations"
-              className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-            />
-          </div>
-          <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-            <button
-              type="button"
-              onClick={expandAll}
-              className="rounded px-2 py-1 hover:bg-muted hover:text-foreground"
-            >
-              Expand all
-            </button>
-            <button
-              type="button"
-              onClick={collapseAll}
-              className="rounded px-2 py-1 hover:bg-muted hover:text-foreground"
-            >
-              Collapse all
-            </button>
-          </div>
+          {showToolbar ? (
+            <div className="flex items-center gap-2">
+              <div className="relative max-w-sm flex-1">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="search"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  placeholder="Filter organizations"
+                  className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                />
+              </div>
+              <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+                <button
+                  type="button"
+                  onClick={expandAll}
+                  className="rounded px-2 py-1 hover:bg-muted hover:text-foreground"
+                >
+                  Expand all
+                </button>
+                <button
+                  type="button"
+                  onClick={collapseAll}
+                  className="rounded px-2 py-1 hover:bg-muted hover:text-foreground"
+                >
+                  Collapse all
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 px-6 py-6 lg:px-8">
         {orgs.isLoading ? (
           <CardSkeleton />
         ) : visible.length === 0 ? (

@@ -140,6 +140,29 @@ export async function createWorkspace(
   const name = input.workspaceName.trim();
   try {
     return await app.withConnection(actor, async (client) => {
+      // Parent organization must be active. Suspended orgs reject all
+      // new sign-ins and shouldn't grow new tenant resources; archived
+      // and soft-deleted orgs are even more terminal.
+      const { rows: orgRows } = await client.query<{
+        organization_status: 'active' | 'suspended' | 'archived';
+        display_name: string;
+      }>(
+        `SELECT organization_status, display_name
+           FROM xb_core.organizations
+          WHERE id = $1 AND deleted_at IS NULL`,
+        [input.organizationId],
+      );
+      const parent = orgRows[0];
+      if (!parent) throw new NotFoundError('organization', input.organizationId);
+      if (parent.organization_status !== 'active') {
+        throw new SemanticError(
+          `Cannot create a workspace in a ${parent.organization_status} organization. ` +
+            `Reactivate "${parent.display_name}" first.`,
+          'parent_org_not_active',
+          { parentStatus: parent.organization_status },
+        );
+      }
+
       await client.query(
         `INSERT INTO xb_core.workspaces
            (id, organization_id, workspace_name, workspace_type, default_currency_code,

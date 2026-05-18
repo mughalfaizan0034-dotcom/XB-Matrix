@@ -195,9 +195,7 @@ export function OrganizationCard({
         </button>
 
         <div className="flex flex-shrink-0 items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => setEdit(true)}>
-            <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
-          </Button>
+          {/* Edit lives in the Actions menu (no duplicate entry point) */}
           <DropdownMenu
             align="end"
             trigger={
