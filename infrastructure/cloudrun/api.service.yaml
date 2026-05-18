@@ -74,18 +74,10 @@ spec:
                 secretKeyRef:
                   name: api-jwt-secret
                   key: latest
-            - name: GROQ_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ai-groq-api-key
-                  key: latest
-                  optional: true
-            - name: OPENROUTER_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: ai-openrouter-api-key
-                  key: latest
-                  optional: true
+            # AI provider keys — re-add when the AI layer is wired in and the
+            # corresponding secrets (ai-groq-api-key, ai-openrouter-api-key)
+            # exist in Secret Manager. Cloud Run rejects deploys that reference
+            # missing secrets; `optional: true` only covers missing versions.
           resources:
             limits:
               cpu: '1'
