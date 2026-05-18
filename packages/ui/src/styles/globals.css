@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading text-foreground;
+    letter-spacing: -0.01em;
+  }
+
+  /* Numbers, percentages, tables: tabular-nums everywhere */
+  .num,
+  [data-numeric='true'],
+  table,
+  th,
+  td {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1, 'cv11' 1;
+  }
+}
+
+@layer components {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  .xb-card {
+    @apply bg-card text-card-foreground rounded-lg border border-border shadow-xb-sm;
+  }
+
+  .xb-divider {
+    @apply h-px w-full bg-border;
+  }
+}
