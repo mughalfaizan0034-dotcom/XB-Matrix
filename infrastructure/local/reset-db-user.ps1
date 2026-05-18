@@ -26,13 +26,23 @@ Write-Host "Setting password for $DbUser on $Instance..."
 & $gcloud sql users set-password $DbUser --instance=$Instance --project=$Project --password=$pw | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "set-password failed" }
 
-$existing = & $gcloud secrets list --project=$Project --filter="name~$SecretName" --format='value(name)' 2>$null
-if ($existing) {
-  Write-Host "Adding new version to existing secret $SecretName"
-  $pw | & $gcloud secrets versions add $SecretName --project=$Project --data-file=- | Out-Null
-} else {
-  Write-Host "Creating new secret $SecretName"
-  $pw | & $gcloud secrets create $SecretName --project=$Project --data-file=- --replication-policy=automatic | Out-Null
+# Pipe-via-PowerShell would append CR/LF. Write a UTF-8 file with no trailing
+# newline and feed gcloud --data-file the path. Cloud Run reads secret payloads
+# raw — a stray CR ends up as part of the env value and breaks downstream
+# consumers (DSN parsers, Cloud SQL connector, etc.).
+$tmpFile = [System.IO.Path]::GetTempFileName()
+try {
+  [System.IO.File]::WriteAllBytes($tmpFile, [System.Text.Encoding]::UTF8.GetBytes($pw))
+  $existing = & $gcloud secrets list --project=$Project --filter="name~$SecretName" --format='value(name)' 2>$null
+  if ($existing) {
+    Write-Host "Adding new version to existing secret $SecretName"
+    & $gcloud secrets versions add $SecretName --project=$Project --data-file=$tmpFile | Out-Null
+  } else {
+    Write-Host "Creating new secret $SecretName"
+    & $gcloud secrets create $SecretName --project=$Project --data-file=$tmpFile --replication-policy=automatic | Out-Null
+  }
+} finally {
+  Remove-Item -Path $tmpFile -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host "done: $DbUser password rotated (length=$Length), stored in Secret Manager as $SecretName"
