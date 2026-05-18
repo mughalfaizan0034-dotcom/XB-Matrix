@@ -11,7 +11,7 @@ export interface DropdownMenuItem {
   readonly onSelect: () => void;
   readonly variant?: 'default' | 'danger';
   readonly disabled?: boolean;
-  readonly divider?: boolean; // render a separator above this item
+  readonly divider?: boolean;
 }
 
 export interface DropdownMenuProps {
@@ -22,22 +22,24 @@ export interface DropdownMenuProps {
 }
 
 /**
- * Portal-based dropdown menu. The panel renders into the global overlay
- * root so no parent's `overflow: hidden`, `transform`, `filter`, or other
- * containing-block creator can clip it. Viewport-aware positioning flips
- * up when there is not enough room below; height is capped to avoid
- * overflowing the screen.
+ * Portal-mounted dropdown menu with viewport-aware positioning. The menu
+ * panel renders into the global overlay root so no parent's `overflow:
+ * hidden`, `transform`, `filter`, or other containing-block creator can
+ * clip it.
  *
  * Closes on:
  *   - outside click (the listener treats trigger AND menu as "inside")
  *   - Escape key
- *   - selecting an item (after `onSelect` is invoked)
+ *   - selecting an item
  */
 export function DropdownMenu({ trigger, items, align = 'end', className }: DropdownMenuProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const pos = useOverlayPosition(triggerRef, menuRef, open, {
+  // The menu element must live in state, not a ref — Portal mounts it on a
+  // subsequent render, and a ref `.current` mutation does not re-fire the
+  // position-computing effect. Tracking it in state guarantees re-measure.
+  const [menuEl, setMenuEl] = useState<HTMLDivElement | null>(null);
+  const pos = useOverlayPosition(triggerRef, menuEl, open, {
     placement: align === 'end' ? 'bottom-end' : 'bottom-start',
     offset: 4,
   });
@@ -48,7 +50,7 @@ export function DropdownMenu({ trigger, items, align = 'end', className }: Dropd
       const t = e.target as Node | null;
       if (!t) return;
       if (triggerRef.current?.contains(t)) return;
-      if (menuRef.current?.contains(t)) return;
+      if (menuEl?.contains(t)) return;
       setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
@@ -60,7 +62,7 @@ export function DropdownMenu({ trigger, items, align = 'end', className }: Dropd
       document.removeEventListener('mousedown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, menuEl]);
 
   return (
     <span className={cn('inline-block', className)}>
@@ -80,7 +82,7 @@ export function DropdownMenu({ trigger, items, align = 'end', className }: Dropd
       {open ? (
         <Portal>
           <div
-            ref={menuRef}
+            ref={setMenuEl}
             role="menu"
             style={{
               position: 'fixed',
@@ -88,7 +90,10 @@ export function DropdownMenu({ trigger, items, align = 'end', className }: Dropd
               left: pos?.left ?? -9999,
               zIndex: Z_LAYER.popover,
               maxHeight: pos?.maxHeight,
+              // Hide until first measurement so we never show a 1-frame
+              // flash at -9999. As soon as pos is set, become visible.
               visibility: pos ? 'visible' : 'hidden',
+              opacity: pos ? 1 : 0,
             }}
             className="w-56 overflow-auto rounded-md border border-border bg-card p-1 shadow-xb-md"
           >

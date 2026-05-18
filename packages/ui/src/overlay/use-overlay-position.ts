@@ -24,10 +24,15 @@ export interface UseOverlayPositionOptions {
  * trigger element, accounting for viewport edges. Auto-flips vertically
  * when there's not enough room, and clamps horizontally. Re-measures on
  * scroll + resize and when the overlay's own size changes (ResizeObserver).
+ *
+ * `overlayEl` must be **state**, not a ref. Portaled content mounts a frame
+ * after the parent renders, and a ref's `.current` change does not trigger
+ * effects. Holding the element in state guarantees the effect re-runs
+ * when the portal finishes mounting.
  */
 export function useOverlayPosition(
   triggerRef: RefObject<HTMLElement | null>,
-  overlayRef: RefObject<HTMLElement | null>,
+  overlayEl: HTMLElement | null,
   open: boolean,
   opts: UseOverlayPositionOptions = {},
 ): OverlayPosition | null {
@@ -37,15 +42,13 @@ export function useOverlayPosition(
   const recompute = useCallback(() => {
     if (!open) return;
     const trig = triggerRef.current;
-    const over = overlayRef.current;
-    if (!trig || !over) return;
+    if (!trig || !overlayEl) return;
 
     const tRect = trig.getBoundingClientRect();
-    const oRect = over.getBoundingClientRect();
+    const oRect = overlayEl.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
-    // Decide vertical placement.
     const spaceBelow = vh - tRect.bottom - viewportPadding;
     const spaceAbove = tRect.top - viewportPadding;
     let placement: Placement = requested;
@@ -63,17 +66,14 @@ export function useOverlayPosition(
     let top = placeBelow ? tRect.bottom + offset : tRect.top - oRect.height - offset;
     let left = placeAtEnd ? tRect.right - oRect.width : tRect.left;
 
-    // Clamp horizontally.
     if (left + oRect.width > vw - viewportPadding) {
       left = vw - viewportPadding - oRect.width;
     }
     if (left < viewportPadding) left = viewportPadding;
 
-    // Clamp vertically — if even after flipping we'd overflow, cap height.
-    const maxHeight =
-      placeBelow
-        ? vh - top - viewportPadding
-        : tRect.top - viewportPadding - offset;
+    const maxHeight = placeBelow
+      ? vh - top - viewportPadding
+      : tRect.top - viewportPadding - offset;
     const clampedMaxHeight =
       maxHeight > 0 && maxHeight < oRect.height ? maxHeight : undefined;
     if (clampedMaxHeight !== undefined && !placeBelow) {
@@ -81,23 +81,21 @@ export function useOverlayPosition(
     }
 
     setPos({ top, left, placement, maxHeight: clampedMaxHeight });
-  }, [open, triggerRef, overlayRef, requested, offset, viewportPadding]);
+  }, [open, triggerRef, overlayEl, requested, offset, viewportPadding]);
 
-  // Initial + re-measure on size changes
+  // Re-fires when overlayEl changes from null → element after Portal mounts.
   useLayoutEffect(() => {
-    if (!open) {
+    if (!open || !overlayEl) {
       setPos(null);
       return;
     }
     recompute();
-    const over = overlayRef.current;
-    if (!over) return;
     const ro = new ResizeObserver(recompute);
-    ro.observe(over);
+    ro.observe(overlayEl);
     return () => ro.disconnect();
-  }, [open, recompute, overlayRef]);
+  }, [open, overlayEl, recompute]);
 
-  // Track scroll/resize while open
+  // Track scroll / resize while open.
   useEffect(() => {
     if (!open) return;
     const onScroll = () => recompute();
