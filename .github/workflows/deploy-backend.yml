@@ -96,8 +96,12 @@ jobs:
           VPC_CONNECTOR: ${{ vars.VPC_CONNECTOR }}
         run: |
           mkdir -p .rendered
-          envsubst < infrastructure/cloudrun/api.service.yaml    > .rendered/api.service.yaml
-          envsubst < infrastructure/cloudrun/worker.service.yaml > .rendered/worker.service.yaml
+          # Source yamls may have CRLF if they were ever edited on Windows.
+          # `tr -d '\r'` strips them; otherwise envsubst's substituted values
+          # carry the \r, which the Cloud SQL connector reads as part of the
+          # instance name and fails with "Invalid request: instance name".
+          envsubst < infrastructure/cloudrun/api.service.yaml    | tr -d '\r' > .rendered/api.service.yaml
+          envsubst < infrastructure/cloudrun/worker.service.yaml | tr -d '\r' > .rendered/worker.service.yaml
 
       - name: Deploy API to Cloud Run
         run: |
