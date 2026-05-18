@@ -26,11 +26,11 @@
     "ulid": "^2.3.0"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
+    "@types/node": "^25.8.0",
     "@types/pg": "^8.11.10",
     "pino-pretty": "^11.2.2",
     "rimraf": "^6.0.1",
     "tsx": "^4.19.1",
-    "typescript": "^5.5.4"
+    "typescript": "^6.0.3"
   }
 }
