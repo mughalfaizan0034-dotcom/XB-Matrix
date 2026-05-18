@@ -13,7 +13,8 @@
     "./actor":     { "types": "./dist/actor.d.ts",      "import": "./dist/actor.js" },
     "./permission":{ "types": "./dist/permission.d.ts", "import": "./dist/permission.js" },
     "./module":    { "types": "./dist/module.d.ts",     "import": "./dist/module.js" },
-    "./api":       { "types": "./dist/api.d.ts",        "import": "./dist/api.js" }
+    "./api":       { "types": "./dist/api.d.ts",        "import": "./dist/api.js" },
+    "./slug":      { "types": "./dist/slug.d.ts",       "import": "./dist/slug.js" }
   },
   "files": ["dist"],
   "scripts": {

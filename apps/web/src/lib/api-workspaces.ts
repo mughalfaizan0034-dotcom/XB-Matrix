@@ -27,6 +27,15 @@ export interface CreateWorkspaceInput {
   readonly dosTargetDays?: number;
 }
 
+export interface PatchWorkspaceInput {
+  readonly workspaceName?: string;
+  readonly workspaceType?: Workspace['workspaceType'];
+  readonly defaultCurrencyCode?: string;
+  readonly timezone?: string;
+  readonly dosTargetDays?: number;
+  readonly expectedRowVersion: number;
+}
+
 export function workspacesKey(orgId: string | null): readonly string[] {
   return ['workspaces', orgId ?? 'self'];
 }
@@ -52,6 +61,61 @@ export function useCreateWorkspace() {
     onSuccess: (ws) => {
       qc.invalidateQueries({ queryKey: workspacesKey(ws.organizationId) });
       qc.invalidateQueries({ queryKey: workspacesKey(null) });
+    },
+  });
+}
+
+export function usePatchWorkspace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: PatchWorkspaceInput }) =>
+      api
+        .patch<{ workspace: Workspace }>(`/v1/workspaces/${id}`, input)
+        .then((r) => r.workspace),
+    onSuccess: (ws) => {
+      qc.invalidateQueries({ queryKey: workspacesKey(ws.organizationId) });
+    },
+  });
+}
+
+type WsTransition = 'archive' | 'reactivate' | 'restore';
+
+export function useWorkspaceTransition(transition: WsTransition) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      expectedRowVersion,
+    }: {
+      id: string;
+      expectedRowVersion?: number;
+    }) => {
+      const body = transition === 'restore' ? {} : { expectedRowVersion };
+      return api
+        .post<{ workspace: Workspace }>(`/v1/workspaces/${id}/${transition}`, body)
+        .then((r) => r.workspace);
+    },
+    onSuccess: (ws) => {
+      qc.invalidateQueries({ queryKey: workspacesKey(ws.organizationId) });
+    },
+  });
+}
+
+export function useSoftDeleteWorkspace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      expectedRowVersion,
+    }: {
+      id: string;
+      expectedRowVersion: number;
+    }) =>
+      api
+        .delete<{ workspace: Workspace }>(`/v1/workspaces/${id}`, { expectedRowVersion })
+        .then((r) => r.workspace),
+    onSuccess: (ws) => {
+      qc.invalidateQueries({ queryKey: workspacesKey(ws.organizationId) });
     },
   });
 }

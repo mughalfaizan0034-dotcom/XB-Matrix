@@ -5,3 +5,4 @@ export * from './actor.js';
 export * from './module.js';
 export * from './permission.js';
 export * from './api.js';
+export * from './slug.js';

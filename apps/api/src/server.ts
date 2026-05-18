@@ -18,6 +18,7 @@ import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { organizationRoutes } from './routes/organizations.js';
 import { workspaceRoutes } from './routes/workspaces.js';
+import { auditRoutes } from './routes/audit.js';
 
 export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   const app = Fastify({
@@ -74,6 +75,7 @@ export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   await app.register(authRoutes, { prefix: '/v1/auth' });
   await app.register(organizationRoutes, { prefix: '/v1/organizations' });
   await app.register(workspaceRoutes, { prefix: '/v1/workspaces' });
+  await app.register(auditRoutes, { prefix: '/v1/audit' });
 
   return app;
 }

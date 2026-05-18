@@ -2,7 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import type { PoolClient } from 'pg';
 import { ulid } from 'ulid';
 import type { ActorContext, OrganizationId } from '@xb/types';
+import { isValidSlug, toSlug } from '@xb/types/slug';
 import { ForbiddenError } from '@xb/auth';
+import { ConflictError, ConcurrencyError, NotFoundError, SemanticError } from '../lib/errors.js';
 
 export interface Organization {
   readonly id: OrganizationId;
@@ -134,7 +136,6 @@ export async function getOrganization(
 export interface CreateOrganizationInput {
   readonly displayName: string;
   readonly legalName?: string;
-  readonly slug: string;
   readonly defaultCurrencyCode: string;
   readonly defaultTimezone?: string;
 }
@@ -142,9 +143,12 @@ export interface CreateOrganizationInput {
 /**
  * Create a new organization. Internal manager only.
  *
- * Runs in a tx with the actor context set so the audit trigger captures
- * who did it. No RLS on organizations (platform-global), so the connection
- * context only matters for the audit trigger.
+ * Slug is derived from displayName via toSlug() and is immutable after
+ * creation — there is no API path to change it. Routing keys, URLs, audit
+ * references all depend on the slug staying stable.
+ *
+ * Duplicate displayName (after slug derivation) raises ConflictError
+ * mapped to HTTP 409 — never surfaces as a 500 to the frontend.
  */
 export async function createOrganization(
   app: FastifyInstance,
@@ -154,27 +158,53 @@ export async function createOrganization(
   if (!actor.isInternalManager) {
     throw new ForbiddenError('only internal managers can create organizations', 'internal_only');
   }
-  const id = ulid();
-  return app.withConnection(actor, async (client) => {
-    await client.query(
-      `INSERT INTO xb_core.organizations
-         (id, display_name, legal_name, slug, default_currency_code, default_timezone,
-          created_by_actor_id, updated_by_actor_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $7)`,
-      [
-        id,
-        input.displayName,
-        input.legalName ?? null,
-        input.slug,
-        input.defaultCurrencyCode,
-        input.defaultTimezone ?? 'UTC',
-        actor.actorId,
-      ],
+
+  const slug = toSlug(input.displayName);
+  if (!isValidSlug(slug)) {
+    throw new SemanticError(
+      'Organization name must contain at least one letter or digit (used to generate a URL identifier).',
+      'invalid_slug_source',
     );
-    const { rows } = await client.query<OrgRow>(`${SELECT_ORG} AND id = $1`, [id]);
-    if (!rows[0]) throw new Error('inserted organization vanished');
-    return rowToOrganization(rows[0]);
-  });
+  }
+
+  const id = ulid();
+  try {
+    return await app.withConnection(actor, async (client) => {
+      await client.query(
+        `INSERT INTO xb_core.organizations
+           (id, display_name, legal_name, slug, default_currency_code, default_timezone,
+            created_by_actor_id, updated_by_actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $7)`,
+        [
+          id,
+          input.displayName.trim(),
+          input.legalName?.trim() || null,
+          slug,
+          input.defaultCurrencyCode,
+          input.defaultTimezone ?? 'UTC',
+          actor.actorId,
+        ],
+      );
+      const { rows } = await client.query<OrgRow>(`${SELECT_ORG} AND id = $1`, [id]);
+      if (!rows[0]) throw new Error('inserted organization vanished');
+      return rowToOrganization(rows[0]);
+    });
+  } catch (err) {
+    if (isUniqueViolation(err, 'uq_organizations_slug')) {
+      throw new ConflictError(
+        `An organization with the name "${input.displayName.trim()}" (slug: ${slug}) already exists.`,
+        'organization_exists',
+        { slug },
+      );
+    }
+    throw err;
+  }
+}
+
+function isUniqueViolation(err: unknown, constraint?: string): boolean {
+  const e = err as { code?: string; constraint?: string };
+  if (e?.code !== '23505') return false;
+  return !constraint || e.constraint === constraint;
 }
 
 export interface PatchOrganizationInput {
@@ -245,8 +275,156 @@ export async function patchOrganization(
       params,
     );
     if (result.rows.length === 0) {
-      throw new ForbiddenError('organization not found or row_version mismatch', 'stale_version');
+      throw new ConcurrencyError();
     }
+    return rowToOrganization(result.rows[0]!);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle operations
+// ---------------------------------------------------------------------------
+//
+// Hard delete is intentionally NOT exposed. The lifecycle is:
+//
+//   active ──suspend──> suspended ──reactivate──> active
+//     │                                                 │
+//     ├──archive──> archived ──restore──> active────────┘
+//     │
+//     └──soft-delete──> (deleted_at set; visible only to internal managers)
+//                        └──restore──> active
+//
+// All transitions require `settings.edit` (internal_manager bypass applies).
+// The audit trigger writes a `record.updated` / `record.soft_deleted` /
+// `record.restored` entry automatically based on the diff.
+
+async function transitionOrgStatus(
+  app: FastifyInstance,
+  actor: ActorContext,
+  id: OrganizationId,
+  expectedRowVersion: number,
+  next: Organization['organizationStatus'],
+  requireFrom?: ReadonlyArray<Organization['organizationStatus']>,
+): Promise<Organization> {
+  await app.assertPermission(actor, {
+    organizationId: id,
+    workspaceId: null,
+    module: 'settings',
+    action: 'edit',
+  });
+  if (!actor.isInternalManager && actor.organizationId !== id) {
+    throw new ForbiddenError('cannot edit other organizations', 'org_scope');
+  }
+  return app.withConnection(actor, async (client) => {
+    const { rows: existing } = await client.query<OrgRow>(`${SELECT_ORG} AND id = $1`, [id]);
+    const cur = existing[0];
+    if (!cur) throw new NotFoundError('organization', id);
+    if (requireFrom && !requireFrom.includes(cur.organization_status)) {
+      throw new SemanticError(
+        `cannot transition from ${cur.organization_status} to ${next}`,
+        'invalid_status_transition',
+        { from: cur.organization_status, to: next, allowedFrom: requireFrom },
+      );
+    }
+    const result = await client.query<OrgRow>(
+      `UPDATE xb_core.organizations
+          SET organization_status = $3::varchar,
+              updated_by_actor_id = $4,
+              suspended_at = CASE WHEN $3::varchar = 'suspended' THEN now() ELSE NULL END,
+              archived_at  = CASE WHEN $3::varchar = 'archived'  THEN now() ELSE NULL END
+        WHERE id = $1
+          AND deleted_at IS NULL
+          AND row_version = $2
+        RETURNING id, display_name, legal_name, slug, organization_status, billing_status,
+                  default_currency_code, default_timezone, created_at, updated_at, row_version`,
+      [id, expectedRowVersion, next, actor.actorId],
+    );
+    if (result.rows.length === 0) throw new ConcurrencyError();
+    return rowToOrganization(result.rows[0]!);
+  });
+}
+
+export const suspendOrganization = (
+  app: FastifyInstance,
+  actor: ActorContext,
+  id: OrganizationId,
+  expectedRowVersion: number,
+) => transitionOrgStatus(app, actor, id, expectedRowVersion, 'suspended', ['active']);
+
+export const reactivateOrganization = (
+  app: FastifyInstance,
+  actor: ActorContext,
+  id: OrganizationId,
+  expectedRowVersion: number,
+) => transitionOrgStatus(app, actor, id, expectedRowVersion, 'active', ['suspended', 'archived']);
+
+export const archiveOrganization = (
+  app: FastifyInstance,
+  actor: ActorContext,
+  id: OrganizationId,
+  expectedRowVersion: number,
+) => transitionOrgStatus(app, actor, id, expectedRowVersion, 'archived', ['active', 'suspended']);
+
+/**
+ * Soft delete. Sets deleted_at; the row remains for 90 days and is then
+ * hard-purged by a worker (which writes a `record.hard_deleted` audit
+ * entry first). Internal managers only.
+ */
+export async function softDeleteOrganization(
+  app: FastifyInstance,
+  actor: ActorContext,
+  id: OrganizationId,
+  expectedRowVersion: number,
+): Promise<Organization> {
+  if (!actor.isInternalManager) {
+    throw new ForbiddenError('only internal managers can delete organizations', 'internal_only');
+  }
+  return app.withConnection(actor, async (client) => {
+    const result = await client.query<OrgRow>(
+      `UPDATE xb_core.organizations
+          SET deleted_at = now(),
+              deleted_by_actor_id = $3
+        WHERE id = $1
+          AND deleted_at IS NULL
+          AND row_version = $2
+        RETURNING id, display_name, legal_name, slug, organization_status, billing_status,
+                  default_currency_code, default_timezone, created_at, updated_at, row_version`,
+      [id, expectedRowVersion, actor.actorId],
+    );
+    if (result.rows.length === 0) throw new ConcurrencyError();
+    return rowToOrganization(result.rows[0]!);
+  });
+}
+
+/**
+ * Restore a soft-deleted organization. Clears deleted_at and resets status to
+ * active. Internal managers only. Only works within the 90-day window before
+ * the hard-purge job removes the row.
+ */
+export async function restoreOrganization(
+  app: FastifyInstance,
+  actor: ActorContext,
+  id: OrganizationId,
+): Promise<Organization> {
+  if (!actor.isInternalManager) {
+    throw new ForbiddenError('only internal managers can restore organizations', 'internal_only');
+  }
+  return app.withConnection(actor, async (client) => {
+    const result = await client.query<OrgRow>(
+      `UPDATE xb_core.organizations
+          SET deleted_at = NULL,
+              deleted_by_actor_id = NULL,
+              organization_status = 'active',
+              suspended_at = NULL,
+              archived_at = NULL,
+              updated_by_actor_id = $2
+        WHERE id = $1
+          AND deleted_at IS NOT NULL
+        RETURNING id, display_name, legal_name, slug, organization_status, billing_status,
+                  default_currency_code, default_timezone, created_at, updated_at, row_version`,
+      [id, actor.actorId],
+    );
+    if (result.rows.length === 0) throw new NotFoundError('soft-deleted organization', id);
     return rowToOrganization(result.rows[0]!);
   });
 }

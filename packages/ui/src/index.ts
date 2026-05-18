@@ -12,3 +12,6 @@ export * from './components/dialog.js';
 export * from './components/toast.js';
 export * from './components/page-header.js';
 export * from './components/badge.js';
+export * from './components/dropdown-menu.js';
+export * from './components/confirm-dialog.js';
+export * from './components/drawer.js';
