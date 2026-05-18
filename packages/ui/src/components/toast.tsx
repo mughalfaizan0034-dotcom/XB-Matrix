@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useReducer } from 'react';
 import { cn } from '../lib/cn.js';
+import { Portal, Z_LAYER } from '../overlay/index.js';
 
 export type ToastKind = 'success' | 'error' | 'info';
 
@@ -38,22 +39,27 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex flex-col gap-2">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={cn(
-              'pointer-events-auto min-w-[280px] max-w-md rounded-md border px-4 py-2.5 text-sm shadow-xb-md backdrop-blur',
-              t.kind === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-800',
-              t.kind === 'error' && 'border-red-200 bg-red-50 text-red-800',
-              t.kind === 'info' && 'border-border bg-card text-foreground',
-            )}
-            role="status"
-          >
-            {t.message}
-          </div>
-        ))}
-      </div>
+      <Portal>
+        <div
+          style={{ zIndex: Z_LAYER.toast }}
+          className="pointer-events-none fixed bottom-4 right-4 flex flex-col gap-2"
+        >
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className={cn(
+                'pointer-events-auto min-w-[280px] max-w-md rounded-md border px-4 py-2.5 text-sm shadow-xb-md backdrop-blur',
+                t.kind === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-800',
+                t.kind === 'error' && 'border-red-200 bg-red-50 text-red-800',
+                t.kind === 'info' && 'border-border bg-card text-foreground',
+              )}
+              role="status"
+            >
+              {t.message}
+            </div>
+          ))}
+        </div>
+      </Portal>
     </ToastContext.Provider>
   );
 }

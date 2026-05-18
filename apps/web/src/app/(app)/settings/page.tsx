@@ -8,14 +8,16 @@ import { useOrganizations, type Organization } from '@/lib/api-orgs';
 import { OrganizationCard } from '@/components/organization-card';
 import { NewOrganizationDialog } from '@/components/new-organization-dialog';
 import { usePersistedStringSet } from '@/lib/use-persisted-set';
+import { usePersistedString } from '@/lib/use-persisted-string';
 
 const EXPANDED_STORAGE_KEY = 'xb.settings.orgs.expanded';
+const FILTER_STORAGE_KEY = 'xb.settings.orgs.filter';
 
 export default function SettingsPage() {
   const { data: user } = useSession();
   const orgs = useOrganizations();
   const [showNewOrg, setShowNewOrg] = useState(false);
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = usePersistedString(FILTER_STORAGE_KEY, '');
   const [expanded, setExpanded] = usePersistedStringSet(EXPANDED_STORAGE_KEY);
   const isManager = user?.isInternalManager ?? false;
 

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Dialog, FormField, Input, Select, useToast } from '@xb/ui';
 import type { Organization } from '@/lib/api-orgs';
 import { useCreateWorkspace } from '@/lib/api-workspaces';
 import { describeError } from '@/lib/session';
+import { ApiError } from '@/lib/api-client';
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'PKR', 'INR'];
 const TYPES = [
@@ -13,6 +14,19 @@ const TYPES = [
   { value: 'warehouse',    label: 'Warehouse (3PL / fulfillment)' },
   { value: 'omni_channel', label: 'Omni-channel (mixed)' },
 ] as const;
+
+const DOS_MIN = 1;
+const DOS_MAX = 365;
+
+function validateDos(value: string): string | null {
+  if (value === '') return 'DOS target is required.';
+  if (!/^\d+$/.test(value)) return 'DOS target must be a whole number.';
+  const n = Number(value);
+  if (n < DOS_MIN || n > DOS_MAX) {
+    return `DOS target must be a whole number between ${DOS_MIN} and ${DOS_MAX}.`;
+  }
+  return null;
+}
 
 export function NewWorkspaceDialog({
   open,
@@ -32,25 +46,39 @@ export function NewWorkspaceDialog({
   const [workspaceType, setType] = useState<(typeof TYPES)[number]['value']>('marketplace');
   const [defaultCurrencyCode, setCurrency] = useState('USD');
   const [dosTargetDays, setDos] = useState('30');
+  const [nameError, setNameError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setOrgId(defaultOrganizationId ?? organizations[0]?.id ?? '');
       setCurrency(
-        organizations.find((o) => o.id === (defaultOrganizationId ?? organizations[0]?.id))?.defaultCurrencyCode ?? 'USD',
+        organizations.find((o) => o.id === (defaultOrganizationId ?? organizations[0]?.id))
+          ?.defaultCurrencyCode ?? 'USD',
       );
+      setName('');
+      setType('marketplace');
+      setDos('30');
+      setNameError(null);
     }
   }, [open, organizations, defaultOrganizationId]);
 
   function close() {
     if (create.isPending) return;
-    setName('');
-    setDos('30');
     onClose();
   }
 
+  const dosError = validateDos(dosTargetDays);
+  const canSubmit =
+    !create.isPending &&
+    workspaceName.trim().length > 0 &&
+    organizationId.length === 26 &&
+    !!defaultCurrencyCode &&
+    dosError === null;
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setNameError(null);
+    if (dosError) return;
     try {
       await create.mutateAsync({
         organizationId,
@@ -60,14 +88,15 @@ export function NewWorkspaceDialog({
         dosTargetDays: Number(dosTargetDays),
       });
       toast.push('success', `Workspace "${workspaceName}" created.`);
-      close();
+      onClose();
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setNameError(err.message);
+        return;
+      }
       toast.push('error', describeError(err));
     }
   }
-
-  const disabled =
-    create.isPending || !workspaceName || !organizationId || !defaultCurrencyCode;
 
   return (
     <Dialog
@@ -80,7 +109,7 @@ export function NewWorkspaceDialog({
           <Button variant="outline" type="button" onClick={close} disabled={create.isPending}>
             Cancel
           </Button>
-          <Button type="submit" form="new-ws-form" disabled={disabled}>
+          <Button type="submit" form="new-ws-form" disabled={!canSubmit}>
             {create.isPending ? 'Creating…' : 'Create workspace'}
           </Button>
         </>
@@ -101,15 +130,20 @@ export function NewWorkspaceDialog({
           </FormField>
         ) : null}
 
-        <FormField label="Workspace name" required>
+        <FormField label="Workspace name" required error={nameError}>
           {(p) => (
             <Input
               {...p}
               value={workspaceName}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (nameError) setNameError(null);
+              }}
               placeholder="Amazon US"
               required
               autoFocus
+              maxLength={200}
+              autoComplete="off"
             />
           )}
         </FormField>
@@ -151,17 +185,21 @@ export function NewWorkspaceDialog({
 
           <FormField
             label="DOS target (days)"
-            hint="Days of stock target for forecasting; default 30"
+            hint={dosError ? undefined : `Whole days, ${DOS_MIN}–${DOS_MAX}. Default 30.`}
+            error={dosError}
+            required
           >
             {(p) => (
               <Input
                 {...p}
                 type="number"
-                min={0}
-                max={9999}
-                step="0.01"
+                inputMode="numeric"
+                min={DOS_MIN}
+                max={DOS_MAX}
+                step={1}
                 value={dosTargetDays}
-                onChange={(e) => setDos(e.target.value)}
+                onChange={(e) => setDos(e.target.value.replace(/[^\d]/g, ''))}
+                required
               />
             )}
           </FormField>

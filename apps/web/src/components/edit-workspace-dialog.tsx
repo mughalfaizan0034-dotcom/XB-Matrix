@@ -14,6 +14,19 @@ const TYPES = [
   { value: 'omni_channel', label: 'Omni-channel' },
 ] as const;
 
+const DOS_MIN = 1;
+const DOS_MAX = 365;
+
+function validateDos(value: string): string | null {
+  if (value === '') return 'DOS target is required.';
+  if (!/^\d+$/.test(value)) return 'DOS target must be a whole number.';
+  const n = Number(value);
+  if (n < DOS_MIN || n > DOS_MAX) {
+    return `DOS target must be a whole number between ${DOS_MIN} and ${DOS_MAX}.`;
+  }
+  return null;
+}
+
 export function EditWorkspaceDialog({
   open,
   onClose,
@@ -38,10 +51,14 @@ export function EditWorkspaceDialog({
       setType(workspace.workspaceType);
       setCurrency(workspace.defaultCurrencyCode);
       setTimezone(workspace.timezone);
-      setDos(workspace.dosTargetDays);
+      // dos_target_days comes from PG as "30.00"; the new tighter UX wants
+      // an integer for display + edit, so round on load.
+      setDos(String(Math.round(Number(workspace.dosTargetDays))));
       setSubmitError(null);
     }
   }, [open, workspace]);
+
+  const dosError = validateDos(dosTargetDays);
 
   function close() {
     if (patch.isPending) return;
@@ -85,7 +102,11 @@ export function EditWorkspaceDialog({
           <Button variant="outline" type="button" onClick={close} disabled={patch.isPending}>
             Cancel
           </Button>
-          <Button type="submit" form="edit-ws-form" disabled={patch.isPending || !workspaceName.trim()}>
+          <Button
+            type="submit"
+            form="edit-ws-form"
+            disabled={patch.isPending || !workspaceName.trim() || dosError !== null}
+          >
             {patch.isPending ? 'Saving…' : 'Save changes'}
           </Button>
         </>
@@ -155,16 +176,23 @@ export function EditWorkspaceDialog({
           </FormField>
         </div>
 
-        <FormField label="DOS target (days)" hint="Days of stock target for forecasting">
+        <FormField
+          label="DOS target (days)"
+          hint={dosError ? undefined : 'Whole days, 1–365.'}
+          error={dosError}
+          required
+        >
           {(p) => (
             <Input
               {...p}
               type="number"
-              min={0}
-              max={9999}
-              step="0.01"
+              inputMode="numeric"
+              min={1}
+              max={365}
+              step={1}
               value={dosTargetDays}
-              onChange={(e) => setDos(e.target.value)}
+              onChange={(e) => setDos(e.target.value.replace(/[^\d]/g, ''))}
+              required
             />
           )}
         </FormField>
