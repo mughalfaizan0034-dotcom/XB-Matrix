@@ -82,5 +82,29 @@ BEGIN
   REVOKE ALL ON public.schema_migrations FROM PUBLIC;
   EXECUTE format('REVOKE ALL ON public.schema_migrations FROM %I', runtime_role);
 
+  -- Revoke CREATE on the database from PUBLIC and the runtime role.
+  EXECUTE format(
+    'REVOKE CREATE ON DATABASE %I FROM PUBLIC',
+    current_database()
+  );
+  EXECUTE format(
+    'REVOKE CREATE ON DATABASE %I FROM %I',
+    current_database(), runtime_role
+  );
+
+  -- Cloud SQL specifics:
+  --
+  -- Every user created via `gcloud sql users create` is automatically:
+  --   1. Added as a member of role `cloudsqlsuperuser` (which has CREATE on the
+  --      DB and many other rights), and
+  --   2. Granted the role attributes CREATEDB and CREATEROLE on itself.
+  --
+  -- Both are wrong for a least-privilege application user. Strip them.
+  -- Guarded so local PG (no cloudsqlsuperuser) is a no-op.
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cloudsqlsuperuser') THEN
+    EXECUTE format('REVOKE cloudsqlsuperuser FROM %I', runtime_role);
+  END IF;
+  EXECUTE format('ALTER ROLE %I NOCREATEDB NOCREATEROLE', runtime_role);
+
   RAISE NOTICE 'runtime grants applied for role %', runtime_role;
 END $$;
