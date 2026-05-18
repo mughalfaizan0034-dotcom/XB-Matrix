@@ -21,6 +21,7 @@
     "@xb/types": "workspace:*",
     "fastify": "^4.28.1",
     "fastify-plugin": "^4.5.1",
+    "dotenv": "^16.4.5",
     "ioredis": "^5.4.1",
     "pg": "^8.13.0",
     "ulid": "^2.3.0"

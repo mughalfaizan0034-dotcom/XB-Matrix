@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { loadWorkerConfig } from '@xb/config/worker';
 import { buildWorker } from './server.js';
 

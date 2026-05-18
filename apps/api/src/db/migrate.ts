@@ -11,6 +11,7 @@
  *   pnpm db:rollback          # roll back the last applied
  *   pnpm db:status            # show applied/pending
  */
+import 'dotenv/config';
 import { readFile, readdir } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

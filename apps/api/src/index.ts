@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { loadApiConfig } from '@xb/config/api';
 import { buildServer } from './server.js';
 
