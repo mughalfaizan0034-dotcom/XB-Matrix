@@ -7,9 +7,11 @@ ARG NODE_VERSION=20.18.0
 ARG PNPM_VERSION=9.15.0
 
 FROM node:${NODE_VERSION}-slim AS base
+ARG PNPM_VERSION
 ENV PNPM_HOME="/pnpm" \
     PATH="/pnpm:${PATH}" \
-    CI=true
+    CI=true \
+    COREPACK_DEFAULT_TO_LATEST=0
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 WORKDIR /repo
 

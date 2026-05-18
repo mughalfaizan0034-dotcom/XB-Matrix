@@ -13,9 +13,13 @@ ARG PNPM_VERSION=9.15.0
 
 # ---------- base ----------
 FROM node:${NODE_VERSION}-slim AS base
+# Re-declare ARGs that are referenced inside this stage. Top-level ARGs are
+# only visible to FROM lines; stage RUN/ENV must re-import them.
+ARG PNPM_VERSION
 ENV PNPM_HOME="/pnpm" \
     PATH="/pnpm:${PATH}" \
-    CI=true
+    CI=true \
+    COREPACK_DEFAULT_TO_LATEST=0
 RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 WORKDIR /repo
 
