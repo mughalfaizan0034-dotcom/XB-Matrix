@@ -1,0 +1,46 @@
+# =============================================================================
+# Optional Cloud Build pipeline — alternative to GitHub Actions for image build.
+# The primary build path is GitHub Actions (.github/workflows/deploy-backend.yml);
+# this file is included for teams who prefer Cloud Build triggers off the repo.
+# =============================================================================
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+substitutions:
+  _AR_HOST: us-central1-docker.pkg.dev
+  _AR_REPO: xb-images
+  _IMAGE_TAG: $SHORT_SHA
+
+steps:
+  - id: build-api
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - infrastructure/docker/Dockerfile.api
+      - -t
+      - ${_AR_HOST}/${PROJECT_ID}/${_AR_REPO}/xb-api:${_IMAGE_TAG}
+      - .
+
+  - id: build-worker
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - infrastructure/docker/Dockerfile.worker
+      - -t
+      - ${_AR_HOST}/${PROJECT_ID}/${_AR_REPO}/xb-worker:${_IMAGE_TAG}
+      - .
+
+  - id: push-api
+    name: gcr.io/cloud-builders/docker
+    args: [push, '${_AR_HOST}/${PROJECT_ID}/${_AR_REPO}/xb-api:${_IMAGE_TAG}']
+
+  - id: push-worker
+    name: gcr.io/cloud-builders/docker
+    args: [push, '${_AR_HOST}/${PROJECT_ID}/${_AR_REPO}/xb-worker:${_IMAGE_TAG}']
+
+images:
+  - ${_AR_HOST}/${PROJECT_ID}/${_AR_REPO}/xb-api:${_IMAGE_TAG}
+  - ${_AR_HOST}/${PROJECT_ID}/${_AR_REPO}/xb-worker:${_IMAGE_TAG}

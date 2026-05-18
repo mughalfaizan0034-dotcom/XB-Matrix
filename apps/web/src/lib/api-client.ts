@@ -1,10 +1,6 @@
 import type { ApiResponse } from '@xb/types';
-import { loadWebPublicConfig } from '@xb/config/web';
 
-const webConfig =
-  typeof window !== 'undefined' || typeof process !== 'undefined'
-    ? loadWebPublicConfig(typeof process !== 'undefined' ? process.env : {})
-    : { apiBaseUrl: '', appName: 'xB Matrix' };
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
 
 export class ApiError extends Error {
   constructor(
@@ -25,7 +21,7 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const { body, idempotencyKey, headers, ...init } = opts;
 
-  const res = await fetch(`${webConfig.apiBaseUrl}${path}`, {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     credentials: 'include',
     headers: {

@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      typescript-tooling:
+        patterns: [typescript, '@types/*', tsx, rimraf]
+      lint-format:
+        patterns: [eslint*, prettier*]
+      next-react:
+        patterns: [next, 'react*', '@tanstack/*']
+      backend:
+        patterns: [fastify*, '@fastify/*', pg, ioredis, pino*, ulid]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

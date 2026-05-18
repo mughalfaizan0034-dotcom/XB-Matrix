@@ -1,0 +1,60 @@
+# =============================================================================
+# xB Matrix — API (Fastify) Cloud Run image
+# Multi-stage build:
+#   1) base    — pnpm-enabled node image
+#   2) deps    — installs full workspace deps from lockfile
+#   3) build   — compiles @xb/api and all transitively-required packages
+#   4) prune   — pnpm deploy to a slim node_modules + dist
+#   5) runtime — distroless-ish node:20-slim with only what runtime needs
+# =============================================================================
+
+ARG NODE_VERSION=20.18.0
+ARG PNPM_VERSION=9.15.0
+
+# ---------- base ----------
+FROM node:${NODE_VERSION}-slim AS base
+ENV PNPM_HOME="/pnpm" \
+    PATH="/pnpm:${PATH}" \
+    CI=true
+RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+WORKDIR /repo
+
+# ---------- deps ----------
+FROM base AS deps
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc tsconfig.base.json ./
+COPY apps/api/package.json apps/api/
+COPY apps/worker/package.json apps/worker/
+COPY apps/web/package.json apps/web/
+COPY packages/types/package.json packages/types/
+COPY packages/config/package.json packages/config/
+COPY packages/auth/package.json packages/auth/
+COPY packages/calculations/package.json packages/calculations/
+COPY packages/ai/package.json packages/ai/
+COPY packages/ui/package.json packages/ui/
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm fetch
+
+# ---------- build ----------
+FROM deps AS build
+COPY . .
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --offline
+RUN pnpm --filter @xb/api... build
+
+# ---------- prune ----------
+FROM build AS prune
+RUN pnpm deploy --filter=@xb/api --prod /out
+COPY sql /out/sql
+
+# ---------- runtime ----------
+FROM node:${NODE_VERSION}-slim AS runtime
+ENV NODE_ENV=production \
+    PORT=4000
+WORKDIR /app
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=prune /out /app
+USER node
+EXPOSE 4000
+CMD ["node", "dist/index.js"]
