@@ -16,7 +16,6 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
-import { loadApiConfig } from '@xb/config/api';
 
 const { Client } = pg;
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -100,8 +99,18 @@ async function rollbackMigration(client: pg.Client, m: MigrationFile): Promise<v
 
 async function main(): Promise<void> {
   const action = process.argv[2] ?? 'up';
-  const config = loadApiConfig();
-  const client = new Client({ connectionString: config.database.url, application_name: 'xb-migrate' });
+  // Read DATABASE_URL directly instead of loadApiConfig — the migrate
+  // runner is intentionally minimal and shouldn't require redis/jwt/auth
+  // env vars that the full API config insists on. The CI deploy step
+  // only provides DATABASE_URL (tunnelled through Cloud SQL Auth Proxy);
+  // local dev still gets it via dotenv.
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error(
+      'DATABASE_URL is required to run migrations. Set it in .env (local) or as a workflow env (CI).',
+    );
+  }
+  const client = new Client({ connectionString: databaseUrl, application_name: 'xb-migrate' });
   await client.connect();
   try {
     await ensureMigrationsTable(client);
