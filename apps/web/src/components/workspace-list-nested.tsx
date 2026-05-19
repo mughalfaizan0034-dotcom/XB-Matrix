@@ -27,7 +27,7 @@ import {
   useSoftDeleteWorkspace,
   type Workspace,
 } from '@/lib/api-workspaces';
-import { describeError } from '@/lib/session';
+import { describeError, useActiveWorkspace } from '@/lib/session';
 import { NewWorkspaceDialog } from '@/components/new-workspace-dialog';
 import { EditWorkspaceDialog } from '@/components/edit-workspace-dialog';
 import { AuditTrail } from '@/components/audit-trail';
@@ -43,6 +43,7 @@ type ConfirmAction = { kind: 'archive' | 'softDelete'; ws: Workspace };
 export function WorkspaceListNested({ organization }: { organization: Organization }) {
   const toast = useToast();
   const wsQ = useWorkspaces({ organizationId: organization.id });
+  const { data: activeWorkspace } = useActiveWorkspace();
 
   const [showNew, setShowNew] = useState(false);
   const [edit, setEdit] = useState<Workspace | null>(null);
@@ -123,7 +124,14 @@ export function WorkspaceListNested({ organization }: { organization: Organizati
     {
       key: 'name',
       header: 'Workspace',
-      accessor: (w) => <span className="font-medium text-foreground">{w.workspaceName}</span>,
+      accessor: (w) => (
+        <span className="inline-flex items-center gap-2">
+          <span className="font-medium text-foreground">{w.workspaceName}</span>
+          {activeWorkspace?.id === w.id ? (
+            <Badge tone="info">Current</Badge>
+          ) : null}
+        </span>
+      ),
     },
     { key: 'type',     header: 'Type',     accessor: (w) => prettyType(w.workspaceType) },
     { key: 'currency', header: 'Currency', accessor: (w) => w.defaultCurrencyCode },
@@ -193,6 +201,7 @@ export function WorkspaceListNested({ organization }: { organization: Organizati
         rows={wsQ.data ?? []}
         rowKey={(w) => w.id}
         loading={wsQ.isLoading}
+        rowClassName={(w) => (activeWorkspace?.id === w.id ? 'bg-navy-50/60' : undefined)}
         emptyState={
           <div className="flex flex-col items-center gap-3 py-6">
             <span className="text-sm">No workspaces yet in this organization.</span>

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button, PageHeader } from '@xb/ui';
 import { cn } from '@xb/ui/lib/cn';
 import { Plus, Search } from 'lucide-react';
-import { useSession } from '@/lib/session';
+import { useActiveWorkspace, useSession } from '@/lib/session';
 import { useOrganizations, type Organization } from '@/lib/api-orgs';
 import { OrganizationCard } from '@/components/organization-card';
 import { NewOrganizationDialog } from '@/components/new-organization-dialog';
@@ -17,6 +17,7 @@ const FILTER_STORAGE_KEY = 'xb.settings.orgs.filter';
 
 export default function SettingsPage() {
   const { data: user } = useSession();
+  const { data: activeWorkspace } = useActiveWorkspace();
   const orgs = useOrganizations();
   const [showNewOrg, setShowNewOrg] = useState(false);
   const [filter, setFilter] = usePersistedString(FILTER_STORAGE_KEY, '');
@@ -35,6 +36,20 @@ export default function SettingsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgs.data]);
+
+  // When an active workspace is selected, ensure its parent organization is
+  // expanded so the user lands on the right context without scrolling/
+  // hunting. We don't collapse other orgs — the user's existing expansion
+  // state is respected.
+  useEffect(() => {
+    if (!activeWorkspace) return;
+    if (expanded.has(activeWorkspace.organizationId)) return;
+    setExpanded((cur) => {
+      cur.add(activeWorkspace.organizationId);
+      return cur;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspace?.organizationId]);
 
   const visible = useMemo(() => {
     if (!orgs.data) return [];

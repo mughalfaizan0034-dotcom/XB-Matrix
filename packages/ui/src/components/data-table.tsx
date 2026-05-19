@@ -17,6 +17,8 @@ export interface DataTableProps<T> {
   readonly emptyState?: React.ReactNode;
   readonly loading?: boolean;
   readonly className?: string;
+  /** Optional per-row className (e.g., highlight the active workspace). */
+  readonly rowClassName?: (row: T) => string | undefined;
 }
 
 /**
@@ -32,6 +34,7 @@ export function DataTable<T>({
   emptyState,
   loading,
   className,
+  rowClassName,
 }: DataTableProps<T>) {
   return (
     <div className={cn('overflow-hidden rounded-lg border border-border bg-card', className)}>
@@ -75,6 +78,7 @@ export function DataTable<T>({
                   className={cn(
                     'transition-colors',
                     onRowClick && 'cursor-pointer hover:bg-muted/40',
+                    rowClassName?.(row),
                   )}
                 >
                   {columns.map((c) => (
