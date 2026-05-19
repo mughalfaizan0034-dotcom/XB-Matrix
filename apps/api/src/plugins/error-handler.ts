@@ -81,10 +81,14 @@ export const errorHandlerPlugin = fp(async (app) => {
         );
       }
       if (pgCode === '23503') {
-        // foreign key violation
+        // foreign key violation — log the constraint so we can diagnose
+        // which relationship failed without needing to repro.
+        const constraint = (err as { constraint?: string; detail?: string }).constraint;
+        const detail = (err as { detail?: string }).detail;
+        app.log.warn({ err, requestId, constraint, detail }, 'fk violation (23503)');
         return res
           .status(409)
-          .send(failure('related_resource_missing', 'referenced resource does not exist', requestId));
+          .send(failure('related_resource_missing', 'referenced resource does not exist', requestId, { constraint }));
       }
       if (pgCode === '23514') {
         // check constraint violation

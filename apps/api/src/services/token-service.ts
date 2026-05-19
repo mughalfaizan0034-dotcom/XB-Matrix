@@ -43,6 +43,14 @@ export interface MintOptions {
   readonly ttlSeconds?: number;
   readonly createdByActorId?: string | null;
   readonly createdIp?: string | null;
+  /**
+   * If the caller is already inside a transaction (e.g., inviteUser just
+   * inserted the user row and needs auth_tokens.target_user_id to see it
+   * via the same snapshot), pass the open client so the INSERT shares the
+   * outer tx instead of opening a new one that would FK-fail against
+   * uncommitted rows.
+   */
+  readonly client?: PoolClient;
 }
 
 export interface MintResult {
@@ -92,7 +100,7 @@ export async function mintToken(
   const expiresAt = new Date(Date.now() + ttl * 1000);
   const createdByActorId = opts.createdByActorId ?? actor?.actorId ?? null;
 
-  await withMaybeContext(app, actor, async (client) => {
+  const insert = async (client: PoolClient): Promise<void> => {
     await client.query(
       `INSERT INTO xb_core.auth_tokens
          (id, token_type, token_hash, target_user_id, target_email, pending_payload,
@@ -110,7 +118,13 @@ export async function mintToken(
         opts.createdIp ?? null,
       ],
     );
-  });
+  };
+
+  if (opts.client) {
+    await insert(opts.client);
+  } else {
+    await withMaybeContext(app, actor, insert);
+  }
 
   return { token, tokenId, expiresAt: expiresAt.toISOString() };
 }

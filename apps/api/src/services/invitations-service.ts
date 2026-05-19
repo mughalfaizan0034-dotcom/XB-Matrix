@@ -180,6 +180,7 @@ export async function inviteUser(
         targetUserId: userId,
         targetEmail: email,
         createdByActorId: actor.actorId,
+        client, // share outer tx — user row isn't committed yet
       });
 
       const acceptUrl = buildAcceptUrl(token);
@@ -416,6 +417,7 @@ export async function resendInvitation(
       targetUserId: u.id,
       targetEmail: u.email,
       createdByActorId: actor.actorId,
+      client, // share outer tx so revoke + mint are atomic
     });
 
     let organizationName: string | null = null;
