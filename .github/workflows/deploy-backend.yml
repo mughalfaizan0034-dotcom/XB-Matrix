@@ -117,6 +117,14 @@ jobs:
         # not the whole UI tree. Faster cold install.
         run: pnpm install --frozen-lockfile --filter=@xb/api...
 
+      - name: Build workspace deps of @xb/api
+        # `tsx` runs migrate.ts directly, but the workspace packages it
+        # imports (@xb/config, @xb/types, @xb/auth) are consumed via their
+        # `main: dist/...` entry points. dist/ doesn't exist until each
+        # package is built. The `^...` filter builds only the dependencies
+        # of @xb/api, not @xb/api itself (we run that through tsx).
+        run: pnpm --filter @xb/api^... build
+
       - name: Apply pending DB migrations
         env:
           GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
