@@ -11,6 +11,7 @@ import { redisPlugin } from './plugins/redis.js';
 import { auditContextPlugin } from './plugins/audit-context.js';
 import { resolverPlugin } from './plugins/resolver.js';
 import { authCookiePlugin } from './plugins/auth-cookie.js';
+import { emailPlugin } from './plugins/email.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { requestIdPlugin } from './plugins/request-id.js';
 
@@ -19,6 +20,8 @@ import { authRoutes } from './routes/auth.js';
 import { organizationRoutes } from './routes/organizations.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 import { auditRoutes } from './routes/audit.js';
+import { userRoutes } from './routes/users.js';
+import { invitationRoutes } from './routes/invitations.js';
 
 export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   const app = Fastify({
@@ -59,6 +62,7 @@ export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
 
   await app.register(dbPlugin);
   await app.register(redisPlugin);
+  await app.register(emailPlugin);
 
   // Audit context + resolver
   await app.register(auditContextPlugin);
@@ -76,6 +80,8 @@ export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   await app.register(organizationRoutes, { prefix: '/v1/organizations' });
   await app.register(workspaceRoutes, { prefix: '/v1/workspaces' });
   await app.register(auditRoutes, { prefix: '/v1/audit' });
+  await app.register(userRoutes, { prefix: '/v1/users' });
+  await app.register(invitationRoutes, { prefix: '/v1/invitations' });
 
   return app;
 }

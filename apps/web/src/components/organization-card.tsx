@@ -31,6 +31,7 @@ import { describeError, useSession } from '@/lib/session';
 import { EditOrganizationDialog } from '@/components/edit-organization-dialog';
 import { AuditTrail } from '@/components/audit-trail';
 import { WorkspaceListNested } from '@/components/workspace-list-nested';
+import { UsersListNested } from '@/components/users-list-nested';
 
 type TabKey = 'workspaces' | 'users' | 'permissions' | 'audit' | 'billing' | 'integrations';
 
@@ -216,7 +217,7 @@ export function OrganizationCard({
             onChange={setTab}
             items={[
               { key: 'workspaces',   label: 'Workspaces' },
-              { key: 'users',        label: 'Users',        badge: <SoonBadge /> },
+              { key: 'users',        label: 'Users' },
               { key: 'permissions',  label: 'Permissions',  badge: <SoonBadge /> },
               { key: 'audit',        label: 'Audit' },
               { key: 'billing',      label: 'Billing',      badge: <SoonBadge /> },
@@ -227,11 +228,7 @@ export function OrganizationCard({
               <WorkspaceListNested organization={o} />
             </TabPanel>
             <TabPanel tabKey="users" className="pt-4">
-              <Placeholder>
-                Users management lands in the next phase. The schema (`xb_core.users` +
-                `xb_core.user_invitations`) is in production; invitations, email
-                verification, and password reset wire up in Phase E.2 part 2.
-              </Placeholder>
+              <UsersListNested organization={o} />
             </TabPanel>
             <TabPanel tabKey="permissions" className="pt-4">
               <Placeholder>

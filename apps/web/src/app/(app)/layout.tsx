@@ -1,6 +1,7 @@
 import { Sidebar } from '@/components/sidebar';
 import { Topbar } from '@/components/topbar';
 import { Protected } from '@/components/protected';
+import { EmailVerificationBanner } from '@/components/email-verification-banner';
 
 /**
  * App shell with an independently scrolling `<main>`.
@@ -22,6 +23,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar />
+          <EmailVerificationBanner />
           <main className="flex-1 overflow-auto">{children}</main>
         </div>
       </div>

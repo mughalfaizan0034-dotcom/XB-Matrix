@@ -21,6 +21,7 @@ export interface SessionUser {
   readonly userKind: 'internal' | 'organization';
   readonly role: string | null;
   readonly isInternalManager: boolean;
+  readonly emailVerifiedAt: string | null;
 }
 
 interface MeResponse {

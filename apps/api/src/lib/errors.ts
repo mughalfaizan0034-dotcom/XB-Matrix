@@ -59,7 +59,11 @@ export class SemanticError extends DomainError {
 }
 
 export class RateLimitError extends DomainError {
-  constructor(retryAfterSeconds: number) {
-    super('too many requests', 'rate_limited', 429, { retryAfterSeconds });
+  constructor(messageOrSeconds: string | number, retryAfterSeconds?: number) {
+    const seconds =
+      typeof messageOrSeconds === 'number' ? messageOrSeconds : retryAfterSeconds ?? 60;
+    const message =
+      typeof messageOrSeconds === 'string' ? messageOrSeconds : 'too many requests';
+    super(message, 'rate_limited', 429, { retryAfterSeconds: seconds });
   }
 }

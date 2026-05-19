@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button, FormField, Input, useToast } from '@xb/ui';
 import { describeError, useSession, useSignIn } from '@/lib/session';
 
@@ -88,6 +89,13 @@ function SignInForm() {
         <Button type="submit" disabled={signIn.isPending || !email || !password}>
           {signIn.isPending ? 'Signing in…' : 'Continue'}
         </Button>
+
+        <Link
+          href="/forgot-password"
+          className="text-center text-xs text-muted-foreground hover:text-foreground"
+        >
+          Forgot password?
+        </Link>
       </form>
     </SignInShell>
   );

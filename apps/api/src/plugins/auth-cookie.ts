@@ -10,6 +10,7 @@ import type {
   SessionId,
 } from '@xb/types';
 import { UnauthenticatedError } from '@xb/auth';
+import { getSession, touchSession } from '../services/session-service.js';
 
 export interface SessionPayload {
   sub: string;          // user id
@@ -22,10 +23,14 @@ export interface SessionPayload {
 }
 
 /**
- * Reads the session JWT from the auth cookie, verifies it, and decorates
- * each request with `.actor` (or null) and `req.requireActor()`.
+ * Reads the session JWT from the auth cookie, verifies it, looks up the
+ * server-side session row to detect revocation, and decorates each
+ * request with `.actor` (or null) and `req.requireActor()`.
  *
- * Routes are public by default; protected ones call `req.requireActor()`.
+ * Server-side session check is what gives sign-out, password reset, and
+ * admin revocation REAL teeth — a stolen cookie stops working as soon as
+ * its session row is revoked, even though the JWT signature is still
+ * valid until expiry.
  */
 export const authCookiePlugin = fp(async (app) => {
   const cookieName = app.config.auth.sessionCookieName;
@@ -42,20 +47,31 @@ export const authCookiePlugin = fp(async (app) => {
       req.actor = null;
       return;
     }
+    let payload: SessionPayload;
     try {
-      const payload = (await app.jwt.verify(raw)) as SessionPayload;
-      req.actor = {
-        actorId: payload.act as ActorId,
-        actorKind: payload.kind,
-        effectiveRole: payload.role,
-        organizationId: (payload.org ?? null) as OrganizationId | null,
-        sessionId: payload.ses as SessionId,
-        requestId: req.id as RequestId,
-        isInternalManager: payload.mgr,
-      };
+      payload = (await app.jwt.verify(raw)) as SessionPayload;
     } catch {
       req.actor = null;
+      return;
     }
+    // Verify session is still live (not revoked, not expired).
+    const session = await getSession(app, payload.ses).catch(() => null);
+    if (!session) {
+      req.actor = null;
+      return;
+    }
+    // Fire-and-forget touch — throttled to 60s per session via Redis.
+    void touchSession(app, payload.ses);
+
+    req.actor = {
+      actorId: payload.act as ActorId,
+      actorKind: payload.kind,
+      effectiveRole: payload.role,
+      organizationId: (payload.org ?? null) as OrganizationId | null,
+      sessionId: payload.ses as SessionId,
+      requestId: req.id as RequestId,
+      isInternalManager: payload.mgr,
+    };
   });
 });
 
