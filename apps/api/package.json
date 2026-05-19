@@ -29,6 +29,7 @@
     "@xb/calculations": "workspace:*",
     "@xb/config": "workspace:*",
     "@xb/types": "workspace:*",
+    "csv-parse": "^5.5.0",
     "dotenv": "^16.4.5",
     "fastify": "^4.28.1",
     "fastify-plugin": "^4.5.1",

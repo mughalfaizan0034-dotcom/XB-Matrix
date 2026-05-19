@@ -7,6 +7,7 @@ import type {
   WorkspaceId,
 } from '@xb/types';
 import { NotFoundError, SemanticError } from '../lib/errors.js';
+import { getValidator } from '../uploads/validators/index.js';
 
 export type UploadStatus = 'queued' | 'uploading' | 'validating' | 'ready' | 'failed';
 
@@ -180,12 +181,24 @@ export async function createUpload(
 
   try {
     return await app.withConnection(actor, async (client) => {
+      // Lifecycle:
+      //   no validator registered → insert as 'ready'; the file is
+      //     stored, nothing else to do.
+      //   validator registered → insert as 'validating', run the
+      //     validator (which inserts canonical rows in this same tx),
+      //     then transition to 'ready' or 'failed' with the summary.
+      // Either way the user sees a complete state by the time the
+      // POST returns. When async workers land for large files this is
+      // where the queued → handoff happens.
+      const validator = getValidator(input.uploadKind);
+      const initialStatus = validator ? 'validating' : 'ready';
+
       await client.query(
         `INSERT INTO xb_core.uploads
            (id, organization_id, workspace_id, upload_kind, original_filename,
             content_type, file_size_bytes, sha256, storage_bucket, storage_object_key,
-            upload_status, created_by_actor_id, updated_by_actor_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ready', $11, $11)`,
+            upload_status, validation_started_at, created_by_actor_id, updated_by_actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)`,
         [
           id,
           orgId,
@@ -197,9 +210,41 @@ export async function createUpload(
           sha256,
           uploadResult.bucket,
           uploadResult.objectKey,
+          initialStatus,
+          validator ? new Date() : null,
           actor.actorId,
         ],
       );
+
+      if (validator) {
+        const result = await validator.validate({
+          app,
+          actor,
+          client,
+          uploadId: id,
+          organizationId: orgId,
+          workspaceId: input.workspaceId,
+          buffer: input.body,
+          originalFilename: input.originalFilename,
+        });
+        await client.query(
+          `UPDATE xb_core.uploads
+              SET upload_status = $2,
+                  validation_summary = $3::jsonb,
+                  validation_completed_at = now(),
+                  error_message = $4,
+                  updated_by_actor_id = $5
+            WHERE id = $1`,
+          [
+            id,
+            result.ok ? 'ready' : 'failed',
+            JSON.stringify(result.summary),
+            result.errorMessage ?? null,
+            actor.actorId,
+          ],
+        );
+      }
+
       const { rows } = await client.query<UploadRow>(`${SELECT_UPLOAD} AND id = $1`, [id]);
       if (!rows[0]) throw new Error('inserted upload vanished');
       return rowToUpload(rows[0]);

@@ -119,12 +119,7 @@ export function UploadDetailDrawer({ uploadId, onClose }: Props) {
 
           {upload.validationSummary ? (
             <Section title="Validation summary">
-              {/* Opaque blob — per-module validators define the shape. The
-                  drawer just renders a readable snapshot until a future
-                  slice adds a typed renderer per upload kind. */}
-              <pre className="overflow-x-auto rounded-md border border-border bg-muted/30 p-3 text-xs text-foreground">
-                {JSON.stringify(upload.validationSummary, null, 2)}
-              </pre>
+              <ValidationSummaryRenderer summary={upload.validationSummary} />
             </Section>
           ) : (
             <Section title="Validation">
@@ -182,6 +177,163 @@ const STATUS_DESCRIPTION: Record<UploadStatus, string> = {
   ready:      'Stored successfully and available for downstream pipelines.',
   failed:     'Something went wrong — see the error message below. You can retry.',
 };
+
+/**
+ * Renders any validator's summary blob. The common envelope shape
+ * (rowsParsed/Accepted/Rejected, columns, errors) is rendered as a
+ * structured panel for every kind. The opaque `extra` block falls
+ * through to a typed renderer when we recognize it (e.g., sales gets
+ * total amount, date range, distinct SKUs).
+ */
+function ValidationSummaryRenderer({ summary }: { summary: Record<string, unknown> }) {
+  const s = summary as Partial<{
+    rowsParsed: number;
+    rowsAccepted: number;
+    rowsRejected: number;
+    columnsDetected: string[];
+    columnsMissing: string[];
+    errors: Array<{ row: number; column?: string; message: string }>;
+    extra: Record<string, unknown>;
+  }>;
+
+  const hasStandardShape = typeof s.rowsParsed === 'number';
+  if (!hasStandardShape) {
+    // Unknown shape — fall back to raw JSON so the data is still inspectable.
+    return (
+      <pre className="overflow-x-auto rounded-md border border-border bg-muted/30 p-3 text-xs text-foreground">
+        {JSON.stringify(summary, null, 2)}
+      </pre>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-3 gap-2">
+        <SummaryStat label="Parsed" value={(s.rowsParsed ?? 0).toLocaleString()} />
+        <SummaryStat
+          label="Accepted"
+          value={(s.rowsAccepted ?? 0).toLocaleString()}
+          tone={s.rowsAccepted ? 'success' : 'neutral'}
+        />
+        <SummaryStat
+          label="Rejected"
+          value={(s.rowsRejected ?? 0).toLocaleString()}
+          tone={s.rowsRejected ? 'danger' : 'neutral'}
+        />
+      </div>
+
+      <SalesExtraPanel extra={s.extra} />
+
+      {s.columnsMissing && s.columnsMissing.length > 0 ? (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+          <div className="font-semibold">Missing required columns</div>
+          <div className="mt-1 font-mono">{s.columnsMissing.join(', ')}</div>
+        </div>
+      ) : null}
+
+      {s.columnsDetected && s.columnsDetected.length > 0 ? (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+            Detected columns ({s.columnsDetected.length})
+          </summary>
+          <div className="mt-1 break-all font-mono text-[11px] text-foreground">
+            {s.columnsDetected.join(', ')}
+          </div>
+        </details>
+      ) : null}
+
+      {s.errors && s.errors.length > 0 ? (
+        <div className="overflow-hidden rounded-md border border-border">
+          <div className="border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Errors ({s.errors.length} shown
+            {typeof s.rowsRejected === 'number' && s.rowsRejected > s.errors.length
+              ? ` of ${s.rowsRejected}`
+              : ''}
+            )
+          </div>
+          <div className="max-h-72 overflow-auto">
+            <table className="min-w-full text-xs">
+              <thead className="bg-muted/20 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-1.5">Row</th>
+                  <th className="px-3 py-1.5">Column</th>
+                  <th className="px-3 py-1.5">Message</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {s.errors.map((e, i) => (
+                  <tr key={i}>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                      {e.row > 0 ? e.row : '—'}
+                    </td>
+                    <td className="px-3 py-1.5 font-mono text-foreground">{e.column ?? '—'}</td>
+                    <td className="px-3 py-1.5 text-foreground">{e.message}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SummaryStat({
+  label,
+  value,
+  tone = 'neutral',
+}: {
+  label: string;
+  value: string;
+  tone?: 'neutral' | 'success' | 'danger';
+}) {
+  const toneClass =
+    tone === 'success' ? 'text-emerald-700' : tone === 'danger' ? 'text-red-700' : 'text-foreground';
+  return (
+    <div className="rounded-md border border-border bg-card px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className={`mt-0.5 text-sm font-semibold tabular-nums ${toneClass}`}>{value}</div>
+    </div>
+  );
+}
+
+/**
+ * Sales-specific extras (totalGrossAmount, distinctSkus, dateRange).
+ * Renders nothing when the upload isn't sales-kind or those fields
+ * aren't present — safe to call for every validator's summary.
+ */
+function SalesExtraPanel({ extra }: { extra?: Record<string, unknown> }) {
+  if (!extra) return null;
+  const total = extra.totalGrossAmount;
+  const distinctSkus = extra.distinctSkus;
+  const dateRange = extra.dateRange as { from?: string; to?: string } | null | undefined;
+  const note = extra.note;
+
+  const hasAny =
+    typeof total === 'string' ||
+    typeof distinctSkus === 'number' ||
+    (dateRange && (dateRange.from || dateRange.to));
+
+  if (!hasAny && !note) return null;
+
+  return (
+    <div className="rounded-md border border-border bg-card px-3 py-2 text-xs">
+      {typeof total === 'string' ? (
+        <KeyValue label="Gross amount" value={total} />
+      ) : null}
+      {typeof distinctSkus === 'number' ? (
+        <KeyValue label="Distinct SKUs" value={distinctSkus.toLocaleString()} />
+      ) : null}
+      {dateRange && dateRange.from && dateRange.to ? (
+        <KeyValue label="Date range" value={`${dateRange.from} → ${dateRange.to}`} />
+      ) : null}
+      {typeof note === 'string' ? (
+        <p className="mt-2 text-muted-foreground">{note}</p>
+      ) : null}
+    </div>
+  );
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
