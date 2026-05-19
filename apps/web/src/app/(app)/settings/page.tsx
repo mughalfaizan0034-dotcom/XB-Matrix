@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Button, PageHeader } from '@xb/ui';
+import { cn } from '@xb/ui/lib/cn';
 import { Plus, Search } from 'lucide-react';
 import { useSession } from '@/lib/session';
 import { useOrganizations, type Organization } from '@/lib/api-orgs';
@@ -9,6 +10,7 @@ import { OrganizationCard } from '@/components/organization-card';
 import { NewOrganizationDialog } from '@/components/new-organization-dialog';
 import { usePersistedStringSet } from '@/lib/use-persisted-set';
 import { usePersistedString } from '@/lib/use-persisted-string';
+import { useScrolledPast } from '@/lib/use-scrolled';
 
 const EXPANDED_STORAGE_KEY = 'xb.settings.orgs.expanded';
 const FILTER_STORAGE_KEY = 'xb.settings.orgs.filter';
@@ -65,12 +67,22 @@ export default function SettingsPage() {
   }
 
   const showToolbar = (orgs.data?.length ?? 0) > 1;
+  const [sentinelRef, scrolled] = useScrolledPast();
 
   return (
-    // Negative margins escape the main element's padding so the sticky
-    // header bar spans full width and pins to the top of the scroll area.
-    <div className="-mx-6 -mt-6 flex flex-col lg:-mx-8 lg:-mt-8">
-      <div className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur">
+    <div className="flex flex-col">
+      {/* Zero-height sentinel just above the sticky bar. When it scrolls out
+          of view the sticky bar lifts visually with a shadow. */}
+      <div ref={sentinelRef} className="h-px" aria-hidden="true" />
+
+      <div
+        className={cn(
+          'sticky top-0 z-20 bg-background/90 backdrop-blur transition-shadow duration-150',
+          scrolled
+            ? 'border-b border-border shadow-xb-md'
+            : 'border-b border-transparent',
+        )}
+      >
         <div className="flex flex-col gap-4 px-6 pb-4 pt-6 lg:px-8 lg:pt-8">
           <PageHeader
             title="Settings"

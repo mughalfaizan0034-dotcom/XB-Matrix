@@ -7,7 +7,7 @@ interface Props {
 
 export function ModulePlaceholder({ title, description }: Props) {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 p-6 lg:p-8">
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">{title}</h1>
         <p className="text-sm text-muted-foreground">{description}</p>

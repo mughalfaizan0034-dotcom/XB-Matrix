@@ -14,7 +14,8 @@
     "./permission":{ "types": "./dist/permission.d.ts", "import": "./dist/permission.js" },
     "./module":    { "types": "./dist/module.d.ts",     "import": "./dist/module.js" },
     "./api":       { "types": "./dist/api.d.ts",        "import": "./dist/api.js" },
-    "./slug":      { "types": "./dist/slug.d.ts",       "import": "./dist/slug.js" }
+    "./slug":      { "types": "./dist/slug.d.ts",       "import": "./dist/slug.js" },
+    "./timezones": { "types": "./dist/timezones.d.ts",  "import": "./dist/timezones.js" }
   },
   "files": ["dist"],
   "scripts": {

@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { Button, Dialog, FormField, Input, Select, useToast } from '@xb/ui';
+import { DEFAULT_TIMEZONE } from '@xb/types/timezones';
 import type { Organization } from '@/lib/api-orgs';
 import { useCreateWorkspace } from '@/lib/api-workspaces';
 import { describeError } from '@/lib/session';
 import { ApiError } from '@/lib/api-client';
+import { TimezoneSelect } from '@/components/timezone-select';
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'PKR', 'INR'];
 const TYPES = [
@@ -45,16 +47,17 @@ export function NewWorkspaceDialog({
   const [workspaceName, setName] = useState('');
   const [workspaceType, setType] = useState<(typeof TYPES)[number]['value']>('marketplace');
   const [defaultCurrencyCode, setCurrency] = useState('USD');
+  const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
   const [dosTargetDays, setDos] = useState('30');
   const [nameError, setNameError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
-      setOrgId(defaultOrganizationId ?? organizations[0]?.id ?? '');
-      setCurrency(
-        organizations.find((o) => o.id === (defaultOrganizationId ?? organizations[0]?.id))
-          ?.defaultCurrencyCode ?? 'USD',
-      );
+      const parentId = defaultOrganizationId ?? organizations[0]?.id ?? '';
+      const parent = organizations.find((o) => o.id === parentId);
+      setOrgId(parentId);
+      setCurrency(parent?.defaultCurrencyCode ?? 'USD');
+      setTimezone(parent?.defaultTimezone || DEFAULT_TIMEZONE);
       setName('');
       setType('marketplace');
       setDos('30');
@@ -85,6 +88,7 @@ export function NewWorkspaceDialog({
         workspaceName,
         workspaceType,
         defaultCurrencyCode,
+        timezone,
         dosTargetDays: Number(dosTargetDays),
       });
       toast.push('success', `Workspace "${workspaceName}" created.`);
@@ -183,6 +187,12 @@ export function NewWorkspaceDialog({
             )}
           </FormField>
 
+          <FormField label="Timezone" required>
+            {(p) => <TimezoneSelect {...p} value={timezone} onChange={setTimezone} required />}
+          </FormField>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
           <FormField
             label="DOS target (days)"
             hint={dosError ? undefined : `Whole days, ${DOS_MIN}–${DOS_MAX}. Default 30.`}

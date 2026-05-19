@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button, Dialog, FormField, Input, Select, useToast } from '@xb/ui';
 import { isValidSlug, toSlug } from '@xb/types/slug';
+import { DEFAULT_TIMEZONE } from '@xb/types/timezones';
 import { useCreateOrganization } from '@/lib/api-orgs';
 import { describeError } from '@/lib/session';
 import { ApiError } from '@/lib/api-client';
+import { TimezoneSelect } from '@/components/timezone-select';
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'PKR', 'INR'];
 
@@ -20,6 +22,7 @@ export function NewOrganizationDialog({
   const create = useCreateOrganization();
   const [displayName, setDisplayName] = useState('');
   const [defaultCurrencyCode, setCurrency] = useState('USD');
+  const [defaultTimezone, setTimezone] = useState(DEFAULT_TIMEZONE);
   const [legalName, setLegalName] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -32,6 +35,7 @@ export function NewOrganizationDialog({
     setDisplayName('');
     setLegalName('');
     setCurrency('USD');
+    setTimezone(DEFAULT_TIMEZONE);
     setSubmitError(null);
   }
 
@@ -53,6 +57,7 @@ export function NewOrganizationDialog({
       await create.mutateAsync({
         displayName,
         defaultCurrencyCode,
+        defaultTimezone,
         ...(legalName ? { legalName } : {}),
       });
       toast.push('success', `Organization "${displayName}" created.`);
@@ -139,22 +144,28 @@ export function NewOrganizationDialog({
           )}
         </FormField>
 
-        <FormField label="Default currency" required>
-          {(p) => (
-            <Select
-              {...p}
-              value={defaultCurrencyCode}
-              onChange={(e) => setCurrency(e.target.value)}
-              required
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </Select>
-          )}
-        </FormField>
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Default currency" required>
+            {(p) => (
+              <Select
+                {...p}
+                value={defaultCurrencyCode}
+                onChange={(e) => setCurrency(e.target.value)}
+                required
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </FormField>
+
+          <FormField label="Default timezone" required>
+            {(p) => <TimezoneSelect {...p} value={defaultTimezone} onChange={setTimezone} required />}
+          </FormField>
+        </div>
       </form>
     </Dialog>
   );

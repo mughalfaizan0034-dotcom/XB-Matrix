@@ -5,6 +5,7 @@ import { Button, Dialog, FormField, Input, Select, useToast } from '@xb/ui';
 import { type Organization, usePatchOrganization } from '@/lib/api-orgs';
 import { describeError } from '@/lib/session';
 import { ApiError } from '@/lib/api-client';
+import { TimezoneSelect } from '@/components/timezone-select';
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'PKR', 'INR'];
 
@@ -141,17 +142,8 @@ export function EditOrganizationDialog({
               </Select>
             )}
           </FormField>
-          <FormField label="Default timezone">
-            {(p) => (
-              <Input
-                {...p}
-                value={defaultTimezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                placeholder="UTC"
-                maxLength={64}
-                autoComplete="off"
-              />
-            )}
+          <FormField label="Default timezone" required>
+            {(p) => <TimezoneSelect {...p} value={defaultTimezone} onChange={setTimezone} required />}
           </FormField>
         </div>
       </form>

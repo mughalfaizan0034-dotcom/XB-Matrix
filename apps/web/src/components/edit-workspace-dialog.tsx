@@ -5,6 +5,7 @@ import { Button, Dialog, FormField, Input, Select, useToast } from '@xb/ui';
 import { type Workspace, usePatchWorkspace } from '@/lib/api-workspaces';
 import { describeError } from '@/lib/session';
 import { ApiError } from '@/lib/api-client';
+import { TimezoneSelect } from '@/components/timezone-select';
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'PKR', 'INR'];
 const TYPES = [
@@ -163,16 +164,8 @@ export function EditWorkspaceDialog({
               </Select>
             )}
           </FormField>
-          <FormField label="Timezone">
-            {(p) => (
-              <Input
-                {...p}
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                maxLength={64}
-                autoComplete="off"
-              />
-            )}
+          <FormField label="Timezone" required>
+            {(p) => <TimezoneSelect {...p} value={timezone} onChange={setTimezone} required />}
           </FormField>
         </div>
 
