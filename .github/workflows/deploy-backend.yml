@@ -132,9 +132,33 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "::group::Fetch DATABASE_URL from Secret Manager"
+          # We read api-database-admin-url here, NOT api-database-url.
+          # The runtime user (`xbmatrixapp`) is intentionally least-privileged
+          # by migration 0007 — it has no CREATE on schema public, so it
+          # cannot run DDL. The admin DSN should resolve to the `postgres`
+          # role (or any role that can run migrations); provision it with
+          # infrastructure/scripts/setup-migrations-secret.ps1.
+          #
+          # If the admin secret doesn't exist yet, SKIP migrations rather
+          # than blocking the deploy. That preserves the original behavior
+          # of the workflow (deploy code without auto-migrate) for as long
+          # as the admin DSN hasn't been provisioned. Set up the secret
+          # with the helper script — the next deploy will run migrations
+          # automatically.
+          echo "::group::Check admin DATABASE_URL is provisioned"
+          if ! gcloud secrets describe api-database-admin-url \
+              --project="$GCP_PROJECT_ID" >/dev/null 2>&1; then
+            echo "::warning::api-database-admin-url secret is not provisioned — skipping migrations."
+            echo "::warning::Run infrastructure/scripts/setup-migrations-secret.ps1 to enable auto-migrate."
+            echo "MIGRATIONS_SKIPPED=true" >> "$GITHUB_ENV"
+            echo "::endgroup::"
+            exit 0
+          fi
+          echo "::endgroup::"
+
+          echo "::group::Fetch admin DATABASE_URL from Secret Manager"
           DB_URL=$(gcloud secrets versions access latest \
-            --secret=api-database-url \
+            --secret=api-database-admin-url \
             --project="$GCP_PROJECT_ID")
           # Mask the whole URL (it contains the password) — also mask the
           # password component on its own so it doesn't leak if logged
