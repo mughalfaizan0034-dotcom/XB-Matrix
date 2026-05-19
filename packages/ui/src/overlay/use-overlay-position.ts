@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 
-export type Placement = 'bottom-start' | 'bottom-end' | 'top-start' | 'top-end';
+export type Placement =
+  | 'bottom-start'
+  | 'bottom-end'
+  | 'top-start'
+  | 'top-end'
+  | 'right-start'
+  | 'left-start';
 
 export interface OverlayPosition {
   readonly top: number;
@@ -49,9 +55,38 @@ export function useOverlayPosition(
     const vw = window.innerWidth;
     const vh = window.innerHeight;
 
+    let placement: Placement = requested;
+
+    // Side flyouts (right-/left-start) — used for nested/multi-level menus.
+    // Anchored to the trigger's top edge, projecting horizontally. Auto-
+    // flip to the other side if there's not enough room.
+    if (requested === 'right-start' || requested === 'left-start') {
+      const spaceRight = vw - tRect.right - viewportPadding;
+      const spaceLeft = tRect.left - viewportPadding;
+      const needsWidth = oRect.width + offset;
+      placement = requested;
+      if (requested === 'right-start' && spaceRight < needsWidth && spaceLeft > spaceRight) {
+        placement = 'left-start';
+      } else if (requested === 'left-start' && spaceLeft < needsWidth && spaceRight > spaceLeft) {
+        placement = 'right-start';
+      }
+      const placeRight = placement === 'right-start';
+      const left = placeRight ? tRect.right + offset : tRect.left - oRect.width - offset;
+      let top = tRect.top;
+      // Clamp vertically so the panel doesn't extend below viewport.
+      if (top + oRect.height > vh - viewportPadding) {
+        top = Math.max(viewportPadding, vh - viewportPadding - oRect.height);
+      }
+      if (top < viewportPadding) top = viewportPadding;
+      const maxHeight = vh - top - viewportPadding;
+      const clampedMaxHeight =
+        maxHeight > 0 && maxHeight < oRect.height ? maxHeight : undefined;
+      setPos({ top, left, placement, maxHeight: clampedMaxHeight });
+      return;
+    }
+
     const spaceBelow = vh - tRect.bottom - viewportPadding;
     const spaceAbove = tRect.top - viewportPadding;
-    let placement: Placement = requested;
     const wantTop = requested.startsWith('top');
     const needsHeight = oRect.height + offset;
     if (wantTop && spaceAbove < needsHeight && spaceBelow > spaceAbove) {
