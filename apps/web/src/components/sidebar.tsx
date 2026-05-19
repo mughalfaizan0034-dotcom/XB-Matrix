@@ -15,6 +15,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { cn } from '@xb/ui/lib/cn';
+import { useToast } from '@xb/ui';
 import { useActiveWorkspace } from '@/lib/session';
 
 interface NavItem {
@@ -22,9 +23,10 @@ interface NavItem {
   readonly href: string;
   readonly icon: React.ComponentType<{ className?: string }>;
   /**
-   * Module is workspace-scoped — when no active workspace is selected
-   * we keep the link visible but visually dimmed and route it through
-   * the dashboard's workspace picker instead of the empty module page.
+   * Module is workspace-scoped. When no active workspace is selected the
+   * sidebar shows a Lock + dimmed state AND swallows clicks so the user
+   * can't land on a module page that has nothing to show — a toast points
+   * them at the topbar switcher instead.
    */
   readonly requiresWorkspace?: boolean;
 }
@@ -44,7 +46,16 @@ const NAV: ReadonlyArray<NavItem> = [
 export function Sidebar() {
   const pathname = usePathname();
   const { data: activeWorkspace } = useActiveWorkspace();
+  const toast = useToast();
   const hasActive = !!activeWorkspace;
+
+  function onGatedClick(e: React.MouseEvent, label: string) {
+    e.preventDefault();
+    toast.push(
+      'info',
+      `${label} needs an active workspace. Pick one from the topbar switcher to unlock it.`,
+    );
+  }
 
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-white lg:flex">
@@ -59,20 +70,16 @@ export function Sidebar() {
           const Icon = item.icon;
           const active = pathname === item.href || pathname.startsWith(item.href + '/');
           const gated = item.requiresWorkspace && !hasActive;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={gated ? 'Select a workspace from the topbar switcher to enable this module.' : undefined}
-              className={cn(
-                'group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                active
-                  ? 'bg-navy text-white'
-                  : gated
-                    ? 'text-foreground/40 hover:bg-muted/40 hover:text-foreground/60'
-                    : 'text-foreground/80 hover:bg-muted hover:text-foreground',
-              )}
-            >
+          const rowClass = cn(
+            'group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+            active
+              ? 'bg-navy text-white'
+              : gated
+                ? 'cursor-not-allowed text-foreground/40 hover:bg-muted/40 hover:text-foreground/60'
+                : 'text-foreground/80 hover:bg-muted hover:text-foreground',
+          );
+          const body = (
+            <>
               <Icon className="h-4 w-4" />
               <span className="flex-1">{item.label}</span>
               {gated ? (
@@ -81,6 +88,28 @@ export function Sidebar() {
                   aria-label="Needs a workspace"
                 />
               ) : null}
+            </>
+          );
+          // Render gated rows as buttons (no navigation) — Link would
+          // silently navigate to the module page, where the user's only
+          // option is to come back. The toast tells them where to fix it.
+          if (gated) {
+            return (
+              <button
+                key={item.href}
+                type="button"
+                aria-disabled="true"
+                title="Select a workspace from the topbar switcher to enable this module."
+                onClick={(e) => onGatedClick(e, item.label)}
+                className={rowClass}
+              >
+                {body}
+              </button>
+            );
+          }
+          return (
+            <Link key={item.href} href={item.href} className={rowClass}>
+              {body}
             </Link>
           );
         })}

@@ -83,6 +83,104 @@ jobs:
             ${{ env.AR_HOST }}/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/xb-worker:${{ steps.tag.outputs.tag }}
             ${{ env.AR_HOST }}/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/xb-worker:latest
 
+      # ---------------------------------------------------------------
+      # Apply pending SQL migrations before the new revision goes live.
+      #
+      # Why before deploy: a deploy of code that depends on a missing
+      # schema would crash on startup. By gating the deploy on migrations
+      # succeeding, the worst case is a failed workflow rather than a
+      # broken production revision.
+      #
+      # How: pull the api-database-url secret, derive a localhost DSN,
+      # tunnel via Cloud SQL Auth Proxy (TCP mode), run
+      # `pnpm --filter @xb/api db:migrate`, kill the proxy.
+      #
+      # Required IAM on the DEPLOY service account (one-time setup):
+      #   roles/cloudsql.client                         (instance-scope)
+      #   roles/secretmanager.secretAccessor            (on api-database-url)
+      # If missing, this step fails with a clear permission error and
+      # the deploy halts; no schema/code drift can result.
+      # ---------------------------------------------------------------
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install workspace deps (for migrations runner)
+        # --filter is the runner — we only need @xb/api + its workspace deps,
+        # not the whole UI tree. Faster cold install.
+        run: pnpm install --frozen-lockfile --filter=@xb/api...
+
+      - name: Apply pending DB migrations
+        env:
+          GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
+          CLOUD_SQL_CONNECTION_NAME: ${{ secrets.CLOUD_SQL_CONNECTION_NAME }}
+        run: |
+          set -euo pipefail
+
+          echo "::group::Fetch DATABASE_URL from Secret Manager"
+          DB_URL=$(gcloud secrets versions access latest \
+            --secret=api-database-url \
+            --project="$GCP_PROJECT_ID")
+          # Mask the whole URL (it contains the password) — also mask the
+          # password component on its own so it doesn't leak if logged
+          # separately.
+          echo "::add-mask::$DB_URL"
+          DB_PASS=$(printf '%s' "$DB_URL" | sed -n 's|^postgresql://[^:]*:\([^@]*\)@.*|\1|p')
+          if [ -n "$DB_PASS" ]; then echo "::add-mask::$DB_PASS"; fi
+          echo "::endgroup::"
+
+          echo "::group::Parse DSN"
+          # Expected shape (Cloud SQL connector form):
+          #   postgresql://user:pass@/db?host=/cloudsql/INSTANCE&sslmode=disable
+          # Output: postgresql://user:pass@127.0.0.1:5433/db
+          USER_PASS=$(printf '%s' "$DB_URL" | sed -n 's|^postgresql://\([^@]*\)@.*|\1|p')
+          DB_NAME=$(printf '%s' "$DB_URL" | sed -n 's|.*@/\([^?]*\).*|\1|p')
+          if [ -z "$USER_PASS" ] || [ -z "$DB_NAME" ]; then
+            echo "::error::Could not parse user/password/db from DATABASE_URL. Expected postgresql://user:pass@/db?host=..."
+            exit 1
+          fi
+          MIGRATION_URL="postgresql://${USER_PASS}@127.0.0.1:5433/${DB_NAME}"
+          echo "::add-mask::$MIGRATION_URL"
+          echo "Parsed db=$DB_NAME (user + password masked)"
+          echo "::endgroup::"
+
+          echo "::group::Start Cloud SQL Auth Proxy"
+          curl -fsSL -o cloud-sql-proxy \
+            https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.13.0/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          ./cloud-sql-proxy --port 5433 "$CLOUD_SQL_CONNECTION_NAME" \
+            > proxy.log 2>&1 &
+          PROXY_PID=$!
+          # Ensure proxy is killed even if migrate fails.
+          trap "echo 'Stopping proxy ($PROXY_PID)'; kill $PROXY_PID 2>/dev/null || true" EXIT
+
+          # Wait up to 30s for the listener to be ready.
+          for i in $(seq 1 30); do
+            if (echo > /dev/tcp/127.0.0.1/5433) >/dev/null 2>&1; then
+              echo "Proxy ready after ${i}s"
+              break
+            fi
+            sleep 1
+            if [ "$i" = "30" ]; then
+              echo "::error::Cloud SQL Auth Proxy did not become ready within 30s"
+              cat proxy.log
+              exit 1
+            fi
+          done
+          echo "::endgroup::"
+
+          echo "::group::Run pnpm db:migrate"
+          DATABASE_URL="$MIGRATION_URL" \
+            pnpm --filter @xb/api db:migrate
+          echo "::endgroup::"
+
       - name: Render Cloud Run service definitions
         env:
           IMAGE_TAG: ${{ steps.tag.outputs.tag }}
