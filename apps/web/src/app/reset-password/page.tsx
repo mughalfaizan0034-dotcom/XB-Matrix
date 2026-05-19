@@ -45,7 +45,7 @@ function ResetForm() {
     setSubmitting(true);
     try {
       await resetPassword(token, password);
-      qc.setQueryData(SESSION_QUERY_KEY, null);
+      qc.setQueryData(SESSION_QUERY_KEY, { user: null, activeWorkspace: null });
       toast.push('success', 'Password updated. Please sign in with your new password.');
       router.replace('/sign-in');
     } catch (err) {

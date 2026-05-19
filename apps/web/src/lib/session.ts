@@ -24,8 +24,18 @@ export interface SessionUser {
   readonly emailVerifiedAt: string | null;
 }
 
+export interface ActiveWorkspaceSummary {
+  readonly id: string;
+  readonly workspaceName: string;
+  readonly workspaceType: 'marketplace' | 'dtc' | 'warehouse' | 'omni_channel';
+  readonly workspaceStatus: 'active' | 'archived';
+  readonly organizationId: string;
+  readonly organizationName: string;
+}
+
 interface MeResponse {
   readonly user: SessionUser | null;
+  readonly activeWorkspace: ActiveWorkspaceSummary | null;
 }
 
 interface SignInResponse {
@@ -37,9 +47,24 @@ export const SESSION_QUERY_KEY = ['session', 'me'] as const;
 export function useSession() {
   return useQuery({
     queryKey: SESSION_QUERY_KEY,
-    queryFn: () => api.get<MeResponse>('/v1/auth/me').then((r) => r.user),
+    queryFn: () => api.get<MeResponse>('/v1/auth/me'),
     staleTime: 60_000,
     retry: false,
+    select: (data) => data.user,
+  });
+}
+
+/**
+ * Reads the active workspace from the same /me cache `useSession` uses, so
+ * we share one round trip per page load.
+ */
+export function useActiveWorkspace() {
+  return useQuery({
+    queryKey: SESSION_QUERY_KEY,
+    queryFn: () => api.get<MeResponse>('/v1/auth/me'),
+    staleTime: 60_000,
+    retry: false,
+    select: (data) => data.activeWorkspace,
   });
 }
 
@@ -50,7 +75,10 @@ export function useSignIn() {
     mutationFn: (vars: { email: string; password: string }) =>
       api.post<SignInResponse>('/v1/auth/sign-in', vars),
     onSuccess: (data) => {
-      qc.setQueryData(SESSION_QUERY_KEY, data.user);
+      // Sign-in returns just the user; the session starts with no active
+      // workspace selected. Seed the cache shape so consumers don't have
+      // to wait for /me to re-fetch.
+      qc.setQueryData(SESSION_QUERY_KEY, { user: data.user, activeWorkspace: null });
       router.push('/dashboard');
     },
   });
@@ -62,7 +90,7 @@ export function useSignOut() {
   return useMutation({
     mutationFn: () => api.post<{ signedOut: boolean }>('/v1/auth/sign-out'),
     onSuccess: () => {
-      qc.setQueryData(SESSION_QUERY_KEY, null);
+      qc.setQueryData(SESSION_QUERY_KEY, { user: null, activeWorkspace: null });
       qc.invalidateQueries();
       router.push('/sign-in');
     },

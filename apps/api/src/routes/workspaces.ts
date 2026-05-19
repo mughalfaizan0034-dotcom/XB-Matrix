@@ -5,10 +5,12 @@ import {
   archiveWorkspace,
   createWorkspace,
   getWorkspace,
+  listAccessibleWorkspaces,
   listWorkspaces,
   patchWorkspace,
   reactivateWorkspace,
   restoreWorkspace,
+  selectActiveWorkspace,
   softDeleteWorkspace,
 } from '../services/workspace-service.js';
 import { NotFoundError } from '../lib/errors.js';
@@ -62,6 +64,35 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       limit: q.limit,
     });
     return ok({ items, page: { cursor: null, hasMore: false } }, req.id);
+  });
+
+  // Workspaces the current actor can switch into (cross-org for managers).
+  // Drives the topbar workspace switcher. Different shape than `GET /`
+  // because the switcher needs the org name attached and skips suspended/
+  // archived contexts the operator can't usefully act on.
+  app.get('/accessible', async (req) => {
+    const actor = req.requireActor();
+    const items = await listAccessibleWorkspaces(app, actor);
+    return ok({ items }, req.id);
+  });
+
+  const SetActiveBody = z.object({
+    workspaceId: ULID.nullable(),
+  });
+
+  app.post('/active', async (req) => {
+    const actor = req.requireActor();
+    if (!actor.sessionId) {
+      throw new NotFoundError('session', 'current');
+    }
+    const body = SetActiveBody.parse(req.body);
+    const ws = await selectActiveWorkspace(
+      app,
+      actor,
+      actor.sessionId,
+      body.workspaceId as WorkspaceId | null,
+    );
+    return ok({ active: ws }, req.id);
   });
 
   app.get('/:id', async (req) => {

@@ -9,6 +9,7 @@ import {
   signIn,
   signOut,
 } from '../services/auth-service.js';
+import { loadActiveWorkspaceForSession } from '../services/workspace-service.js';
 import { rateLimit } from '../lib/rate-limit.js';
 import { ok } from '../lib/http-helpers.js';
 
@@ -71,9 +72,12 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/me', async (req) => {
-    if (!req.actor) return ok({ user: null }, req.id);
+    if (!req.actor) return ok({ user: null, activeWorkspace: null }, req.id);
     const user = await loadCurrentUser(app, req.actor);
-    return ok({ user }, req.id);
+    const activeWorkspace = req.actor.sessionId
+      ? await loadActiveWorkspaceForSession(app, req.actor.sessionId)
+      : null;
+    return ok({ user, activeWorkspace }, req.id);
   });
 
   /**

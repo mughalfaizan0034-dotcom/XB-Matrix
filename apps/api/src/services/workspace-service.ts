@@ -93,6 +93,147 @@ export async function listWorkspaces(
   });
 }
 
+export interface AccessibleWorkspace {
+  readonly id: WorkspaceId;
+  readonly workspaceName: string;
+  readonly workspaceType: Workspace['workspaceType'];
+  readonly workspaceStatus: Workspace['workspaceStatus'];
+  readonly organizationId: OrganizationId;
+  readonly organizationName: string;
+}
+
+/**
+ * Workspaces the current actor can switch into. Used by the topbar switcher.
+ *
+ *   - internal_manager → every active workspace across every active org
+ *   - organization_admin / organization_user → every active workspace in
+ *     their own org (page-level permission grants will narrow this further
+ *     in a future phase; for now org membership is sufficient)
+ *
+ * Only active workspaces under active organizations are returned — there is
+ * no reason to surface suspended/archived contexts in the switcher.
+ */
+export async function listAccessibleWorkspaces(
+  app: FastifyInstance,
+  actor: ActorContext,
+): Promise<ReadonlyArray<AccessibleWorkspace>> {
+  const isManager = actor.isInternalManager;
+  if (!isManager && !actor.organizationId) return [];
+
+  const sql = `
+    SELECT w.id, w.workspace_name, w.workspace_type, w.workspace_status,
+           w.organization_id, o.display_name AS organization_name
+      FROM xb_core.workspaces w
+      JOIN xb_core.organizations o ON o.id = w.organization_id
+     WHERE w.deleted_at IS NULL
+       AND o.deleted_at IS NULL
+       AND w.workspace_status = 'active'
+       AND o.organization_status = 'active'
+       ${isManager ? '' : 'AND w.organization_id = $1'}
+     ORDER BY o.display_name ASC, w.workspace_name ASC
+  `;
+  const params = isManager ? [] : [actor.organizationId];
+
+  return app.withConnection(actor, async (client) => {
+    const { rows } = await client.query<{
+      id: string;
+      workspace_name: string;
+      workspace_type: Workspace['workspaceType'];
+      workspace_status: Workspace['workspaceStatus'];
+      organization_id: string;
+      organization_name: string;
+    }>(sql, params);
+    return rows.map((r) => ({
+      id: r.id as WorkspaceId,
+      workspaceName: r.workspace_name,
+      workspaceType: r.workspace_type,
+      workspaceStatus: r.workspace_status,
+      organizationId: r.organization_id as OrganizationId,
+      organizationName: r.organization_name,
+    }));
+  });
+}
+
+/**
+ * Set the active workspace on the current session, after verifying the
+ * actor actually has access. Passing null clears it (returning to the
+ * org-level / cross-workspace view).
+ */
+export async function selectActiveWorkspace(
+  app: FastifyInstance,
+  actor: ActorContext,
+  sessionId: string,
+  workspaceId: WorkspaceId | null,
+): Promise<AccessibleWorkspace | null> {
+  if (workspaceId === null) {
+    await app.withConnection(actor, async (client) => {
+      await client.query(
+        `UPDATE xb_core.sessions SET active_workspace_id = NULL, last_seen_at = now()
+          WHERE id = $1 AND revoked_at IS NULL`,
+        [sessionId],
+      );
+    });
+    return null;
+  }
+
+  const accessible = await listAccessibleWorkspaces(app, actor);
+  const match = accessible.find((w) => w.id === workspaceId);
+  if (!match) {
+    throw new ForbiddenError('workspace not accessible to this actor', 'workspace_scope');
+  }
+
+  await app.withConnection(actor, async (client) => {
+    await client.query(
+      `UPDATE xb_core.sessions
+          SET active_workspace_id = $2, last_seen_at = now()
+        WHERE id = $1 AND revoked_at IS NULL`,
+      [sessionId, workspaceId],
+    );
+  });
+  return match;
+}
+
+/**
+ * Look up the active workspace summary for a session, if any. Used by /me
+ * so the frontend can hydrate the switcher's selected state on every page
+ * load without an extra round trip.
+ */
+export async function loadActiveWorkspaceForSession(
+  app: FastifyInstance,
+  sessionId: string,
+): Promise<AccessibleWorkspace | null> {
+  const { rows } = await app.pg.query<{
+    id: string;
+    workspace_name: string;
+    workspace_type: Workspace['workspaceType'];
+    workspace_status: Workspace['workspaceStatus'];
+    organization_id: string;
+    organization_name: string;
+  }>(
+    `SELECT w.id, w.workspace_name, w.workspace_type, w.workspace_status,
+            w.organization_id, o.display_name AS organization_name
+       FROM xb_core.sessions s
+       JOIN xb_core.workspaces w     ON w.id = s.active_workspace_id
+       JOIN xb_core.organizations o  ON o.id = w.organization_id
+      WHERE s.id = $1
+        AND s.revoked_at IS NULL
+        AND w.deleted_at IS NULL
+        AND o.deleted_at IS NULL
+      LIMIT 1`,
+    [sessionId],
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: r.id as WorkspaceId,
+    workspaceName: r.workspace_name,
+    workspaceType: r.workspace_type,
+    workspaceStatus: r.workspace_status,
+    organizationId: r.organization_id as OrganizationId,
+    organizationName: r.organization_name,
+  };
+}
+
 export async function getWorkspace(
   app: FastifyInstance,
   actor: ActorContext,
