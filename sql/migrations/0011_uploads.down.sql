@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS xb_core.uploads CASCADE;

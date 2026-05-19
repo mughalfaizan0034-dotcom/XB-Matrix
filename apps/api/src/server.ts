@@ -12,6 +12,7 @@ import { auditContextPlugin } from './plugins/audit-context.js';
 import { resolverPlugin } from './plugins/resolver.js';
 import { authCookiePlugin } from './plugins/auth-cookie.js';
 import { emailPlugin } from './plugins/email.js';
+import { storagePlugin } from './plugins/storage.js';
 import { errorHandlerPlugin } from './plugins/error-handler.js';
 import { requestIdPlugin } from './plugins/request-id.js';
 
@@ -22,6 +23,7 @@ import { workspaceRoutes } from './routes/workspaces.js';
 import { auditRoutes } from './routes/audit.js';
 import { userRoutes } from './routes/users.js';
 import { invitationRoutes } from './routes/invitations.js';
+import { uploadRoutes } from './routes/uploads.js';
 
 export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   const app = Fastify({
@@ -63,6 +65,7 @@ export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   await app.register(dbPlugin);
   await app.register(redisPlugin);
   await app.register(emailPlugin);
+  await app.register(storagePlugin);
 
   // Audit context + resolver
   await app.register(auditContextPlugin);
@@ -82,6 +85,7 @@ export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   await app.register(auditRoutes, { prefix: '/v1/audit' });
   await app.register(userRoutes, { prefix: '/v1/users' });
   await app.register(invitationRoutes, { prefix: '/v1/invitations' });
+  await app.register(uploadRoutes, { prefix: '/v1/uploads' });
 
   return app;
 }

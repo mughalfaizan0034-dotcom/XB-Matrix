@@ -2,7 +2,8 @@ import { cn } from '../lib/cn.js';
 
 export interface PageHeaderProps {
   readonly title: string;
-  readonly description?: string;
+  /** Plain string OR a React node (e.g., contextual chips/icons). */
+  readonly description?: React.ReactNode;
   readonly actions?: React.ReactNode;
   readonly className?: string;
 }
@@ -15,7 +16,11 @@ export function PageHeader({ title, description, actions, className }: PageHeade
           {title}
         </h1>
         {description ? (
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          typeof description === 'string' ? (
+            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          ) : (
+            <div className="mt-1 text-sm text-muted-foreground">{description}</div>
+          )
         ) : null}
       </div>
       {actions ? <div className="flex flex-shrink-0 items-center gap-2">{actions}</div> : null}

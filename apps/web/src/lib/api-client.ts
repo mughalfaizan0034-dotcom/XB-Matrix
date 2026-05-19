@@ -22,6 +22,10 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const { body, idempotencyKey, headers, ...init } = opts;
   const hasBody = body !== undefined;
+  // FormData carries its own content-type (multipart/form-data; boundary=…)
+  // that the browser sets automatically. Setting our own would clobber the
+  // boundary and the server would fail to parse parts.
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
 
   let res: Response;
   try {
@@ -29,15 +33,12 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
       ...init,
       credentials: 'include',
       headers: {
-        // Only declare a JSON content-type when we are actually sending a body.
-        // Fastify (and every conforming HTTP parser) rejects a request that
-        // advertises `content-type: application/json` with no body —
-        // sign-out, restore, and other "no-payload POSTs" were 400-ing here.
-        ...(hasBody ? { 'content-type': 'application/json' } : {}),
+        // Only declare a JSON content-type when we are actually sending a JSON body.
+        ...(hasBody && !isFormData ? { 'content-type': 'application/json' } : {}),
         ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
         ...headers,
       },
-      body: hasBody ? JSON.stringify(body) : undefined,
+      body: !hasBody ? undefined : isFormData ? (body as FormData) : JSON.stringify(body),
     });
   } catch (err) {
     throw new ApiError(
