@@ -71,7 +71,11 @@ export function Sidebar() {
           const active = pathname === item.href || pathname.startsWith(item.href + '/');
           const gated = item.requiresWorkspace && !hasActive;
           const rowClass = cn(
-            'group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+            // text-left because gated rows render as <button>, which
+            // defaults to text-align: center in every browser. Without
+            // this, the labels of locked modules float in the middle of
+            // the row instead of sitting next to their icon.
+            'group flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
             active
               ? 'bg-navy text-white'
               : gated
