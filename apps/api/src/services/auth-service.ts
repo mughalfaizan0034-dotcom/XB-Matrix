@@ -261,7 +261,7 @@ export async function requestPasswordReset(
     createdIp: ip,
   });
 
-  const url = `${PUBLIC_WEB_BASE}/reset-password/${encodeURIComponent(token)}/`;
+  const url = `${PUBLIC_WEB_BASE}/reset-password/?token=${encodeURIComponent(token)}`;
   const msg = passwordResetEmail({
     displayName: row.display_name,
     resetUrl: url,
@@ -375,7 +375,7 @@ export async function requestEmailVerification(
     targetEmail: user.email,
     createdByActorId: user.actorId,
   });
-  const url = `${PUBLIC_WEB_BASE}/verify-email/${encodeURIComponent(token)}/`;
+  const url = `${PUBLIC_WEB_BASE}/verify-email/?token=${encodeURIComponent(token)}`;
   const msg = emailVerificationEmail({
     displayName: user.displayName,
     verifyUrl: url,

@@ -52,7 +52,7 @@ function isInternal(role: InviteRole): boolean {
 }
 
 function buildAcceptUrl(token: string): string {
-  return `${PUBLIC_WEB_BASE}/accept-invite/${encodeURIComponent(token)}/`;
+  return `${PUBLIC_WEB_BASE}/accept-invite/?token=${encodeURIComponent(token)}`;
 }
 
 /**

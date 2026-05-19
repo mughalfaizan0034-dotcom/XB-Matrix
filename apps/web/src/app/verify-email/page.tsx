@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@xb/ui';
 import { verifyEmail } from '@/lib/api-users';
@@ -12,8 +12,16 @@ import { SESSION_QUERY_KEY } from '@/lib/session';
 type State = 'verifying' | 'success' | 'error';
 
 export default function VerifyEmailPage() {
-  const params = useParams<{ token: string }>();
-  const token = decodeURIComponent(params?.token ?? '');
+  return (
+    <Suspense fallback={<Shell>Verifying…</Shell>}>
+      <VerifyInner />
+    </Suspense>
+  );
+}
+
+function VerifyInner() {
+  const search = useSearchParams();
+  const token = search?.get('token') ?? '';
   const router = useRouter();
   const qc = useQueryClient();
   const [state, setState] = useState<State>('verifying');
@@ -44,6 +52,41 @@ export default function VerifyEmailPage() {
     };
   }, [token, qc]);
 
+  if (state === 'verifying') {
+    return <Shell>Verifying…</Shell>;
+  }
+  if (state === 'success') {
+    return (
+      <Shell>
+        <div className="space-y-4">
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+            {message}
+          </div>
+          <Button onClick={() => router.replace('/dashboard')} className="w-full">
+            Continue to dashboard
+          </Button>
+        </div>
+      </Shell>
+    );
+  }
+  return (
+    <Shell>
+      <div className="space-y-4">
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800">
+          {message}
+        </div>
+        <Link
+          href="/sign-in"
+          className="block text-center text-xs text-muted-foreground hover:text-foreground"
+        >
+          Back to sign in
+        </Link>
+      </div>
+    </Shell>
+  );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-8">
       <div className="w-full max-w-md rounded-lg border border-border bg-card p-8 shadow-xb-md">
@@ -56,30 +99,10 @@ export default function VerifyEmailPage() {
             <p className="text-xs text-muted-foreground">Email verification</p>
           </div>
         </div>
-
-        {state === 'verifying' ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">Verifying…</div>
-        ) : state === 'success' ? (
-          <div className="space-y-4">
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
-              {message}
-            </div>
-            <Button onClick={() => router.replace('/dashboard')} className="w-full">
-              Continue to dashboard
-            </Button>
-          </div>
+        {typeof children === 'string' ? (
+          <div className="py-6 text-center text-sm text-muted-foreground">{children}</div>
         ) : (
-          <div className="space-y-4">
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800">
-              {message}
-            </div>
-            <Link
-              href="/sign-in"
-              className="block text-center text-xs text-muted-foreground hover:text-foreground"
-            >
-              Back to sign in
-            </Link>
-          </div>
+          children
         )}
       </div>
     </main>

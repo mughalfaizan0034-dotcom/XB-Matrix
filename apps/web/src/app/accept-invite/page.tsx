@@ -1,7 +1,7 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, FormField, Input, useToast } from '@xb/ui';
 import { SESSION_QUERY_KEY } from '@/lib/session';
 import { useQueryClient } from '@tanstack/react-query';
@@ -10,9 +10,17 @@ import { ApiError } from '@/lib/api-client';
 import Link from 'next/link';
 
 export default function AcceptInvitePage() {
+  return (
+    <Suspense fallback={<Shell title="Set your password" />}>
+      <AcceptInviteForm />
+    </Suspense>
+  );
+}
+
+function AcceptInviteForm() {
   const router = useRouter();
-  const params = useParams<{ token: string }>();
-  const token = decodeURIComponent(params?.token ?? '');
+  const search = useSearchParams();
+  const token = search?.get('token') ?? '';
   const toast = useToast();
   const qc = useQueryClient();
   const [password, setPassword] = useState('');
@@ -108,7 +116,7 @@ export default function AcceptInvitePage() {
   );
 }
 
-function Shell({ title, children }: { title: string; children: React.ReactNode }) {
+function Shell({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-8">
       <div className="w-full max-w-md rounded-lg border border-border bg-card p-8 shadow-xb-md">
