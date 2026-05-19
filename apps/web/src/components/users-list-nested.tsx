@@ -1,12 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import { useMemo } from 'react';
 import {
   Badge,
   Button,
   ConfirmDialog,
   DataTable,
+  DataTablePagination,
+  DataTableToolbar,
   DropdownMenu,
+  exportRowsToCsv,
+  useDataTableState,
   useToast,
   type ColumnDef,
   type DropdownMenuItem,
@@ -53,6 +58,16 @@ export function UsersListNested({ organization }: { organization: Organization }
 
   const [showInvite, setShowInvite] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
+
+  // Same DataTable primitives as workspaces: per-org URL prefix so each
+  // org's user table keeps its own sort/search/filter independently.
+  // /v1/users isn't paginated server-side yet (small row counts per org);
+  // when it gains paging this is the only place that needs to change.
+  const [tableState, tableActions] = useDataTableState({
+    storageKey: 'users-table',
+    urlKey: `users.${organization.slug}`,
+    defaultPageSize: 20,
+  });
 
   const isManager = session?.isInternalManager ?? false;
   const isOrgAdmin = session?.effectiveRole === 'organization_admin';
@@ -130,6 +145,8 @@ export function UsersListNested({ organization }: { organization: Organization }
     {
       key: 'name',
       header: 'User',
+      sortKey: 'displayName',
+      hideable: false,
       accessor: (u) => (
         <div>
           <div className="font-medium text-foreground">{u.displayName}</div>
@@ -140,16 +157,19 @@ export function UsersListNested({ organization }: { organization: Organization }
     {
       key: 'role',
       header: 'Role',
+      sortKey: 'role',
       accessor: (u) => prettyRole(u),
     },
     {
       key: 'status',
       header: 'Status',
+      sortKey: 'status',
       accessor: (u) => <Badge tone={STATUS_TONE[u.status]}>{u.status.replace('_', ' ')}</Badge>,
     },
     {
       key: 'verified',
       header: 'Email verified',
+      sortKey: 'verified',
       accessor: (u) => (
         <span className="text-xs text-muted-foreground">
           {u.emailVerifiedAt ? '✓ verified' : '— pending'}
@@ -159,6 +179,7 @@ export function UsersListNested({ organization }: { organization: Organization }
     {
       key: 'last',
       header: 'Last sign-in',
+      sortKey: 'lastLoginAt',
       accessor: (u) => (
         <span data-numeric="true" className="text-xs text-muted-foreground">
           {u.lastLoginAt ? formatDate(u.lastLoginAt) : 'never'}
@@ -169,6 +190,7 @@ export function UsersListNested({ organization }: { organization: Organization }
       key: 'actions',
       header: '',
       width: '48px',
+      hideable: false,
       accessor: (u) =>
         buildMenu(u).length === 0 ? null : (
           <DropdownMenu
@@ -184,41 +206,180 @@ export function UsersListNested({ organization }: { organization: Organization }
     },
   ];
 
+  // Client-side search + filter + sort + paginate over the in-memory
+  // /v1/users response. Same shape as WorkspaceListNested — when
+  // /v1/users gains server-side paging, the only block that needs to
+  // change is this one.
+  const allRows = usersQ.data ?? [];
+  const statusFilter = tableState.filters.status as UserSummary['status'] | undefined;
+
+  const filtered = useMemo(() => {
+    let rows: ReadonlyArray<UserSummary> = allRows;
+    if (statusFilter) rows = rows.filter((u) => u.status === statusFilter);
+    const q = tableState.search.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter(
+        (u) =>
+          u.displayName.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q),
+      );
+    }
+    return rows;
+  }, [allRows, statusFilter, tableState.search]);
+
+  const sorted = useMemo(() => {
+    if (!tableState.sort) return filtered;
+    const { column, direction } = tableState.sort;
+    const sign = direction === 'asc' ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      let av: unknown;
+      let bv: unknown;
+      if (column === 'role') {
+        av = prettyRole(a);
+        bv = prettyRole(b);
+      } else if (column === 'verified') {
+        av = a.emailVerifiedAt ?? '';
+        bv = b.emailVerifiedAt ?? '';
+      } else if (column === 'lastLoginAt') {
+        av = a.lastLoginAt ?? '';
+        bv = b.lastLoginAt ?? '';
+      } else {
+        av = (a as unknown as Record<string, unknown>)[column];
+        bv = (b as unknown as Record<string, unknown>)[column];
+      }
+      if (av == null && bv == null) return 0;
+      if (av == null) return -1 * sign;
+      if (bv == null) return 1 * sign;
+      return String(av).localeCompare(String(bv)) * sign;
+    });
+  }, [filtered, tableState.sort]);
+
+  const pageStart = tableState.page * tableState.pageSize;
+  const pageRows = sorted.slice(pageStart, pageStart + tableState.pageSize);
+
+  function onExport(): void {
+    exportRowsToCsv(
+      sorted,
+      [
+        { key: 'name',     header: 'Name',          value: (u) => u.displayName },
+        { key: 'email',    header: 'Email',         value: (u) => u.email },
+        { key: 'role',     header: 'Role',          value: (u) => prettyRole(u) },
+        { key: 'status',   header: 'Status',        value: (u) => u.status },
+        { key: 'verified', header: 'Email verified', value: (u) => (u.emailVerifiedAt ? 'yes' : 'no') },
+        { key: 'last',     header: 'Last sign-in',  value: (u) => u.lastLoginAt ?? '' },
+        { key: 'created',  header: 'Created',       value: (u) => u.createdAt },
+      ],
+      `users-${organization.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
+    );
+  }
+
+  const chips = [
+    tableState.search
+      ? { key: 'q', label: `Search: ${tableState.search}`, onRemove: () => tableActions.setSearch('') }
+      : null,
+    statusFilter
+      ? {
+          key: 'status',
+          label: `Status: ${statusFilter}`,
+          onRemove: () => tableActions.clearFilter('status'),
+        }
+      : null,
+  ].filter(Boolean) as Array<{ key: string; label: string; onRemove: () => void }>;
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {usersQ.data
-            ? `${usersQ.data.length} user${usersQ.data.length === 1 ? '' : 's'}`
-            : '…'}
-        </p>
-        {canInvite ? (
-          <Button size="sm" onClick={() => setShowInvite(true)}>
-            <UserPlus className="mr-1 h-3.5 w-3.5" /> Invite user
-          </Button>
-        ) : !canInvite && organization.organizationStatus !== 'active' ? (
-          <span className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
-            Invitations locked
-          </span>
-        ) : null}
-      </div>
-
-      <DataTable
+      <DataTableToolbar<UserSummary>
         columns={COLUMNS}
-        rows={usersQ.data ?? []}
-        rowKey={(u) => u.id}
-        loading={usersQ.isLoading}
-        emptyState={
-          <div className="flex flex-col items-center gap-3 py-6">
-            <span className="text-sm">No users yet in this organization.</span>
+        columnVisibility={tableState.columnVisibility}
+        onColumnVisibilityChange={tableActions.setColumnVisibility}
+        search={tableState.search}
+        onSearchChange={tableActions.setSearch}
+        searchPlaceholder="Search by name or email"
+        density={tableState.density}
+        onDensityChange={tableActions.setDensity}
+        onExport={allRows.length > 0 ? onExport : undefined}
+        chips={chips}
+        onClearAllFilters={chips.length > 0 ? tableActions.clearAllFilters : undefined}
+        trailing={
+          <>
+            <DropdownMenu
+              align="end"
+              width="w-48"
+              header={
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Filter by status
+                </div>
+              }
+              trigger={
+                <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
+                  {statusFilter ? `Status: ${statusFilter.replace('_', ' ')}` : 'Status'}
+                </span>
+              }
+              items={[
+                {
+                  key: 'all',
+                  label: 'All statuses',
+                  trailing: statusFilter ? null : <span aria-hidden="true">✓</span>,
+                  onSelect: () => tableActions.clearFilter('status'),
+                },
+                ...(['active', 'pending_invite', 'deactivated'] as const).map((s) => ({
+                  key: s,
+                  label: s.replace('_', ' '),
+                  trailing: statusFilter === s ? <span aria-hidden="true">✓</span> : null,
+                  onSelect: () => tableActions.setFilter('status', s),
+                })),
+              ]}
+            />
             {canInvite ? (
-              <Button size="sm" variant="outline" onClick={() => setShowInvite(true)}>
-                <Plus className="mr-1 h-3.5 w-3.5" /> Invite the first user
+              <Button size="sm" onClick={() => setShowInvite(true)}>
+                <UserPlus className="mr-1 h-3.5 w-3.5" /> Invite user
               </Button>
+            ) : organization.organizationStatus !== 'active' ? (
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+                Invitations locked
+              </span>
             ) : null}
-          </div>
+          </>
         }
       />
+
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <DataTable
+          columns={COLUMNS}
+          rows={pageRows}
+          rowKey={(u) => u.id}
+          loading={usersQ.isLoading}
+          density={tableState.density}
+          sort={tableState.sort}
+          onSortChange={tableActions.setSort}
+          columnVisibility={tableState.columnVisibility}
+          onColumnVisibilityChange={tableActions.setColumnVisibility}
+          className="rounded-none border-0"
+          emptyState={
+            <div className="flex flex-col items-center gap-3 py-6">
+              <span className="text-sm">
+                {tableState.search || statusFilter
+                  ? 'No users match the current filters.'
+                  : 'No users yet in this organization.'}
+              </span>
+              {!tableState.search && !statusFilter && canInvite ? (
+                <Button size="sm" variant="outline" onClick={() => setShowInvite(true)}>
+                  <Plus className="mr-1 h-3.5 w-3.5" /> Invite the first user
+                </Button>
+              ) : null}
+            </div>
+          }
+        />
+        {sorted.length > tableState.pageSize ? (
+          <DataTablePagination
+            page={tableState.page}
+            pageSize={tableState.pageSize}
+            total={sorted.length}
+            onPageChange={tableActions.setPage}
+            onPageSizeChange={tableActions.setPageSize}
+          />
+        ) : null}
+      </div>
 
       <InviteUserDialog open={showInvite} onClose={() => setShowInvite(false)} organization={organization} />
 
