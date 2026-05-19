@@ -58,22 +58,56 @@ const SELECT_ORG = `
 `;
 
 export interface ListOptions {
-  readonly limit?: number;
-  readonly cursor?: string | null;
+  /** Zero-based page offset. */
+  readonly page?: number;
+  readonly pageSize?: number;
   readonly status?: Organization['organizationStatus'];
+  /** Free-text search across display_name + legal_name + slug. */
+  readonly q?: string;
+  /** Sort column. Prefix with `-` for descending (e.g., `-createdAt`). */
+  readonly sort?: string;
+}
+
+export interface OrganizationListResult {
+  readonly items: ReadonlyArray<Organization>;
+  readonly total: number;
+  readonly hasMore: boolean;
+}
+
+const SORT_COLUMN_MAP: Record<string, string> = {
+  displayName: 'display_name',
+  slug: 'slug',
+  status: 'organization_status',
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+};
+
+function parseSort(sort: string | undefined): { column: string; direction: 'ASC' | 'DESC' } {
+  if (!sort) return { column: 'created_at', direction: 'DESC' };
+  const desc = sort.startsWith('-');
+  const key = desc ? sort.slice(1) : sort;
+  const column = SORT_COLUMN_MAP[key] ?? 'created_at';
+  return { column, direction: desc ? 'DESC' : 'ASC' };
 }
 
 /**
- * List organizations.
- * - internal_manager + internal_staff see everything
- * - organization_user / organization_admin see only their own organization
- * - others get an empty list
+ * List organizations with offset-based pagination, optional search, and
+ * server-side sorting. The result shape carries `total` so the UI can
+ * render "Showing X–Y of N" without a separate count round trip.
+ *
+ *   - internal_manager + internal_staff see everything
+ *   - organization_user / organization_admin see only their own org
+ *   - others get an empty list
+ *
+ * The search uses ILIKE — fine for the < 10k orgs we'll have at maturity.
+ * If org count ever crosses ~100k we'll want a trigram index + tsvector;
+ * not worth the operational cost today.
  */
 export async function listOrganizations(
   app: FastifyInstance,
   actor: ActorContext,
   opts: ListOptions = {},
-): Promise<ReadonlyArray<Organization>> {
+): Promise<OrganizationListResult> {
   await app.assertPermission(actor, {
     organizationId: (actor.organizationId ?? 'platform') as OrganizationId,
     workspaceId: null,
@@ -81,26 +115,56 @@ export async function listOrganizations(
     action: 'view',
   });
 
-  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+  const pageSize = Math.min(Math.max(opts.pageSize ?? 50, 1), 200);
+  const page = Math.max(opts.page ?? 0, 0);
+  const offset = page * pageSize;
+  const { column, direction } = parseSort(opts.sort);
 
-  if (actor.isInternalManager || actor.effectiveRole === 'internal_staff') {
-    const params: unknown[] = [limit];
-    let where = '';
-    if (opts.status) {
-      where = 'AND organization_status = $2';
-      params.push(opts.status);
-    }
-    const { rows } = await app.pg.query<OrgRow>(
-      `${SELECT_ORG} ${where} ORDER BY created_at DESC LIMIT $1`,
-      params,
+  // Org-scoped users see only their own org. No pagination needed — at
+  // most one row — but we keep the same shape so the route is uniform.
+  if (!actor.isInternalManager && actor.effectiveRole !== 'internal_staff') {
+    if (!actor.organizationId) return { items: [], total: 0, hasMore: false };
+    const items = await app.withConnection(actor, async (client) =>
+      listOrgsInTx(client, actor.organizationId!),
     );
-    return rows.map(rowToOrganization);
+    return { items, total: items.length, hasMore: false };
   }
 
-  if (actor.organizationId) {
-    return app.withConnection(actor, async (client) => listOrgsInTx(client, actor.organizationId!));
+  // Internal users: build a parameterized WHERE for status + search.
+  const where: string[] = [];
+  const params: unknown[] = [];
+  let idx = 1;
+
+  if (opts.status) {
+    where.push(`organization_status = $${idx++}`);
+    params.push(opts.status);
   }
-  return [];
+  if (opts.q && opts.q.trim()) {
+    const like = `%${opts.q.trim().toLowerCase()}%`;
+    where.push(
+      `(lower(display_name) LIKE $${idx} OR lower(coalesce(legal_name, '')) LIKE $${idx} OR slug LIKE $${idx})`,
+    );
+    params.push(like);
+    idx++;
+  }
+
+  const whereSql = where.length ? `AND ${where.join(' AND ')}` : '';
+
+  const { rows: countRows } = await app.pg.query<{ total: string }>(
+    `SELECT count(*)::text AS total FROM xb_core.organizations WHERE deleted_at IS NULL ${whereSql}`,
+    params,
+  );
+  const total = Number(countRows[0]?.total ?? 0);
+
+  // ORDER BY is interpolated (allow-listed via SORT_COLUMN_MAP) — never
+  // user-controlled. LIMIT/OFFSET are parameterized.
+  const dataParams = [...params, pageSize, offset];
+  const { rows } = await app.pg.query<OrgRow>(
+    `${SELECT_ORG} ${whereSql} ORDER BY ${column} ${direction}, id ${direction} LIMIT $${idx++} OFFSET $${idx++}`,
+    dataParams,
+  );
+  const items = rows.map(rowToOrganization);
+  return { items, total, hasMore: offset + items.length < total };
 }
 
 async function listOrgsInTx(client: PoolClient, orgId: string): Promise<Organization[]> {

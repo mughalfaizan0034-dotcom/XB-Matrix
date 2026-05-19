@@ -18,8 +18,11 @@ import { ok } from '../lib/http-helpers.js';
 const ULID = z.string().length(26);
 
 const ListQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(200).optional(),
+  page: z.coerce.number().int().min(0).max(10_000).optional(),
+  pageSize: z.coerce.number().int().min(1).max(200).optional(),
   status: z.enum(['active', 'suspended', 'archived']).optional(),
+  q: z.string().trim().max(200).optional(),
+  sort: z.string().trim().max(64).optional(),
 });
 
 const CreateBody = z.object({
@@ -47,8 +50,14 @@ export const organizationRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', async (req) => {
     const actor = req.requireActor();
     const q = ListQuery.parse(req.query);
-    const items = await listOrganizations(app, actor, q);
-    return ok({ items, page: { cursor: null, hasMore: false } }, req.id);
+    const result = await listOrganizations(app, actor, q);
+    return ok(
+      {
+        items: result.items,
+        page: { cursor: null, hasMore: result.hasMore, total: result.total },
+      },
+      req.id,
+    );
   });
 
   app.get('/:id', async (req) => {

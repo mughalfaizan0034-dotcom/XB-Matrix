@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, PageHeader } from '@xb/ui';
 import { cn } from '@xb/ui/lib/cn';
 import { Plus, Search } from 'lucide-react';
@@ -18,24 +18,29 @@ const FILTER_STORAGE_KEY = 'xb.settings.orgs.filter';
 export default function SettingsPage() {
   const { data: user } = useSession();
   const { data: activeWorkspace } = useActiveWorkspace();
-  const orgs = useOrganizations();
-  const [showNewOrg, setShowNewOrg] = useState(false);
   const [filter, setFilter] = usePersistedString(FILTER_STORAGE_KEY, '');
+  // Server-side search — the trimmed filter is passed to the API, which
+  // does an ILIKE across display_name/legal_name/slug. Client-side
+  // filtering is gone; the result set is already what we should display.
+  const orgs = useOrganizations({ q: filter.trim() || undefined, pageSize: 200 });
+  const [showNewOrg, setShowNewOrg] = useState(false);
   const [expanded, setExpanded] = usePersistedStringSet(EXPANDED_STORAGE_KEY);
   const isManager = user?.isInternalManager ?? false;
+  const visible = orgs.data?.items ?? [];
+  const total = orgs.data?.total ?? 0;
 
   // If there's exactly one organization, expand it automatically — that's the
   // common case for organization users and there's no reason to make them click.
   useEffect(() => {
-    if (orgs.data?.length === 1 && expanded.size === 0) {
-      const only = orgs.data[0]!;
+    if (visible.length === 1 && expanded.size === 0) {
+      const only = visible[0]!;
       setExpanded((cur) => {
         cur.add(only.id);
         return cur;
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgs.data]);
+  }, [visible.length === 1 ? visible[0]?.id : null]);
 
   // When an active workspace is selected, ensure its parent organization is
   // expanded so the user lands on the right context without scrolling/
@@ -50,18 +55,6 @@ export default function SettingsPage() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeWorkspace?.organizationId]);
-
-  const visible = useMemo(() => {
-    if (!orgs.data) return [];
-    const q = filter.trim().toLowerCase();
-    if (!q) return orgs.data;
-    return orgs.data.filter(
-      (o) =>
-        o.displayName.toLowerCase().includes(q) ||
-        o.slug.includes(q) ||
-        (o.legalName ?? '').toLowerCase().includes(q),
-    );
-  }, [orgs.data, filter]);
 
   function toggleExpand(o: Organization) {
     setExpanded((cur) => {
@@ -81,7 +74,7 @@ export default function SettingsPage() {
     setExpanded(() => new Set());
   }
 
-  const showToolbar = (orgs.data?.length ?? 0) > 1;
+  const showToolbar = total > 1 || filter.length > 0;
   const [sentinelRef, scrolled] = useScrolledPast();
 
   return (

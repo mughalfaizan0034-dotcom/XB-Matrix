@@ -35,11 +35,47 @@ export interface PatchOrgInput {
 
 const ORGS_KEY = ['orgs'] as const;
 
-export function useOrganizations() {
+export interface OrganizationsQuery {
+  readonly page?: number;
+  readonly pageSize?: number;
+  readonly q?: string;
+  readonly status?: 'active' | 'suspended' | 'archived';
+  readonly sort?: string;
+}
+
+export interface OrganizationsPage {
+  readonly items: ReadonlyArray<Organization>;
+  readonly total: number;
+  readonly hasMore: boolean;
+}
+
+function buildOrgsUrl(q: OrganizationsQuery | undefined): string {
+  const sp = new URLSearchParams();
+  if (q?.page !== undefined) sp.set('page', String(q.page));
+  if (q?.pageSize !== undefined) sp.set('pageSize', String(q.pageSize));
+  if (q?.q) sp.set('q', q.q);
+  if (q?.status) sp.set('status', q.status);
+  if (q?.sort) sp.set('sort', q.sort);
+  const qs = sp.toString();
+  return qs ? `/v1/organizations?${qs}` : '/v1/organizations';
+}
+
+/**
+ * Server-paginated organizations list. Pass a `query` to scope/sort/page;
+ * omit it to get the first page with default sort (createdAt desc).
+ *
+ * Returns the full paginated envelope so consumers can drive pagination
+ * UI from `total` / `hasMore` without a separate count round trip.
+ */
+export function useOrganizations(query?: OrganizationsQuery) {
   return useQuery({
-    queryKey: ORGS_KEY,
+    queryKey: [...ORGS_KEY, 'list', query ?? null],
     queryFn: () =>
-      api.get<Paginated<Organization>>('/v1/organizations').then((r) => r.items),
+      api.get<Paginated<Organization>>(buildOrgsUrl(query)).then((r) => ({
+        items: r.items,
+        total: r.page.total ?? r.items.length,
+        hasMore: r.page.hasMore,
+      })),
     staleTime: 15_000,
   });
 }
