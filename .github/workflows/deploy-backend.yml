@@ -139,27 +139,28 @@ jobs:
           # role (or any role that can run migrations); provision it with
           # infrastructure/scripts/setup-migrations-secret.ps1.
           #
-          # If the admin secret doesn't exist yet, SKIP migrations rather
-          # than blocking the deploy. That preserves the original behavior
-          # of the workflow (deploy code without auto-migrate) for as long
-          # as the admin DSN hasn't been provisioned. Set up the secret
-          # with the helper script — the next deploy will run migrations
-          # automatically.
-          echo "::group::Check admin DATABASE_URL is provisioned"
-          if ! gcloud secrets describe api-database-admin-url \
-              --project="$GCP_PROJECT_ID" >/dev/null 2>&1; then
-            echo "::warning::api-database-admin-url secret is not provisioned — skipping migrations."
-            echo "::warning::Run infrastructure/scripts/setup-migrations-secret.ps1 to enable auto-migrate."
-            echo "MIGRATIONS_SKIPPED=true" >> "$GITHUB_ENV"
-            echo "::endgroup::"
-            exit 0
-          fi
-          echo "::endgroup::"
-
+          # If the admin secret doesn't exist OR the deploy SA can't read
+          # it, SKIP migrations rather than blocking the deploy. That
+          # preserves the original behavior of the workflow (deploy code
+          # without auto-migrate) for as long as the admin DSN isn't
+          # set up. Run infrastructure/scripts/setup-migrations-secret.ps1
+          # to enable auto-migrate — the next deploy will then run.
+          #
+          # We try `versions access` directly (not `secrets describe`)
+          # because roles/secretmanager.secretAccessor grants
+          # `versions.access` but NOT `secrets.get`. Using describe for
+          # the existence check would false-positive "missing" when the
+          # secret exists but only has accessor (not viewer) binding.
           echo "::group::Fetch admin DATABASE_URL from Secret Manager"
           DB_URL=$(gcloud secrets versions access latest \
             --secret=api-database-admin-url \
-            --project="$GCP_PROJECT_ID")
+            --project="$GCP_PROJECT_ID" 2>/dev/null || true)
+          if [ -z "$DB_URL" ]; then
+            echo "::warning::api-database-admin-url is not accessible (missing secret, missing role, or empty value) — skipping migrations."
+            echo "::warning::Run infrastructure/scripts/setup-migrations-secret.ps1 to enable auto-migrate."
+            echo "::endgroup::"
+            exit 0
+          fi
           # Mask the whole URL (it contains the password) — also mask the
           # password component on its own so it doesn't leak if logged
           # separately.
