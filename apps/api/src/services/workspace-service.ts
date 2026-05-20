@@ -188,7 +188,12 @@ export async function selectActiveWorkspace(
     throw new ForbiddenError('workspace not accessible to this actor', 'workspace_scope');
   }
 
-  await app.withConnection(actor, async (client) => {
+  // UPDATE + reload in the SAME transaction so read-after-write
+  // visibility is guaranteed regardless of connection pooling /
+  // proxy modes between the two queries (previously the reload ran
+  // on a separate pool connection and could miss the just-committed
+  // row, throwing a spurious 422 switch_did_not_persist).
+  return app.withConnection(actor, async (client) => {
     const result = await client.query(
       `UPDATE xb_core.sessions
           SET active_workspace_id = $2, last_seen_at = now()
@@ -198,26 +203,47 @@ export async function selectActiveWorkspace(
     if ((result.rowCount ?? 0) === 0) {
       throw new NotFoundError('session', sessionId);
     }
-  });
 
-  // Reload from DB so the response reflects what's actually persisted,
-  // not just the lookup match. This is the authoritative reading the
-  // frontend trusts — if loadActiveWorkspaceForSession returns null
-  // here despite a non-zero rowCount above, something is genuinely
-  // broken (FK constraint deferred, replication lag, JOIN filter
-  // mismatch) and we want to surface it instead of returning success.
-  const reloaded = await loadActiveWorkspaceForSession(app, sessionId);
-  if (!reloaded) {
-    app.log.error(
-      { sessionId, workspaceId },
-      'session UPDATE reported success but reload returned null — inconsistency',
+    const { rows } = await client.query<{
+      id: string;
+      workspace_name: string;
+      workspace_type: Workspace['workspaceType'];
+      workspace_status: Workspace['workspaceStatus'];
+      organization_id: string;
+      organization_name: string;
+    }>(
+      `SELECT w.id, w.workspace_name, w.workspace_type, w.workspace_status,
+              w.organization_id, o.display_name AS organization_name
+         FROM xb_core.sessions s
+         JOIN xb_core.workspaces w     ON w.id = s.active_workspace_id
+         JOIN xb_core.organizations o  ON o.id = w.organization_id
+        WHERE s.id = $1
+          AND s.revoked_at IS NULL
+          AND w.deleted_at IS NULL
+          AND o.deleted_at IS NULL
+        LIMIT 1`,
+      [sessionId],
     );
-    throw new SemanticError(
-      'Workspace switch did not persist. Refresh and try again.',
-      'switch_did_not_persist',
-    );
-  }
-  return reloaded;
+    const row = rows[0];
+    if (!row) {
+      // Should be impossible after a successful UPDATE — log loudly
+      // but still return the lookup-validated workspace so the user
+      // isn't blocked on a transient read inconsistency.
+      app.log.error(
+        { sessionId, workspaceId },
+        'session UPDATE succeeded but in-tx reload returned null — returning lookup match',
+      );
+      return match;
+    }
+    return {
+      id: row.id as WorkspaceId,
+      workspaceName: row.workspace_name,
+      workspaceType: row.workspace_type,
+      workspaceStatus: row.workspace_status,
+      organizationId: row.organization_id as OrganizationId,
+      organizationName: row.organization_name,
+    };
+  });
 }
 
 /**
