@@ -122,8 +122,8 @@ export function UploadDialog({ open, onClose }: Props) {
       {noActiveWorkspace ? null : (
         <div className="flex flex-col gap-4">
           <FormField
-            label="Operational category & source format"
-            hint="Each category accepts one or more platform-specific source formats. Same canonical entity downstream — pick whichever matches your file."
+            label="Operational dataset & ingestion path"
+            hint="Pick the operational dataset (Sales Performance, Inventory Position, …) and then which ingestion path matches your file. Every path lands in the same centralized intelligence layer downstream — marketplace stays as a column dimension, not a separate entity."
           >
             {(p) => (
               <Select {...p} value={kind} onChange={(e) => setKind(e.target.value as UploadKind)}>

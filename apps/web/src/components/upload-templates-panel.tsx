@@ -204,21 +204,20 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
 
 export function UploadTemplatesPanel() {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
         <p>
-          Uploads are grouped by <span className="font-medium text-foreground">operational category</span> —
-          Sales Performance, Inventory Position, Advertising Performance, … — not by marketplace.
-          The same business entity may flow in from many platforms; the marketplace lives as a column
-          inside the dataset (<code className="font-mono">marketplace</code>,{' '}
-          <code className="font-mono">channel</code>,{' '}
-          <code className="font-mono">source_platform</code>), and the platform normalizes into one
-          centralized intelligence layer downstream.
+          The product entity is the <span className="font-medium text-foreground">operational dataset</span> —
+          Sales Performance, Inventory Position, Advertising Performance, and so on. Each one accepts
+          many ingestion paths underneath (Amazon, Walmart, Shopify, future API connectors, normalized
+          ERP/BI exports). Every path lands in the same centralized intelligence layer, so engines,
+          dashboards, and reports never see "Amazon vs Walmart" — they see one blended view of your
+          business with marketplace as a filter dimension.
         </p>
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-5">
         {CATEGORIES.map((c) => (
           <CategoryCard key={c.id} category={c} />
         ))}
@@ -228,75 +227,113 @@ export function UploadTemplatesPanel() {
 }
 
 function CategoryCard({ category }: { category: OperationalCategory }) {
-  // Default-open the first format so operators see what's available
-  // without an extra click. Multiple formats stay collapsed.
-  const [openFormat, setOpenFormat] = useState<string | null>(
-    category.formats[0]?.kind ?? null,
-  );
+  // Detail panel is collapsed by default — the operational dataset
+  // header is the primary content; the per-connector template is
+  // supplementary, expand-to-see.
+  const [openFormat, setOpenFormat] = useState<string | null>(null);
 
   return (
     <Card>
-      <CardHeader className="flex flex-col gap-1.5 pb-3">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="flex items-center gap-2">
-            <Layers className="h-4 w-4 text-muted-foreground" />
-            {category.title}
-          </CardTitle>
+      {/* ─── Primary: operational dataset identity ────────────────
+          Larger heading, summary, canonical entity, dimensions. This
+          is what the operator should anchor their mental model on —
+          the connector strip below is a supporting affordance. */}
+      <CardHeader className="flex flex-col gap-2 pb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-navy/10 text-navy">
+              <Layers className="h-4 w-4" />
+            </span>
+            <div className="flex flex-col">
+              <CardTitle className="text-base">{category.title}</CardTitle>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Operational dataset
+              </span>
+            </div>
+          </div>
           {category.comingSoon ? (
             <Badge tone="neutral">coming soon</Badge>
-          ) : (
-            <Badge tone="success">{category.formats.length} source format{category.formats.length === 1 ? '' : 's'}</Badge>
-          )}
+          ) : null}
         </div>
-        <p className="text-xs text-muted-foreground">{category.summary}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span className="font-medium text-foreground">canonical:</span>
-          <code className="font-mono text-[10px]">{category.canonicalEntity}</code>
-          <span>·</span>
-          <span className="font-medium text-foreground">dimensions:</span>
-          {category.dimensions.map((d) => (
-            <code key={d} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">
-              {d}
+        <p className="text-sm text-muted-foreground">{category.summary}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wide">Canonical</span>
+            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">
+              {category.canonicalEntity}
             </code>
-          ))}
+          </span>
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wide">Dimensions</span>
+            {category.dimensions.map((d) => (
+              <code key={d} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">
+                {d}
+              </code>
+            ))}
+          </span>
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
-        {category.formats.length === 0 ? (
-          <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-6 text-center text-xs text-muted-foreground">
-            Source formats land here as connectors ship. Until then, this category lives in
-            the spec — engines and dashboards already plan around its dimensions.
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Supported source formats
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {category.formats.map((f) => (
-                <button
-                  key={f.kind}
-                  type="button"
-                  onClick={() => setOpenFormat(f.kind)}
-                  className={
-                    openFormat === f.kind
-                      ? 'rounded-md border border-navy bg-navy/5 px-2.5 py-1.5 text-xs font-medium text-navy'
-                      : 'rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }
-                >
-                  {f.platform}
-                  <span className="ml-1.5 font-mono text-[10px] opacity-70">{f.kind}</span>
-                </button>
-              ))}
-            </div>
 
-            {openFormat ? (
-              <SourceFormatDetail
-                format={category.formats.find((f) => f.kind === openFormat)!}
-              />
-            ) : null}
-          </div>
-        )}
+      {/* ─── Secondary: compatible ingestion formats ───────────────
+          Visually demoted — separator, small label, slim chip row,
+          collapsed detail. Frames every connector as one of many
+          ingestion paths into the same dataset, not the entity. */}
+      <CardContent className="pt-0">
+        <div className="border-t border-border pt-3">
+          {category.formats.length === 0 ? (
+            <div className="text-xs text-muted-foreground">
+              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide">
+                Compatible ingestion formats
+              </div>
+              <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-4">
+                Ingestion paths land here as connectors ship — manual templates first,
+                then direct API connectors, normalized ERP/BI exports, and webhook syncs.
+                The operational dataset is already designed around its dimensions, so
+                engines and dashboards will pick it up the moment data starts flowing.
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Compatible ingestion formats
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  {category.formats.length} available · more connectors planned
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {category.formats.map((f) => {
+                  const isOpen = openFormat === f.kind;
+                  return (
+                    <button
+                      key={f.kind}
+                      type="button"
+                      onClick={() => setOpenFormat(isOpen ? null : f.kind)}
+                      className={
+                        isOpen
+                          ? 'rounded-md border border-navy bg-navy/5 px-2 py-1 text-[11px] font-medium text-navy'
+                          : 'rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }
+                    >
+                      {f.platform}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {openFormat ? (
+                <SourceFormatDetail
+                  format={category.formats.find((f) => f.kind === openFormat)!}
+                />
+              ) : (
+                <div className="text-[11px] text-muted-foreground">
+                  Pick a format above to see its columns, sample rows, and download its CSV template.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -311,14 +348,19 @@ function SourceFormatDetail({ format }: { format: SourceFormat }) {
     downloadCsv(lines.join('\r\n') + '\r\n', format.filename);
   }
 
+  // Supplementary drawer — visually framed as "details about an
+  // ingestion path", never as a primary entity.
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border bg-muted/10 p-3">
+    <div className="flex flex-col gap-2.5 rounded-md border border-border bg-muted/10 p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2">
-          <FileText className="mt-0.5 h-4 w-4 text-muted-foreground" />
+          <FileText className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
           <div>
-            <div className="text-xs font-medium text-foreground">{format.platform} source format</div>
-            <p className="text-xs text-muted-foreground">{format.description}</p>
+            <div className="text-xs text-muted-foreground">
+              <span className="text-[10px] font-semibold uppercase tracking-wide">Ingestion path</span>
+              <span className="ml-1.5 text-foreground">{format.platform}</span>
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">{format.description}</p>
           </div>
         </div>
         <Button size="sm" variant="outline" onClick={onDownload}>
