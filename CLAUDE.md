@@ -1630,8 +1630,160 @@ forget the work-in-progress:
 | Ads / PPC validator | (reverted before commit) | columns: action/uid/start_date/end_date/campaign_name/campaign_type/sku_name/impressions/clicks/orders/total_cost/sales/currency/platform/target_platform | needs build |
 | sales_orders canonical table | per-order grain, exists | `sales_performance_period` (period grain, monthly partitions) | bridge then drop |
 | inventory_snapshots canonical | warehouse-point-in-time, exists | `inventory_position` (date-partitioned) | bridge then drop |
-| /uploads page | single table view | 5-tab structure (Files / History / Validation Errors / Templates / Processing Logs) | needs UI restructure |
+| /uploads page | 5-tab structure shipped (Files / History / Validation Errors / Templates / Processing Logs) | ✅ done | |
 | Sidebar | 9 items | 11 items (+ Forecasting + Insights) | needs update |
 | Settings tabs | Workspaces / Users / Permissions(soon) / Audit / Billing(soon) / Integrations(soon) | + Warehouses / Forecast Rules / Upload Templates / Diagnostics | needs update |
 | Engines | none | Sales/PPC/Inventory/DOS/Replenishment/Forecasting/Profitability/Anomaly | awaiting spec continuation |
+
+---
+
+# Part 4 — Connector architecture clarification (CRITICAL)
+
+> Direction received 2026-05-20. Read before designing any canonical
+> table, summary table, or engine.
+
+## The platform is multi-channel, not Amazon-only
+
+XB Matrix is a **centralized multi-channel commerce intelligence
+platform**. Amazon is the first connector because it's the easiest
+operational starting point, but the platform must from day one be
+architected to ingest from many platforms and produce **one unified
+operational intelligence layer** on top.
+
+Channels we already expect to support:
+
+- **Marketplaces:** Amazon, Walmart, eBay, Etsy, Target Plus, Home
+  Depot, Wayfair, Faire
+- **DTC platforms:** Shopify, WooCommerce
+- **Social commerce:** TikTok Shop
+- **Feed-based:** Google Shopping / Merchant
+- **Ad platforms:** Meta Ads, Google Ads, (Amazon Ads already)
+- **Marketing:** Klaviyo / email marketing
+- **Operations:** 3PL / WMS systems, ERP / accounting systems
+
+## Where connector-specific logic IS allowed
+
+At the **ingestion edge only**:
+
+```
+Upload → Validation → Mapping layer
+   ^connector-specific from here
+                       ^canonicalized from here
+```
+
+Connector-specific code lives in:
+- **Upload kinds** (e.g., `amazon_sales`, `walmart_sales`, `shopify_sales`)
+- **Validators** (each marketplace has slightly different report shapes)
+- **CSV templates** (each platform's report format)
+- **Mapping layer** (transforms platform-shaped rows → canonical entities)
+
+Each connector owns: its template, its validator, its mapper. Adding a
+new connector should not require changing canonical tables, engines,
+summaries, or UI beyond a new upload kind dropdown entry.
+
+## Where channel-agnostic architecture is REQUIRED
+
+Everything **after** canonicalization:
+
+- **Canonical tables** (`xb_canonical.*`)
+- **Summary tables** (`xb_summary.*`)
+- **Intelligence tables** (`xb_intelligence.*`)
+- **Engines** (sales aggregation, PPC analytics, inventory health, DOS,
+  replenishment, forecasting, profitability, anomaly detection)
+- **Reports** generated from engine outputs
+- **Dashboard / module views** that read from summary tables
+
+These layers must NOT contain Amazon-specific assumptions. An engine
+that says "if (platform === 'amazon') …" is a smell — pull the
+divergence into the mapping layer instead.
+
+## Suggested canonical naming (when DDL ships)
+
+The current spec uses names like `sales_performance_period`. With the
+multi-channel clarification, generalize to channel-prefixed entities:
+
+| Connector edge | Canonical layer |
+|---|---|
+| `amazon_sales`, `walmart_sales`, `shopify_sales` | `channel_sales` |
+| `amazon_inventory`, `walmart_inventory`, … | `channel_inventory` |
+| `amazon_ads`, `meta_ads`, `google_ads` | `channel_ads` |
+| `amazon_settlement`, `walmart_settlement` | `channel_settlement` |
+| `3pl_inventory`, `wms_inventory` | `warehouse_inventory` |
+| `fba_inventory` (subset of amazon_inventory) | `fulfillment_inventory` |
+| (analytics from various) | `traffic_performance` |
+| SKU master uploads from any source | `catalog_master` |
+
+## Source metadata attached everywhere
+
+Every canonical / summary / intelligence row carries source metadata so
+operators can answer "where did this number come from":
+
+| Column | Purpose |
+|---|---|
+| `source_platform` | `amazon` / `walmart` / `shopify` / `meta_ads` / … |
+| `source_account` | The specific seller/merchant account on that platform |
+| `source_workspace_id` | Which xB workspace ingested it |
+| `source_report_type` | `business_report`, `inventory_ledger`, `ads_search_term`, … |
+| `source_upload_id` | The xb_core.uploads row that produced this canonical row |
+| `ingested_at` | When canonicalization happened |
+| `engine_key` / `engine_version` | (intelligence rows) which engine + version produced this |
+
+Spec 3's `PACK_SOURCE` already encodes most of this for canonical
+tables. The engine version pack covers intelligence outputs. The
+**critical addition** is `source_platform` — Spec 3 §10.x will need to
+specify this on every canonical + intelligence table.
+
+## Goal — what this enables
+
+| Capability | What channel-agnostic canonical enables |
+|---|---|
+| Unified inventory coverage | Sum across Amazon + Shopify + Walmart for one SKU |
+| Blended TACOS | Total ad spend / total sales across all ad platforms |
+| Cross-channel sales velocity | One SKU's daily run-rate summed across all sales channels |
+| Centralized replenishment forecasting | Forecast aggregated demand → propose shipments per warehouse |
+| Unified profitability engine | Per-SKU margin including all marketplace fees + all ad costs + COGS |
+| Omnichannel operational dashboards | One dashboard, one truth, regardless of how many connectors |
+
+## Implementation rules for this session and beyond
+
+1. **Connector boundary is the mapping layer.** Validators may inspect
+   platform-shaped fields (e.g., Amazon's `b2b_total` split). After
+   the mapper, those distinctions must either be normalized away or
+   carried as channel-agnostic dimensions.
+
+2. **No `if (platform === 'amazon')` in engines.** If platform-specific
+   handling is needed in an engine, pull it back to the mapper or add
+   a normalized indicator column the engine reads (e.g., `is_fba`
+   boolean instead of `platform === 'amazon' && warehouse_code LIKE
+   'FBA-%'`).
+
+3. **Engines operate on `channel_*` tables, not platform-specific
+   ones.** If a new connector ships and an engine needs no changes,
+   the architecture is right.
+
+4. **UI is connector-agnostic except where genuinely connector-specific
+   (e.g., upload templates).** Tables, dashboards, reports show
+   canonical entities with source as a dimension/filter.
+
+5. **The Amazon validators shipped today (`amazon-sales`,
+   `amazon-inventory`, `amazon-ads`) are correctly scoped to the
+   ingestion edge.** When the second platform's validator ships (e.g.,
+   `walmart-sales`), they'll sit side-by-side under
+   `apps/api/src/uploads/validators/`. A future refactor may move
+   each connector into its own subdirectory (e.g.,
+   `uploads/connectors/amazon/sales.ts`) for clarity once the second
+   platform lands — premature today.
+
+## Effect on currently-shipped work
+
+| Shipped | Status given clarification |
+|---|---|
+| `amazon_sales` / `amazon_inventory` / `amazon_ads` upload kinds + validators | ✅ correctly scoped to ingestion edge |
+| `amazon_*_template.csv` downloadable templates | ✅ same |
+| Legacy `sales_orders` + `inventory_snapshots` canonical tables | ❌ wrong on TWO counts now — wrong shape AND wrong naming. Replace with `channel_sales` + `channel_inventory` when Spec 3 ships canonical DDL. Bridge existing data via mapper. |
+| Legacy `sales` / `inventory` / `ad_spend` validators (still active) | ⚠️ legacy compat only; their canonical writes still violate the channel-agnostic rule. Either disable canonical writes now or wait for the bridge migration to land. |
+
+**No code changes required this turn** — the clarification is
+forward-looking. Future canonical / engine work follows the rules
+above.
 
