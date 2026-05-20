@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Button, PageHeader } from '@xb/ui';
 import { cn } from '@xb/ui/lib/cn';
-import { Plus, Search } from 'lucide-react';
+import { FlaskConical, Plus, Search } from 'lucide-react';
 import { useActiveWorkspace, useSession } from '@/lib/session';
 import { useOrganizations, type Organization } from '@/lib/api-orgs';
 import { OrganizationCard } from '@/components/organization-card';
@@ -97,9 +98,18 @@ export default function SettingsPage() {
             description="Tenants and operational configuration. Each organization expands to manage workspaces, users, permissions, audit, billing, and integrations."
             actions={
               isManager ? (
-                <Button onClick={() => setShowNewOrg(true)} size="sm">
-                  <Plus className="mr-1 h-3.5 w-3.5" /> New organization
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/settings/bootstrap"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                    title="Bootstrap / testing tools (internal-manager only)"
+                  >
+                    <FlaskConical className="h-3.5 w-3.5" /> Bootstrap tools
+                  </Link>
+                  <Button onClick={() => setShowNewOrg(true)} size="sm">
+                    <Plus className="mr-1 h-3.5 w-3.5" /> New organization
+                  </Button>
+                </div>
               ) : null
             }
           />
