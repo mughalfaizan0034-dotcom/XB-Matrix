@@ -207,7 +207,7 @@ export function WorkspaceListNested({ organization }: { organization: Organizati
     return allRows.filter(
       (w) =>
         w.workspaceName.toLowerCase().includes(q) ||
-        w.workspaceType.toLowerCase().includes(q) ||
+        (w.workspaceType ?? '').toLowerCase().includes(q) ||
         w.defaultCurrencyCode.toLowerCase().includes(q),
     );
   }, [allRows, tableState.search]);

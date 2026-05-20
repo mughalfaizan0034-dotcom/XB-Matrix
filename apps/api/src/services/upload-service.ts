@@ -169,7 +169,7 @@ export async function createUpload(
     )
     .then((r) => r.rows[0]);
   if (!ws) throw new NotFoundError('workspace', input.workspaceId);
-  if (!actor.isInternalManager && ws.organization_id !== actor.organizationId) {
+  if (!actor.isInternalManager && ws.organization_id !== (actor.organizationId as string | null)) {
     throw new NotFoundError('workspace', input.workspaceId);
   }
   const orgId = ws.organization_id as OrganizationId;

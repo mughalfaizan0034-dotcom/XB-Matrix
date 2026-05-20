@@ -57,6 +57,18 @@ export function useAdminResetPassword() {
   });
 }
 
+/** Remove a user — soft delete. Idempotent, no row-version required. */
+export function useRemoveUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string; organizationId: string | null }) =>
+      api.post<{ removed: boolean }>(`/v1/users/${id}/remove`),
+    onSuccess: (_r, vars) => {
+      qc.invalidateQueries({ queryKey: usersKey(vars.organizationId) });
+    },
+  });
+}
+
 export function usersKey(orgId: string | null): readonly string[] {
   return ['users', orgId ?? 'platform'];
 }

@@ -21,13 +21,14 @@ import {
 import {
   KeyRound,
   MoreHorizontal,
-  Pause,
   Play,
   Plus,
+  Trash2,
   UserPlus,
 } from 'lucide-react';
 import {
   useAdminResetPassword,
+  useRemoveUser,
   useUsers,
   useUserTransition,
   type UserSummary,
@@ -43,15 +44,15 @@ const STATUS_TONE: Record<UserSummary['status'], 'success' | 'warning' | 'neutra
 };
 
 type ConfirmAction =
-  | { kind: 'deactivate'; user: UserSummary }
+  | { kind: 'remove'; user: UserSummary }
   | { kind: 'reactivate'; user: UserSummary };
 
 export function UsersListNested({ organization }: { organization: Organization }) {
   const { data: session } = useSession();
   const toast = useToast();
   const usersQ = useUsers({ organizationId: organization.id });
-  const deactivate = useUserTransition('deactivate');
   const reactivate = useUserTransition('reactivate');
+  const remove = useRemoveUser();
 
   const [showAdd, setShowAdd] = useState(false);
   const [resetTarget, setResetTarget] = useState<UserSummary | null>(null);
@@ -78,17 +79,7 @@ export function UsersListNested({ organization }: { organization: Organization }
         onSelect: () => setResetTarget(u),
       });
     }
-    if (u.status === 'active') {
-      items.push({
-        key: 'deactivate',
-        label: 'Deactivate',
-        icon: Pause,
-        variant: 'danger',
-        divider: true,
-        disabled: isSelf(u),
-        onSelect: () => setConfirm({ kind: 'deactivate', user: u }),
-      });
-    } else if (u.status === 'deactivated') {
+    if (u.status === 'deactivated') {
       items.push({
         key: 'reactivate',
         label: 'Reactivate',
@@ -96,6 +87,17 @@ export function UsersListNested({ organization }: { organization: Organization }
         onSelect: () => setConfirm({ kind: 'reactivate', user: u }),
       });
     }
+    // Remove is available for any not-already-removed user (the list
+    // only ever shows non-deleted users). Self-removal is blocked.
+    items.push({
+      key: 'remove',
+      label: 'Remove user',
+      icon: Trash2,
+      variant: 'danger',
+      divider: items.length > 0,
+      disabled: isSelf(u),
+      onSelect: () => setConfirm({ kind: 'remove', user: u }),
+    });
     return items;
   }
 
@@ -103,9 +105,9 @@ export function UsersListNested({ organization }: { organization: Organization }
     if (!confirm) return;
     const u = confirm.user;
     try {
-      if (confirm.kind === 'deactivate') {
-        await deactivate.mutateAsync({ id: u.id, expectedRowVersion: u.rowVersion });
-        toast.push('success', `Deactivated ${u.displayName}.`);
+      if (confirm.kind === 'remove') {
+        await remove.mutateAsync({ id: u.id, organizationId: u.organizationId });
+        toast.push('success', `Removed ${u.displayName}.`);
       } else {
         await reactivate.mutateAsync({ id: u.id, expectedRowVersion: u.rowVersion });
         toast.push('success', `Reactivated ${u.displayName}.`);
@@ -346,8 +348,8 @@ export function UsersListNested({ organization }: { organization: Organization }
         open={confirm !== null}
         onClose={() => setConfirm(null)}
         onConfirm={runConfirmed}
-        busy={deactivate.isPending || reactivate.isPending}
-        variant={confirm?.kind === 'deactivate' ? 'danger' : 'default'}
+        busy={remove.isPending || reactivate.isPending}
+        variant={confirm?.kind === 'remove' ? 'danger' : 'default'}
         title={confirmTitle(confirm)}
         description={confirmDescription(confirm)}
         confirmLabel={confirmCta(confirm)}
@@ -453,15 +455,15 @@ function confirmTitle(c: ConfirmAction | null): string {
   if (!c) return '';
   const name = c.user.displayName;
   switch (c.kind) {
-    case 'deactivate': return `Deactivate ${name}?`;
+    case 'remove':     return `Remove ${name}?`;
     case 'reactivate': return `Reactivate ${name}?`;
   }
 }
 function confirmDescription(c: ConfirmAction | null): string {
   if (!c) return '';
   switch (c.kind) {
-    case 'deactivate':
-      return 'Deactivated users can no longer sign in. Existing sessions stay live until they expire — use admin revoke to force sign-out everywhere immediately.';
+    case 'remove':
+      return 'The user is removed and can no longer sign in. Every active session is revoked immediately. Audit history is preserved.';
     case 'reactivate':
       return 'Restore the user to active. They can sign in again with their existing password.';
   }
@@ -469,7 +471,7 @@ function confirmDescription(c: ConfirmAction | null): string {
 function confirmCta(c: ConfirmAction | null): string {
   if (!c) return 'Confirm';
   switch (c.kind) {
-    case 'deactivate': return 'Deactivate';
+    case 'remove':     return 'Remove user';
     case 'reactivate': return 'Reactivate';
   }
 }

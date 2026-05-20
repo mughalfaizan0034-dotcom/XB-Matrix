@@ -27,6 +27,18 @@ function SignInShell({ children }: { children?: React.ReactNode }) {
           </div>
         </div>
         {children}
+
+        <div className="mt-6 border-t border-border pt-4 text-center">
+          <a
+            href="https://www.xceleratebrands.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Powered by{' '}
+            <span className="font-medium text-foreground">Xcelerate Brands</span>
+          </a>
+        </div>
       </div>
     </main>
   );

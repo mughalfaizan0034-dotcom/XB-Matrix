@@ -74,7 +74,7 @@ function PickerInner() {
         const matchingWs = g.workspaces.filter(
           (w) =>
             w.workspaceName.toLowerCase().includes(q) ||
-            w.workspaceType.toLowerCase().includes(q),
+            (w.workspaceType ?? '').toLowerCase().includes(q),
         );
         // If the org name matches, keep all its workspaces; otherwise
         // keep only matching workspaces. Drop the group if nothing left.

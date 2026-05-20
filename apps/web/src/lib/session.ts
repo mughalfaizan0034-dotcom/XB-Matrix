@@ -82,7 +82,9 @@ export function useSignIn() {
       // workspace selected. Seed the cache shape so consumers don't have
       // to wait for /me to re-fetch.
       qc.setQueryData(SESSION_QUERY_KEY, { user: data.user, activeWorkspace: null });
-      router.push('/dashboard');
+      // Land on the workspace picker (nav hidden) — the user chooses a
+      // workspace, then the full app chrome appears.
+      router.push('/select-workspace');
     },
   });
 }

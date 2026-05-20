@@ -373,7 +373,7 @@ export default function UploadsPage() {
       ) : null}
 
       <Tabs<'files' | 'history' | 'errors' | 'templates' | 'logs'>
-        defaultValue={crossWorkspace ? 'history' : 'files'}
+        defaultValue="files"
         items={[
           { key: 'files',     label: 'Upload Files' },
           { key: 'history',   label: 'Upload History' },
