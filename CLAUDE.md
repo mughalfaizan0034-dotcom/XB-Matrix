@@ -1787,3 +1787,485 @@ specify this on every canonical + intelligence table.
 forward-looking. Future canonical / engine work follows the rules
 above.
 
+---
+
+# Part 5 — SKU-centric data model + dimensional drill-down (CRITICAL)
+
+> Direction received 2026-05-20. Builds on Part 4. Read before
+> designing any canonical row shape, summary table, engine, or
+> SKU-detail UI.
+
+## The SKU is the central operational entity
+
+**Everything in XB Matrix orbits the normalized SKU.** A single SKU
+simultaneously exists across many channels, many inventory pools,
+many ad platforms, many regions. The canonical layer must collapse
+that fragmentation into a single SKU identity so the user — and the
+engines — can see the SKU as one operational thing.
+
+### The reality the architecture must model
+
+A SKU may simultaneously exist as a sellable item on:
+
+- Amazon US, Amazon CA, Amazon UK, Amazon DE, …
+- Shopify
+- Walmart
+- TikTok Shop
+- eBay
+- Etsy / Faire / Target Plus / Home Depot / Wayfair / …
+
+Inventory for that same SKU may simultaneously live in:
+
+- FBA US, FBA CA, FBA UK, …
+- FBM (merchant-fulfilled)
+- 3PL pools (per provider)
+- Owned warehouses (per location)
+- Retail / wholesale inventory pools
+- Inbound / in-transit (per warehouse, per arrival date)
+
+Ad spend for that same SKU may simultaneously flow from:
+
+- Amazon Ads (SP, SB, SD), per marketplace
+- Walmart Connect
+- Meta Ads
+- Google Ads (Shopping, Search, PMax)
+- TikTok Ads
+- (Klaviyo / email later)
+
+## What the engine and UX must support — both at the same time
+
+For any selected SKU, the user expects to see:
+
+| Mode | What it shows |
+|---|---|
+| **Blended / global** (default) | Total across all channels / locations / ad sources — blended sales, total inventory, blended ad spend, unified DOS, total profitability, centralized replenishment recommendation |
+| **Filtered / drill-down** | Same metric scoped to one dimension — Amazon-only, Walmart-only, FBA-only, US-only, Meta Ads only, one warehouse, … |
+
+Example for one SKU:
+
+| | Blended | Amazon US | Walmart | Shopify |
+|---|---|---|---|---|
+| Units sold (30d) | 5,000 | 1,500 | 800 | 2,700 |
+| Sessions | … | 12k | n/a | 4k |
+| Ad spend | $2,300 | $1,400 (Amazon Ads) | $200 (Walmart Connect) | $700 (Meta + Google) |
+
+Inventory view:
+
+| Pool | Units |
+|---|---|
+| FBA US | 400 |
+| FBA CA | 200 |
+| Shopify warehouse | 150 |
+| 3PL East | 300 |
+| **Total** | **1,050** |
+
+The engine computes unified DOS off the blended units sold + total
+inventory. The user can drill in to ask "what's my DOS just for FBA
+US given just Amazon US sales velocity?" — the same engine answers it,
+just with different `WHERE` clauses on the canonical data.
+
+## Foundational dimensions on every canonical row
+
+These are **not optional metadata** — they are first-class columns
+that engines + summaries + UIs depend on. Every canonical row carries:
+
+| Dimension | Type | Source | Examples |
+|---|---|---|---|
+| `sku_normalized` | `varchar(200)` | normalized via `xb_master.sku_aliases` | `WIDGET-A` |
+| `marketplace_code` | `varchar(80)` | from upload `channel` column | `amazon_us`, `amazon_uk`, `walmart`, `shopify`, `tiktok_shop` |
+| `region_code` | `char(2)` or `varchar(8)` | derived from marketplace | `US`, `CA`, `UK`, `DE` |
+| `fulfillment_type` | `varchar(40)` | derived or supplied | `fba`, `fbm`, `dtc`, `3pl`, `retail` |
+| `inventory_location_code` | `varchar(120)` | inventory-table-only | `FBA-US`, `FBA-CA`, `WH-NJ`, `3PL-LAX-01` |
+| `ad_platform_code` | `varchar(80)` | ads-table-only | `amazon_ads`, `meta_ads`, `google_ads`, `tiktok_ads` |
+| `source_platform` | `varchar(80)` | from connector identity | `amazon`, `walmart`, `shopify`, `meta_ads`, `google_ads` |
+| `source_account` | `varchar(200)` | seller/merchant account id | `A1B2C3` (Amazon merchant ID) |
+| `source_upload_id` | `char(26)` | provenance | FK to `xb_core.uploads.id` |
+
+The engines never care which channel a row came from in code. They
+compose blended views by aggregating over rows; they compose filtered
+views by adding a `WHERE` on the matching dimension.
+
+## SKU identity normalization (`xb_master.sku_aliases`)
+
+The same product often has different SKU codes per platform:
+
+- Amazon ASIN: `B0C123XYZ`
+- Amazon seller SKU: `WIDGET-A-US-PRIME`
+- Walmart item ID: `WMT-447721`
+- Shopify variant ID: `gid://shopify/ProductVariant/4982`
+- Internal SKU: `WIDGET-A`
+
+`xb_master.sku_aliases` maps any platform's SKU code → the canonical
+`sku_normalized`. Validators look up the alias during mapping; the
+canonical row stores the normalized SKU. Without this, the same
+physical product appears as several SKUs in dashboards and engines
+double-count inventory + sales.
+
+Spec 3 §10 hasn't covered `xb_master` yet. When it does, this table
+is foundational and must land early.
+
+## Canonical schema implication — broader than just `channel_*`
+
+Part 4 already said canonical tables should be channel-agnostic with
+generic names. Part 5 adds: the **column shape** must explicitly
+carry all the dimensions above. Sketching what the eventual canonical
+sales table looks like:
+
+```sql
+CREATE TABLE xb_canonical.channel_sales (
+  id                       char(26)       PRIMARY KEY,
+  organization_id          char(26)       NOT NULL,
+  workspace_id             char(26)       NOT NULL,
+
+  -- Core entity
+  sku_normalized           varchar(200)   NOT NULL,
+
+  -- Operational dimensions (every row carries these)
+  marketplace_code         varchar(80)    NOT NULL,    -- amazon_us, walmart, shopify, ...
+  region_code              varchar(8)     NOT NULL,    -- US, CA, UK, DE
+  fulfillment_type         varchar(40)    NULL,        -- fba, fbm, dtc, 3pl (when known per row)
+
+  -- Period grain (period-aggregated by week/day)
+  period_start             date           NOT NULL,
+  period_end               date           NOT NULL,
+  period_grain             varchar(20)    NOT NULL,    -- 'day' | 'week' | 'month'
+
+  -- Metrics (B2B + total split)
+  sessions_total           bigint         NOT NULL,
+  sessions_b2b             bigint         NOT NULL DEFAULT 0,
+  orders_total             bigint         NOT NULL,
+  orders_b2b               bigint         NOT NULL DEFAULT 0,
+  units_total              bigint         NOT NULL,
+  units_b2b                bigint         NOT NULL DEFAULT 0,
+  sales_total              numeric(18,4)  NOT NULL,
+  sales_b2b                numeric(18,4)  NOT NULL DEFAULT 0,
+  refunds_total            numeric(18,4)  NOT NULL DEFAULT 0,
+  refunds_b2b              numeric(18,4)  NOT NULL DEFAULT 0,
+  currency_code            char(3)        NOT NULL,
+
+  -- Provenance (PACK_SOURCE expanded)
+  source_platform          varchar(80)    NOT NULL,    -- amazon, walmart, shopify
+  source_account           varchar(200)   NULL,
+  source_report_type       varchar(80)    NULL,        -- business_report, ...
+  source_upload_id         char(26)       NULL,
+  source_row_uid           varchar(200)   NULL,        -- upload-supplied uid for idempotency
+  ingested_at              timestamptz    NOT NULL DEFAULT now(),
+
+  -- Standard packs (PACK_TIMESTAMPS, PACK_SOFT_DELETE not applied;
+  -- canonical period tables are upsert-by-composite-key per Spec 3 §3)
+  created_at               timestamptz    NOT NULL DEFAULT now(),
+  updated_at               timestamptz    NOT NULL DEFAULT now(),
+
+  -- Composite uniqueness so re-uploading the same (sku, marketplace,
+  -- period) replaces instead of duplicating.
+  CONSTRAINT uq_channel_sales_natural UNIQUE (
+    workspace_id, sku_normalized, marketplace_code, region_code,
+    fulfillment_type, period_start, period_end, source_platform, source_account
+  )
+);
+
+-- Hot scans: per-SKU blended (no marketplace filter), per-channel filtered,
+-- per-period range, per-region.
+CREATE INDEX idx_channel_sales_ws_sku_period ON xb_canonical.channel_sales
+  (workspace_id, sku_normalized, period_start DESC);
+CREATE INDEX idx_channel_sales_ws_marketplace_period ON xb_canonical.channel_sales
+  (workspace_id, marketplace_code, period_start DESC);
+CREATE INDEX idx_channel_sales_ws_region_period ON xb_canonical.channel_sales
+  (workspace_id, region_code, period_start DESC);
+-- Partition by month on period_start per Spec 3 §6
+```
+
+`channel_inventory` and `channel_ads` follow the same pattern with
+their own metric columns + `inventory_location_code` /
+`ad_platform_code` as additional dimensions.
+
+## Engine I/O contract
+
+Every engine takes:
+
+```typescript
+interface EngineQuery {
+  workspaceId: WorkspaceId;
+  // Mandatory time window
+  periodStart: Date;
+  periodEnd: Date;
+  // Optional filters — any combination
+  skuNormalized?: string;
+  marketplaceCode?: string;
+  regionCode?: string;
+  fulfillmentType?: string;
+  inventoryLocationCode?: string;
+  adPlatformCode?: string;
+}
+```
+
+Engines return blended results by default; filters narrow the
+aggregation. The SAME engine answers "blended DOS for SKU X" and
+"FBA-US-only DOS for SKU X" — the only difference is which filters
+are passed.
+
+## SKU-detail UX implication
+
+The eventual SKU detail page is the canonical example:
+
+```
+/sku/[sku_normalized]
+   ↓
+  [blended KPI strip]
+   ↓
+  [filter chips: marketplace | region | fulfillment | ad platform | warehouse]
+   ↓
+  [tabs: Sales | Inventory | Ads | DOS | Profitability]
+   ↓
+  [each tab renders both blended and a per-dimension breakdown table]
+```
+
+The same component reads the same canonical tables; chips change the
+`WHERE` clause passed to the engine.
+
+## Implementation rules
+
+1. **Every canonical table carries the full dimension set** relevant
+   to its data: sales gets marketplace/region/fulfillment; inventory
+   gets location/fulfillment; ads gets ad_platform. SKU dimension is
+   on every row that's SKU-scoped.
+
+2. **Validators must capture dimensional fields** during ingestion.
+   The Amazon validators already do this (`channel`, `target_platform`).
+   Future connectors (Walmart, Shopify) must do the same with their
+   platform's equivalents.
+
+3. **The mapper is where dimensional normalization happens:**
+   marketplace `amazon_us` stays as-is; `Amazon.com` becomes
+   `amazon_us`; region `US` is derived from marketplace; fulfillment
+   `FBA-US` becomes `fulfillment_type='fba' + inventory_location_code='FBA-US'`.
+
+4. **Engines NEVER read raw upload data** — they read canonical with
+   filter parameters and aggregate.
+
+5. **Summary tables are pre-aggregated blended views** with the same
+   dimension columns, so dashboard tiles for "total across all
+   channels" don't require live SUMs across millions of rows.
+
+6. **Frontend filter UI is a single component** taking a list of
+   active dimensions and emitting filter objects. The same component
+   appears on dashboards, SKU details, sales view, inventory view,
+   PPC view.
+
+## Effect on currently-shipped work
+
+| Area | Status given Part 5 |
+|---|---|
+| `amazon-sales` validator (carries `channel` column) | ✅ correct — channel field is captured at ingestion |
+| `amazon-inventory` validator (carries `channel`) | ✅ correct |
+| `amazon-ads` validator (carries `platform` + `target_platform`) | ✅ correct |
+| Legacy `sales_orders` table | ❌ missing dimensional columns; replace with `channel_sales` per above |
+| Legacy `inventory_snapshots` table | ❌ missing dimensional columns; replace with `channel_inventory` |
+| Legacy `/sales` page | reads `sales_orders` — will be rebuilt against `channel_sales` with the dimensional filter UI |
+| Legacy `/inventory` page | same as above |
+| Dashboard tiles | currently read blended sales/inventory aggregates → architecturally consistent; values flow correctly once canonical tables ship |
+| Engines | none yet; this section defines their I/O contract |
+
+**No code changes this turn.** This document update locks in the
+data model that all future canonical / engine / UI work follows.
+
+---
+
+# Part 6 — Inventory + WMS orchestration: SKU as the global operational entity
+
+> Direction received 2026-05-20. Sharpens Part 5 specifically for
+> inventory + replenishment + forecasting. Read before designing any
+> inventory canonical row, WMS feature, or any engine that touches
+> inventory.
+
+## Position: XB Matrix is a commerce + inventory operating system
+
+Inventory in XB Matrix is **not** a marketplace report viewer. It's a
+centralized inventory orchestration layer that:
+
+- Aggregates every inventory pool the customer owns (FBA per country,
+  FBM, multiple 3PLs, owned warehouses, retail, inbound, in-transit)
+- Aggregates every sales channel that drains those pools
+- Aggregates every ad platform driving demand into those pools
+- Computes one **SKU-level** operational truth: how much is available
+  globally, how much is sellable per channel, what needs to move where,
+  what needs to be reordered
+
+The engine never thinks "Amazon inventory" or "Shopify inventory."
+It thinks **"total operational inventory position for SKU X across
+the business"** — and answers filtered questions by adding a `WHERE`,
+not by switching schemas.
+
+## Inventory dimensions (every `xb_canonical.channel_inventory` row carries these)
+
+Building on Part 5's dimension set, inventory rows additionally need:
+
+| Dimension | Type | Purpose |
+|---|---|---|
+| `sku_normalized` | `varchar(200)` | Same as Part 5 — the SKU is the entity |
+| `marketplace_code` | `varchar(80)` | Where it's listed for sale (`amazon_us`, `shopify`, `walmart`, …) — nullable for warehouse-only inventory not yet allocated to a marketplace |
+| `region_code` | `varchar(8)` | `US`, `CA`, `UK`, … |
+| `inventory_location_code` | `varchar(120)` | Physical pool: `FBA-US`, `FBA-CA`, `WH-NJ`, `3PL-LAX-01`, `RETAIL-SHELF`, … |
+| `fulfillment_type` | `varchar(40)` | `fba`, `fbm`, `3pl`, `owned_warehouse`, `retail`, `dropship` |
+| `inventory_state` | `varchar(40)` | `available`, `reserved`, `inbound`, `damaged`, `transfer`, `processing`, `unsellable` |
+| `ownership` | `varchar(40)` | `owned`, `consigned`, `partner` — for inventory the org doesn't fully own |
+| `linked_shipment_id` | `char(26)` | When the units are in-transit, link to the originating shipment (FK to `xb_canonical.shipment_tracking`) |
+| `position_date` | `date` | Point-in-time snapshot the row represents |
+
+The `quantity` column on each row is "units in this exact (sku ×
+marketplace × location × state × ownership)" — so a single SKU with
+units in FBA-US available, FBA-US reserved, FBA-CA available, and
+3PL-LAX inbound produces 4 rows.
+
+This shape is **denormalized for query speed**. The engine reads
+billions of these rows by `WHERE` on whichever dimension it cares
+about; aggregating over `quantity` answers any operational question.
+
+## Inventory states (controlled vocabulary)
+
+| State | Meaning | Counts toward "sellable now"? |
+|---|---|---|
+| `available` | On hand and ready to ship | ✅ |
+| `reserved` | Committed to open orders, not yet shipped | ❌ (already promised) |
+| `inbound` | In transit toward this location, not yet receivable | ❌ |
+| `damaged` | Unsellable due to damage | ❌ |
+| `transfer` | Mid-move between two locations the org owns | ❌ at destination, ❌ at source |
+| `processing` | At a fulfillment node but not yet shelved (FBA receiving, 3PL putaway) | ❌ |
+| `unsellable` | Catch-all for FBA "unfulfillable" / quarantined | ❌ |
+
+Engines compute "sellable supply" as the sum where `inventory_state =
+'available'`. "Pipeline supply" includes `inbound` + `transfer` +
+`processing` with their expected arrival dates.
+
+## Canonical questions the inventory engine must answer
+
+For any SKU, scoped by any combination of dimensions, the engine
+returns:
+
+| Question | Computation |
+|---|---|
+| Total inventory globally | `SUM(quantity)` across all rows for the SKU |
+| Sellable inventory globally | `SUM(quantity) WHERE state='available'` |
+| Sellable inventory per marketplace | Same, with `marketplace_code` filter |
+| Pipeline supply (inbound + transfer) | `SUM(quantity) WHERE state IN ('inbound','transfer','processing')` |
+| Blended DOS | sellable inventory ÷ (units sold per day from `channel_sales` over same scope) |
+| Per-marketplace DOS | Same filtered by `marketplace_code` |
+| Which marketplace stocks out first | Per-marketplace DOS, ranked ascending |
+| Transfer recommendation (warehouse → FBA US) | If owned-warehouse `available` is high AND FBA-US `available` is low AND FBA-US 7-day velocity is high → propose move |
+| Reorder recommendation (from supplier) | If total pipeline + sellable < (lead-time-days × blended velocity × safety factor) → propose PO |
+| True blended demand velocity | `units` aggregated across all `channel_sales` rows for the SKU over the window |
+| SKU profitability after blended ad spend | (sum sales − sum refunds) / sum units − sum ad-spend / sum units − COGS |
+
+Every one of these reads canonical tables with a `WHERE` and an
+aggregation — no platform-specific code paths.
+
+## Engine I/O contract for inventory (extends Part 5's `EngineQuery`)
+
+```typescript
+interface InventoryEngineQuery {
+  workspaceId: WorkspaceId;
+  asOf: Date;                    // point-in-time snapshot anchor
+  windowDays: number;            // velocity lookback (default 30)
+  // Filters — any combination, all optional
+  skuNormalized?: string;
+  marketplaceCode?: string;
+  regionCode?: string;
+  fulfillmentType?: string;
+  inventoryLocationCode?: string;
+  state?: ReadonlyArray<InventoryState>;
+}
+```
+
+Engine returns a normalized result:
+
+```typescript
+interface InventoryPosition {
+  skuNormalized: string;
+  sellable: number;              // state='available' sum
+  pipeline: {                    // future-arriving supply
+    inbound: number;
+    transfer: number;
+    processing: number;
+    earliestArrivalDate: Date | null;
+  };
+  reserved: number;
+  damagedOrUnsellable: number;
+  velocityPerDay: number;        // from channel_sales over window
+  dosBlended: number | null;     // sellable / velocityPerDay
+  byDimension?: {                // optional per-dimension breakdown
+    marketplace?: Array<{ marketplace_code: string; sellable: number; velocity: number; dos: number | null }>;
+    location?: Array<{ inventory_location_code: string; sellable: number; reserved: number }>;
+  };
+}
+```
+
+The SAME engine answers blended ("no filters") and drill-down
+("`marketplace_code = 'amazon_us'`") variants by changing the SQL
+predicates. No second engine, no marketplace-specific code.
+
+## Replenishment recommendation flow
+
+```
+For each (workspace × SKU):
+  1. Aggregate sellable inventory per marketplace
+  2. Aggregate velocity per marketplace over the lookback window
+  3. Compute marketplace-level DOS
+  4. Identify low-DOS marketplaces (below workspace.dos_target_days)
+  5. Identify high-inventory pools the org owns (warehouse + 3PL)
+  6. Match: which pool can feed which marketplace (geography + fulfillment compatibility)
+  7. Propose:
+     - Transfer X units from warehouse_code=WH-NJ → marketplace=amazon_us
+     - Reorder Y units from supplier when (pipeline + sellable) <
+       (lead-time × velocity × safety_factor)
+```
+
+All of step 1–6 are SQL aggregations over canonical tables with the
+right filters. Step 7 is the engine's recommendation output, stored
+in `xb_intelligence.recommendations` with full provenance.
+
+## Implementation rules (extend Parts 4 + 5)
+
+1. **`channel_inventory` is the single inventory canonical table.**
+   Every pool — FBA, FBM, 3PL, owned warehouse, retail — lands here,
+   distinguished by `fulfillment_type` + `inventory_location_code`.
+   There is NOT a separate `fba_inventory` table.
+
+2. **`inventory_state` is mandatory on every row.** Sums over
+   inventory without filtering on state are meaningless. The engine
+   API requires callers to specify which states they want, or returns
+   a structured breakdown by state.
+
+3. **`shipment_tracking` links to inventory.** Inbound + transfer rows
+   in `channel_inventory` carry `linked_shipment_id` so the engine can
+   compute expected arrival dates accurately. Without this, "DOS
+   including pipeline" can't be honest.
+
+4. **`xb_master.warehouses` is the source of truth for warehouse
+   identity.** The `inventory_location_code` is an FK into it. The
+   warehouse master knows: region, address, is_fba boolean,
+   parent_org. The engine joins to it for region-based aggregations.
+
+5. **`xb_master.sku_aliases` (Part 5) handles SKU normalization
+   across platforms.** Inventory rows store `sku_normalized` resolved
+   at canonicalization time — never the platform-specific code.
+
+6. **Frontend never aggregates inventory.** The dashboard tile,
+   SKU-detail tab, and inventory list all read engine output for the
+   same `InventoryEngineQuery` shape. Add a filter chip → re-run the
+   engine query → render. No client-side `Math.max(…)` over rows.
+
+## Effect on currently-shipped work
+
+| Area | Status given Part 6 |
+|---|---|
+| `amazon-inventory` validator (captures `channel`, `total`, `receiving`, `fc_transfer`, `reserved`, `damaged`) | ✅ correct shape at the edge. When canonicalization lands, the mapper splits these into multiple `channel_inventory` rows (one per state: `available`/`reserved`/etc) with `fulfillment_type='fba'` + `inventory_location_code='FBA-' || region`. |
+| Future Walmart / Shopify / 3PL inventory validators | All map into the same `channel_inventory` table; their templates carry whatever the source platform exposes; the mapper normalizes onto the shared dimension set. |
+| Legacy `inventory_snapshots` table | ❌ even more wrong now — flat per-(sku, warehouse) shape can't represent state granularity (`available` vs `reserved` vs `inbound`). Replace, don't extend. |
+| Inventory KPI strip (planned: Available / Reserved / Receiving / FC Transfer / Damaged) | Maps 1:1 to inventory states once canonical lands. UI just reads engine output. |
+| Forecasting / Replenishment engines (not built) | I/O contract above is binding when they ship. |
+| Dashboard tiles | "Available" + "Stock cover" tiles are already engine-output shape, just reading from temporary canonical today. Re-pointing to `channel_inventory` engine output is a clean swap. |
+
+**No code changes this turn.** This locks in inventory orchestration
+shape that all future canonical / engine / UI work for inventory,
+WMS, replenishment, forecasting, and SKU-detail follows.
+
