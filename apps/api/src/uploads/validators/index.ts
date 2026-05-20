@@ -1,5 +1,6 @@
 import type { UploadKind } from '../../services/upload-service.js';
 import { salesValidator } from './sales.js';
+import { inventoryValidator } from './inventory.js';
 import type { UploadValidator } from './types.js';
 
 /**
@@ -9,6 +10,7 @@ import type { UploadValidator } from './types.js';
  */
 const VALIDATORS: Map<UploadKind, UploadValidator> = new Map([
   [salesValidator.kind, salesValidator],
+  [inventoryValidator.kind, inventoryValidator],
 ]);
 
 export function getValidator(kind: UploadKind): UploadValidator | null {

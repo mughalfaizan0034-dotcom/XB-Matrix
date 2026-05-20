@@ -25,6 +25,7 @@ import { userRoutes } from './routes/users.js';
 import { invitationRoutes } from './routes/invitations.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { salesRoutes } from './routes/sales.js';
+import { inventoryRoutes } from './routes/inventory.js';
 
 export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   const app = Fastify({
@@ -88,6 +89,7 @@ export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   await app.register(invitationRoutes, { prefix: '/v1/invitations' });
   await app.register(uploadRoutes, { prefix: '/v1/uploads' });
   await app.register(salesRoutes, { prefix: '/v1/sales' });
+  await app.register(inventoryRoutes, { prefix: '/v1/inventory' });
 
   return app;
 }
