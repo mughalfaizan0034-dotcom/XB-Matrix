@@ -391,6 +391,63 @@ export async function adminResetPassword(
   });
 }
 
+/**
+ * Remove a user — soft delete. No optimistic-lock version required:
+ * removal is idempotent and a stale row_version should never block an
+ * admin from removing a user. Sets deleted_at + deactivates + revokes
+ * every live session so the account is fully retired immediately.
+ */
+export async function removeUser(
+  app: FastifyInstance,
+  actor: ActorContext,
+  userId: UserId,
+): Promise<void> {
+  await app.withConnection(actor, async (client) => {
+    const { rows } = await client.query<{
+      id: string;
+      organization_id: string | null;
+      internal_user_role: 'super_admin' | 'manager' | 'staff' | null;
+    }>(
+      `SELECT id, organization_id, internal_user_role
+         FROM xb_core.users WHERE id = $1 AND deleted_at IS NULL`,
+      [userId],
+    );
+    const cur = rows[0];
+    if (!cur) throw new NotFoundError('user', userId);
+
+    if (cur.id === actor.actorId) {
+      throw new SemanticError('You cannot remove your own account.', 'self_remove');
+    }
+    // The single super admin cannot be removed via the API.
+    if (cur.internal_user_role === 'super_admin') {
+      throw new ForbiddenError('The super admin account cannot be removed.', 'super_admin_locked');
+    }
+    if (!actor.isInternalManager) {
+      if (actor.effectiveRole !== 'organization_admin') {
+        throw new ForbiddenError('Not authorized to remove users.', 'not_authorized');
+      }
+      if (cur.organization_id !== actor.organizationId) {
+        throw new ForbiddenError('Cannot remove users outside your organization.', 'org_scope');
+      }
+    }
+
+    await client.query(
+      `UPDATE xb_core.users
+          SET deleted_at = now(),
+              deleted_by_actor_id = $2,
+              user_status = 'deactivated'
+        WHERE id = $1 AND deleted_at IS NULL`,
+      [userId, actor.actorId],
+    );
+    await client.query(
+      `UPDATE xb_core.sessions
+          SET revoked_at = now(), revoke_reason = 'admin_revoke'
+        WHERE user_id = $1 AND revoked_at IS NULL`,
+      [userId],
+    );
+  });
+}
+
 export interface DeactivateUserInput {
   readonly userId: UserId;
   readonly expectedRowVersion: number;

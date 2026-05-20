@@ -15,15 +15,13 @@ import { describeError, useActiveWorkspace } from '@/lib/session';
 
 const MAX_BYTES = 32 * 1024 * 1024; // matches server-side cap in routes/uploads.ts
 
-// Only the omnichannel operational datasets are offered. Per-marketplace
-// upload kinds were removed — every dataset has exactly one normalized
-// template with marketplace as a column. `generic` stays for arbitrary
-// passthrough files.
+// Only the operational datasets are offered. One normalized template
+// per dataset; marketplace is a column inside the file. No generic /
+// passthrough uploads — every upload must be a recognized dataset.
 const KIND_OPTIONS: ReadonlyArray<{ value: UploadKind; label: string }> = [
-  { value: 'sales_performance',        label: 'Sales Performance' },
-  { value: 'inventory_position',       label: 'Inventory Position' },
-  { value: 'advertising_performance',  label: 'Advertising Performance' },
-  { value: 'generic',                  label: 'Generic file (no validator)' },
+  { value: 'sales_performance',        label: 'Sales Report' },
+  { value: 'inventory_position',       label: 'Inventory Report' },
+  { value: 'advertising_performance',  label: 'Ads Report' },
 ];
 
 interface Props {

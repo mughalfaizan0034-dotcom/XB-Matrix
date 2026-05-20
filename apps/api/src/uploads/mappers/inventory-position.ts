@@ -27,7 +27,7 @@ export interface InventoryPositionRow {
 }
 
 /**
- * Inventory Position mapper — omnichannel. Each input row carries the
+ * Inventory Position mapper — all-channel. Each input row carries the
  * pool's marketplace + channel + per-state quantities; the mapper
  * decomposes it into up-to-5 NormalizedInventoryPosition rows (one
  * per non-zero state: available / reserved / inbound / transfer /

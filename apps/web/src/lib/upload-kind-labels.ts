@@ -26,7 +26,7 @@ export type UploadCategory =
 export interface KindMeta {
   readonly category: UploadCategory;
   readonly categoryLabel: string;     // "Sales Performance"
-  readonly platformLabel: string;     // "Omnichannel" / "Amazon" / "Walmart" / ...
+  readonly platformLabel: string;     // "All-channel" / "Amazon" / "Walmart" / ...
   readonly compactLabel: string;       // "Sales · Amazon" — for table cells
   readonly fullLabel: string;          // "Sales Performance — Amazon" — for dropdowns
   readonly /** PRIMARY normalized kind for its category. */ primary?: boolean;
@@ -35,32 +35,33 @@ export interface KindMeta {
 }
 
 export const UPLOAD_KIND_META: Record<UploadKind, KindMeta> = {
-  // PRIMARY omnichannel datasets — one per operational category.
+  // PRIMARY datasets — one normalized template per operational category.
   sales_performance: {
     category: 'sales',
-    categoryLabel: 'Sales Performance',
-    platformLabel: 'Omnichannel',
-    compactLabel: 'Sales Performance',
-    fullLabel: 'Sales Performance (omnichannel)',
+    categoryLabel: 'Sales Report',
+    platformLabel: 'All channels',
+    compactLabel: 'Sales Report',
+    fullLabel: 'Sales Report',
     primary: true,
   },
   inventory_position: {
     category: 'inventory',
-    categoryLabel: 'Inventory Position',
-    platformLabel: 'Omnichannel',
-    compactLabel: 'Inventory Position',
-    fullLabel: 'Inventory Position (omnichannel)',
+    categoryLabel: 'Inventory Report',
+    platformLabel: 'All channels',
+    compactLabel: 'Inventory Report',
+    fullLabel: 'Inventory Report',
     primary: true,
   },
   advertising_performance: {
     category: 'advertising',
-    categoryLabel: 'Advertising Performance',
-    platformLabel: 'Omnichannel',
-    compactLabel: 'Advertising Performance',
-    fullLabel: 'Advertising Performance (omnichannel)',
+    categoryLabel: 'Ads Report',
+    platformLabel: 'All channels',
+    compactLabel: 'Ads Report',
+    fullLabel: 'Ads Report',
     primary: true,
   },
-  // SECONDARY per-marketplace adapters — preserve native field names.
+  // SECONDARY per-marketplace adapters — kept only so legacy rows
+  // display correctly; not offered for new uploads.
   amazon_sales: {
     category: 'sales',
     categoryLabel: 'Sales Performance',

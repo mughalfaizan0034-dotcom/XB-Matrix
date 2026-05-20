@@ -8,7 +8,7 @@ export interface Workspace {
   readonly id: WorkspaceId;
   readonly organizationId: OrganizationId;
   readonly workspaceName: string;
-  readonly workspaceType: 'marketplace' | 'dtc' | 'warehouse' | 'omni_channel';
+  readonly workspaceType: string | null;
   readonly workspaceStatus: 'active' | 'archived';
   readonly defaultCurrencyCode: string;
   readonly timezone: string;
@@ -309,7 +309,8 @@ export async function getWorkspace(
 export interface CreateWorkspaceInput {
   readonly organizationId: OrganizationId;
   readonly workspaceName: string;
-  readonly workspaceType: Workspace['workspaceType'];
+  /** Free-text, optional label (e.g. "Amazon", "DTC"). No fixed vocabulary. */
+  readonly workspaceType?: string | null;
   readonly defaultCurrencyCode: string;
   readonly timezone?: string;
   readonly dosTargetDays?: number;
@@ -366,7 +367,7 @@ export async function createWorkspace(
           id,
           input.organizationId,
           name,
-          input.workspaceType,
+          input.workspaceType?.trim() || null,
           input.defaultCurrencyCode,
           input.timezone ?? 'UTC',
           input.dosTargetDays ?? 30,

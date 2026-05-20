@@ -31,7 +31,7 @@ export interface AdvertisingPerformanceRow {
 }
 
 /**
- * Advertising Performance mapper — omnichannel. Each row carries the
+ * Advertising Performance mapper — all-channel. Each row carries the
  * ad platform AND the target marketplace separately, so the canonical
  * layer can answer:
  *   - blended TACOS across every ad platform (no platform filter)

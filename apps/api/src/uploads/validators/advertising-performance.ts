@@ -21,7 +21,7 @@ import {
 } from './csv-helpers.js';
 
 /**
- * Advertising Performance — the omnichannel normalized template.
+ * Advertising Performance — the all-channel normalized template.
  *
  * One file can mix campaigns from every ad platform: Amazon Ads,
  * Walmart Connect, Meta Ads, Google Ads, TikTok Ads. Two source
@@ -34,7 +34,7 @@ import {
  * traffic driven into Amazon), so the canonical layer separates the
  * spend source from the destination marketplace.
  *
- * Columns (2026-05-20 omnichannel direction):
+ * Columns (2026-05-20 all-channel direction):
  *   action            — add | update | remove
  *   uid               — caller-supplied unique row id (idempotency)
  *   start_date        — period start (YYYY-MM-DD)

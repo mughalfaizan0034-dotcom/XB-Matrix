@@ -7,7 +7,7 @@ import { SESSION_QUERY_KEY } from './session';
 export interface AccessibleWorkspace {
   readonly id: string;
   readonly workspaceName: string;
-  readonly workspaceType: 'marketplace' | 'dtc' | 'warehouse' | 'omni_channel';
+  readonly workspaceType: string | null;
   readonly workspaceStatus: 'active' | 'archived';
   readonly organizationId: string;
   readonly organizationName: string;

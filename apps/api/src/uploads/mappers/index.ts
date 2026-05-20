@@ -1,5 +1,5 @@
 import type { UploadKind } from '../../services/upload-service.js';
-// PRIMARY omnichannel mappers
+// PRIMARY all-channel mappers
 import { salesPerformanceMapper, type SalesPerformanceRow } from './sales-performance.js';
 import { inventoryPositionMapper, type InventoryPositionRow } from './inventory-position.js';
 import { advertisingPerformanceMapper, type AdvertisingPerformanceRow } from './advertising-performance.js';

@@ -8,12 +8,6 @@ import { ApiError } from '@/lib/api-client';
 import { TimezoneSelect } from '@/components/timezone-select';
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'PKR', 'INR'];
-const TYPES = [
-  { value: 'marketplace',  label: 'Marketplace' },
-  { value: 'dtc',          label: 'DTC' },
-  { value: 'warehouse',    label: 'Warehouse' },
-  { value: 'omni_channel', label: 'Omni-channel' },
-] as const;
 
 const DOS_MIN = 1;
 const DOS_MAX = 365;
@@ -40,7 +34,7 @@ export function EditWorkspaceDialog({
   const toast = useToast();
   const patch = usePatchWorkspace();
   const [workspaceName, setName] = useState('');
-  const [workspaceType, setType] = useState<Workspace['workspaceType']>('marketplace');
+  const [workspaceType, setType] = useState('');
   const [defaultCurrencyCode, setCurrency] = useState('USD');
   const [timezone, setTimezone] = useState('UTC');
   const [dosTargetDays, setDos] = useState('30');
@@ -49,7 +43,7 @@ export function EditWorkspaceDialog({
   useEffect(() => {
     if (open && workspace) {
       setName(workspace.workspaceName);
-      setType(workspace.workspaceType);
+      setType(workspace.workspaceType ?? '');
       setCurrency(workspace.defaultCurrencyCode);
       setTimezone(workspace.timezone);
       // dos_target_days comes from PG as "30.00"; the new tighter UX wants
@@ -75,7 +69,7 @@ export function EditWorkspaceDialog({
         id: workspace.id,
         input: {
           workspaceName,
-          workspaceType,
+          workspaceType: workspaceType.trim() || null,
           defaultCurrencyCode,
           timezone,
           dosTargetDays: Number(dosTargetDays),
@@ -130,20 +124,16 @@ export function EditWorkspaceDialog({
           )}
         </FormField>
 
-        <FormField label="Workspace type" required>
+        <FormField label="Workspace type" hint="Optional free-text label.">
           {(p) => (
-            <Select
+            <Input
               {...p}
               value={workspaceType}
-              onChange={(e) => setType(e.target.value as Workspace['workspaceType'])}
-              required
-            >
-              {TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </Select>
+              onChange={(e) => setType(e.target.value)}
+              placeholder="Optional"
+              maxLength={80}
+              autoComplete="off"
+            />
           )}
         </FormField>
 

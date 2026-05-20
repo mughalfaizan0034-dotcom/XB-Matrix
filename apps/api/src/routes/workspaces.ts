@@ -34,7 +34,8 @@ const ListQuery = z.object({
 const CreateBody = z.object({
   organizationId: ULID,
   workspaceName: z.string().trim().min(1).max(200),
-  workspaceType: z.enum(['marketplace', 'dtc', 'warehouse', 'omni_channel']),
+  // Free-text, optional label. No fixed vocabulary.
+  workspaceType: z.string().trim().max(80).optional().nullable(),
   defaultCurrencyCode: z.string().regex(/^[A-Z]{3}$/),
   timezone: z.string().trim().max(64).optional(),
   dosTargetDays: DOS_TARGET.optional(),
@@ -42,7 +43,7 @@ const CreateBody = z.object({
 
 const PatchBody = z.object({
   workspaceName: z.string().trim().min(1).max(200).optional(),
-  workspaceType: z.enum(['marketplace', 'dtc', 'warehouse', 'omni_channel']).optional(),
+  workspaceType: z.string().trim().max(80).optional().nullable(),
   defaultCurrencyCode: z.string().regex(/^[A-Z]{3}$/).optional(),
   timezone: z.string().trim().max(64).optional(),
   dosTargetDays: DOS_TARGET.optional(),

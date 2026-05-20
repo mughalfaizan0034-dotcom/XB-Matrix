@@ -12,7 +12,7 @@ import {
 } from './helpers.js';
 
 /**
- * Row shape from the `sales_performance` validator. Already omnichannel:
+ * Row shape from the `sales_performance` validator. Already all-channel:
  * the `marketplace` column lives on every row, so a single file can
  * mix Amazon US + Amazon CA + Walmart + Shopify + TikTok rows.
  */
@@ -37,7 +37,7 @@ export interface SalesPerformanceRow {
 }
 
 /**
- * Sales Performance mapper — operates on a normalized omnichannel
+ * Sales Performance mapper — operates on a normalized all-channel
  * row shape. The marketplace column drives the per-row source
  * platform / marketplace / region derivation; no per-marketplace
  * branching is needed downstream because every row produces the

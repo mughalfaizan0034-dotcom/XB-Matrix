@@ -8,7 +8,7 @@ export interface Workspace {
   readonly id: string;
   readonly organizationId: string;
   readonly workspaceName: string;
-  readonly workspaceType: 'marketplace' | 'dtc' | 'warehouse' | 'omni_channel';
+  readonly workspaceType: string | null;
   readonly workspaceStatus: 'active' | 'archived';
   readonly defaultCurrencyCode: string;
   readonly timezone: string;
@@ -21,7 +21,8 @@ export interface Workspace {
 export interface CreateWorkspaceInput {
   readonly organizationId: string;
   readonly workspaceName: string;
-  readonly workspaceType: Workspace['workspaceType'];
+  /** Free-text, optional. Omit or pass null when not set. */
+  readonly workspaceType?: string | null;
   readonly defaultCurrencyCode: string;
   readonly timezone?: string;
   readonly dosTargetDays?: number;

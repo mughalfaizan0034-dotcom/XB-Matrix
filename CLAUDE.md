@@ -1742,7 +1742,7 @@ specify this on every canonical + intelligence table.
 | Cross-channel sales velocity | One SKU's daily run-rate summed across all sales channels |
 | Centralized replenishment forecasting | Forecast aggregated demand → propose shipments per warehouse |
 | Unified profitability engine | Per-SKU margin including all marketplace fees + all ad costs + COGS |
-| Omnichannel operational dashboards | One dashboard, one truth, regardless of how many connectors |
+| All-channel operational dashboards | One dashboard, one truth, regardless of how many connectors |
 
 ## Implementation rules for this session and beyond
 
@@ -2276,7 +2276,7 @@ WMS, replenishment, forecasting, and SKU-detail follows.
 
 Concise log of decisions that override earlier sections. Newest wins.
 
-## Uploads — single omnichannel file per dataset
+## Uploads — single all-channel file per dataset
 
 There are NO per-marketplace uploads or templates. One normalized file
 per operational dataset:
@@ -2288,7 +2288,7 @@ per operational dataset:
 Every marketplace's rows go in the SAME file. The `marketplace` column
 (sales/inventory) and `platform` + `target_marketplace` columns (ads)
 are what the internal engine uses for all math — blended TACOS,
-omnichannel DOS, per-channel slicing. Per-marketplace upload kinds
+all-channel DOS, per-channel slicing. Per-marketplace upload kinds
 (`amazon_sales`, `walmart_sales`, …) and "adapter" templates are
 removed from the UI. Validators/mappers for them may remain in the
 backend tree but are not surfaced.

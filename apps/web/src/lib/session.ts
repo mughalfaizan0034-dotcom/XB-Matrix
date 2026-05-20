@@ -30,7 +30,7 @@ export interface SessionUser {
 export interface ActiveWorkspaceSummary {
   readonly id: string;
   readonly workspaceName: string;
-  readonly workspaceType: 'marketplace' | 'dtc' | 'warehouse' | 'omni_channel';
+  readonly workspaceType: string | null;
   readonly workspaceStatus: 'active' | 'archived';
   readonly organizationId: string;
   readonly organizationName: string;

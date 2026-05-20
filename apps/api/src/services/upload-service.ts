@@ -16,7 +16,7 @@ export const UPLOAD_KINDS = [
   // exports, arbitrary files.
   'generic',
 
-  // Omnichannel normalized templates — the PRIMARY operational
+  // All-channel normalized templates — the PRIMARY operational
   // upload kinds (2026-05-20 direction). One template per dataset,
   // with marketplace/platform as a column dimension. A single file
   // can carry rows from any combination of marketplaces. See
@@ -28,7 +28,7 @@ export const UPLOAD_KINDS = [
   // Per-marketplace ADAPTERS — keep their platform's native field
   // names at the ingestion edge for convenience when an operator
   // exports straight from the platform. The mapper translates these
-  // to the same Normalized* contract the omnichannel templates
+  // to the same Normalized* contract the all-channel templates
   // produce. Demoted in the UI; still accessible as advanced
   // ingestion paths.
   'amazon_sales',
@@ -156,21 +156,10 @@ export async function createUpload(
   actor: ActorContext,
   input: CreateUploadInput,
 ): Promise<UploadSummary> {
-  if (!actor.organizationId) {
-    throw new SemanticError('Uploads require an organization context.', 'no_org');
-  }
-  const orgId = actor.organizationId;
-
-  await app.assertPermission(actor, {
-    organizationId: orgId,
-    workspaceId: input.workspaceId,
-    module: 'uploads',
-    action: 'create',
-  });
-
-  // Workspace must exist + belong to the actor's org. Defense in depth
-  // beyond RLS so we 404 cleanly instead of leaking via a constraint
-  // violation.
+  // The organization is derived from the TARGET WORKSPACE, not the
+  // actor. Internal managers / super admins have no organization of
+  // their own but legitimately upload into any workspace they've
+  // switched into. Org users are scoped to their own org's workspaces.
   const ws = await app.pg
     .query<{ organization_id: string; workspace_status: string }>(
       `SELECT organization_id, workspace_status
@@ -180,9 +169,18 @@ export async function createUpload(
     )
     .then((r) => r.rows[0]);
   if (!ws) throw new NotFoundError('workspace', input.workspaceId);
-  if (ws.organization_id !== orgId && !actor.isInternalManager) {
+  if (!actor.isInternalManager && ws.organization_id !== actor.organizationId) {
     throw new NotFoundError('workspace', input.workspaceId);
   }
+  const orgId = ws.organization_id as OrganizationId;
+
+  await app.assertPermission(actor, {
+    organizationId: orgId,
+    workspaceId: input.workspaceId,
+    module: 'uploads',
+    action: 'create',
+  });
+
   if (ws.workspace_status !== 'active') {
     throw new SemanticError(
       `Cannot upload to a ${ws.workspace_status} workspace.`,

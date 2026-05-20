@@ -54,7 +54,7 @@ export async function tryResolve(
 export function normalizeMarketplaceCode(raw: string): string {
   const k = raw.trim().toLowerCase().replace(/\s+/g, '_');
 
-  // Canonical .com-style vocabulary (2026-05-20 omnichannel direction).
+  // Canonical .com-style vocabulary (2026-05-20 all-channel direction).
   // Templates use these values; mapper normalizes to internal codes
   // so downstream canonical tables stay stable.
   switch (k) {

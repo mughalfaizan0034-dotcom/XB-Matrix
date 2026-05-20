@@ -6,7 +6,7 @@ import { salesValidator } from './sales.js';
 import { inventoryValidator } from './inventory.js';
 // Spec-aligned validators — Part 1 §Uploads templates. Parse + validate +
 // produce summary. Canonical insertion lands when Spec 3 §10.9+ DDL ships.
-// PRIMARY operational templates — omnichannel normalized shape, one
+// PRIMARY operational templates — all-channel normalized shape, one
 // per operational dataset. Marketplace/platform lives as a column on
 // each row. See CLAUDE.md "uploads are operational categories".
 import { salesPerformanceValidator } from './sales-performance.js';

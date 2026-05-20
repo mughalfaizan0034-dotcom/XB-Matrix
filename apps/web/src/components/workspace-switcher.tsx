@@ -410,11 +410,7 @@ function groupByOrganization(
   return [...map.values()];
 }
 
+// Workspace type is a free-text optional label.
 function prettyType(t: AccessibleWorkspace['workspaceType']): string {
-  switch (t) {
-    case 'marketplace':  return 'Marketplace';
-    case 'dtc':          return 'DTC';
-    case 'warehouse':    return 'Warehouse';
-    case 'omni_channel': return 'Omni-channel';
-  }
+  return t?.trim() || 'Workspace';
 }

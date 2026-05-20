@@ -364,13 +364,9 @@ export function WorkspaceListNested({ organization }: { organization: Organizati
   );
 }
 
+// Workspace type is a free-text optional label.
 function prettyType(t: Workspace['workspaceType']): string {
-  switch (t) {
-    case 'marketplace':  return 'Marketplace';
-    case 'dtc':          return 'DTC';
-    case 'warehouse':    return 'Warehouse';
-    case 'omni_channel': return 'Omni-channel';
-  }
+  return t?.trim() || '—';
 }
 
 function formatDate(iso: string): string {

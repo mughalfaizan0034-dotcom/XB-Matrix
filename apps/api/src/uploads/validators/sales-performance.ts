@@ -20,7 +20,7 @@ import {
 } from './csv-helpers.js';
 
 /**
- * Sales Performance — the omnichannel normalized template.
+ * Sales Performance — the all-channel normalized template.
  *
  * One file can mix rows from Amazon US / Amazon CA / Walmart / Shopify
  * / TikTok Shop / any future marketplace. The `marketplace` column on
@@ -33,7 +33,7 @@ import {
  * this same canonical sales shape. The primary template exposed to
  * users is this one.
  *
- * Columns (Part 5 + 2026-05-20 omnichannel direction):
+ * Columns (Part 5 + 2026-05-20 all-channel direction):
  *   action            — add | update | remove
  *   uid               — caller-supplied unique row id (idempotency)
  *   start_date        — period start (YYYY-MM-DD)

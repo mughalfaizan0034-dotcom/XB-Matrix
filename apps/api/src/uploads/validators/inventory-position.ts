@@ -18,7 +18,7 @@ import {
 } from './csv-helpers.js';
 
 /**
- * Inventory Position — the omnichannel normalized template.
+ * Inventory Position — the all-channel normalized template.
  *
  * One file can mix rows from every inventory pool the operator runs:
  * FBA per country, FBM, owned warehouses, 3PL pools, retail. The
@@ -28,7 +28,7 @@ import {
  * damaged) downstream so engines can compute blended DOS, transfer
  * planning, replenishment, etc. — see CLAUDE.md Part 6.
  *
- * Columns (2026-05-20 omnichannel direction):
+ * Columns (2026-05-20 all-channel direction):
  *   action      — add | update | remove
  *   uid         — caller-supplied unique row id (idempotency)
  *   date        — snapshot date (YYYY-MM-DD)

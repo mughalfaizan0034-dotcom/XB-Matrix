@@ -7,7 +7,7 @@ import { api } from './api-client';
 export type UploadStatus = 'queued' | 'uploading' | 'validating' | 'ready' | 'failed';
 
 export const UPLOAD_KINDS = [
-  // PRIMARY omnichannel templates — one normalized shape per operational
+  // PRIMARY all-channel templates — one normalized shape per operational
   // dataset. Marketplace/platform is a column inside the row.
   'sales_performance',
   'inventory_position',

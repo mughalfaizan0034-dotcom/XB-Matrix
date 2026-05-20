@@ -8,6 +8,7 @@ import {
   getUser,
   listUsers,
   reactivateUser,
+  removeUser,
   type CreateUserRole,
 } from '../services/users-service.js';
 import { NotFoundError } from '../lib/errors.js';
@@ -86,6 +87,14 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
     const { password } = ResetPasswordBody.parse(req.body);
     await adminResetPassword(app, actor, id as UserId, password);
     return ok({ reset: true }, req.id);
+  });
+
+  // Remove user — soft delete. No row-version body; idempotent.
+  app.post('/:id/remove', async (req) => {
+    const actor = req.requireActor();
+    const { id } = IdParam.parse(req.params);
+    await removeUser(app, actor, id as UserId);
+    return ok({ removed: true }, req.id);
   });
 
   app.post('/:id/deactivate', async (req) => {
