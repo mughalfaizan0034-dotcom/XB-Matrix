@@ -39,7 +39,8 @@ export interface AuthenticatedUser {
   readonly actorKind: ActorKind;
   readonly effectiveRole: EffectiveRole;
   readonly organizationId: OrganizationId | null;
-  readonly email: string;
+  readonly username: string;
+  readonly email: string | null;
   readonly displayName: string;
   readonly userKind: 'internal' | 'organization';
   readonly role: string | null;
@@ -52,7 +53,8 @@ interface UserRow {
   actor_id: string;
   user_kind: 'internal' | 'organization';
   organization_id: string | null;
-  email: string;
+  username: string;
+  email: string | null;
   display_name: string;
   password_hash: string;
   user_status: 'active' | 'deactivated' | 'pending_invite';
@@ -62,7 +64,7 @@ interface UserRow {
 }
 
 const SELECT_USER = `
-  SELECT id, actor_id, user_kind, organization_id, email, display_name,
+  SELECT id, actor_id, user_kind, organization_id, username, email, display_name,
          password_hash, user_status, internal_user_role, organization_user_role,
          email_verified_at
     FROM xb_core.users
@@ -72,6 +74,19 @@ async function loadUserByEmail(app: FastifyInstance, email: string): Promise<Use
   const { rows } = await app.pg.query<UserRow>(
     `${SELECT_USER} WHERE lower(email) = lower($1) AND deleted_at IS NULL LIMIT 1`,
     [email],
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Username-first lookup for sign-in (2026-05-20 auth pivot).
+ * Username has its own unique index, so we never fall back to email
+ * here — username is the identity until email infrastructure ships.
+ */
+async function loadUserByUsername(app: FastifyInstance, username: string): Promise<UserRow | null> {
+  const { rows } = await app.pg.query<UserRow>(
+    `${SELECT_USER} WHERE lower(username) = lower($1) AND deleted_at IS NULL LIMIT 1`,
+    [username],
   );
   return rows[0] ?? null;
 }
@@ -108,6 +123,7 @@ function toAuthenticatedUser(row: UserRow): AuthenticatedUser {
     actorKind: row.user_kind === 'internal' ? 'internal_user' : 'organization_user',
     effectiveRole,
     organizationId: (row.organization_id ?? null) as OrganizationId | null,
+    username: row.username,
     email: row.email,
     displayName: row.display_name,
     userKind: row.user_kind,
@@ -121,25 +137,38 @@ function toAuthenticatedUser(row: UserRow): AuthenticatedUser {
  * Sign in: verify password, persist a session row, sign JWT with session id.
  * The session id is what makes server-side revocation possible (sign-out,
  * password reset cascade, admin revoke).
+ *
+ * Identity: username (2026-05-20 auth pivot). Email-based sign-in
+ * returns once resend.com is wired up.
+ *
+ * rememberDevice: when true, the session row is created with a 30-day
+ * TTL instead of the default 7-day. Lets operators stay signed in
+ * across browser restarts without re-auth pressure.
  */
+const REMEMBER_DEVICE_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+
 export async function signIn(
   app: FastifyInstance,
-  email: string,
+  username: string,
   password: string,
-  meta: { userAgent: string | null; ipAddress: string | null },
+  meta: {
+    userAgent: string | null;
+    ipAddress: string | null;
+    rememberDevice?: boolean;
+  },
 ): Promise<AuthenticatedSession> {
-  const row = await loadUserByEmail(app, email);
-  // Constant-ish error for both "no such user" and "wrong password" so we
-  // don't leak which emails exist.
-  if (!row) throw new UnauthenticatedError('invalid email or password');
+  const row = await loadUserByUsername(app, username);
+  // Constant-ish error for both "no such user" and "wrong password" so
+  // we don't leak which usernames exist.
+  if (!row) throw new UnauthenticatedError('invalid username or password');
   if (row.user_status === 'deactivated') {
     throw new UnauthenticatedError('account is deactivated');
   }
   if (row.user_status === 'pending_invite') {
-    throw new UnauthenticatedError('account hasn’t been activated yet — check your invitation email');
+    throw new UnauthenticatedError('account is not yet activated — ask an administrator to set your password');
   }
   const ok = await verifyPassword(password, row.password_hash);
-  if (!ok) throw new UnauthenticatedError('invalid email or password');
+  if (!ok) throw new UnauthenticatedError('invalid username or password');
 
   const user = toAuthenticatedUser(row);
 
@@ -159,6 +188,7 @@ export async function signIn(
       organizationId: user.organizationId,
       userAgent: meta.userAgent,
       ipAddress: meta.ipAddress,
+      ttlSeconds: meta.rememberDevice ? REMEMBER_DEVICE_TTL_SECONDS : undefined,
     });
     await client.query('COMMIT');
 
@@ -235,6 +265,13 @@ export async function requestPasswordReset(
   }
   if (row.user_status !== 'active') {
     app.log.info({ userId: row.id, status: row.user_status }, 'password reset requested for non-active user — dropping');
+    return;
+  }
+  if (!row.email) {
+    // Username-only users (post auth pivot) don't have an email; the
+    // admin password-reset endpoint on /v1/users/:id/reset-password
+    // is the recovery path until email infrastructure ships.
+    app.log.info({ userId: row.id }, 'password reset requested for user without email — dropping');
     return;
   }
 
@@ -353,6 +390,7 @@ export async function requestEmailVerification(
   user: AuthenticatedUser,
 ): Promise<void> {
   if (user.emailVerifiedAt) return;
+  if (!user.email) return;  // username-only user, no email to verify
 
   await app.withConnection(
     {

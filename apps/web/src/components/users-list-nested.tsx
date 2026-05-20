@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Badge,
   Button,
@@ -9,7 +8,10 @@ import {
   DataTable,
   DataTablePagination,
   DataTableToolbar,
+  Dialog,
   DropdownMenu,
+  FormField,
+  Input,
   exportRowsToCsv,
   useDataTableState,
   useToast,
@@ -17,23 +19,21 @@ import {
   type DropdownMenuItem,
 } from '@xb/ui';
 import {
+  KeyRound,
   MoreHorizontal,
   Pause,
   Play,
   Plus,
-  RefreshCcw,
-  Trash2,
   UserPlus,
 } from 'lucide-react';
 import {
+  useAdminResetPassword,
   useUsers,
   useUserTransition,
-  useResendInvitation,
-  useRevokeInvitation,
   type UserSummary,
 } from '@/lib/api-users';
 import { describeError, useSession } from '@/lib/session';
-import { InviteUserDialog } from '@/components/invite-user-dialog';
+import { AddUserDialog } from '@/components/add-user-dialog';
 import type { Organization } from '@/lib/api-orgs';
 
 const STATUS_TONE: Record<UserSummary['status'], 'success' | 'warning' | 'neutral'> = {
@@ -44,8 +44,7 @@ const STATUS_TONE: Record<UserSummary['status'], 'success' | 'warning' | 'neutra
 
 type ConfirmAction =
   | { kind: 'deactivate'; user: UserSummary }
-  | { kind: 'reactivate'; user: UserSummary }
-  | { kind: 'revoke-invite'; user: UserSummary };
+  | { kind: 'reactivate'; user: UserSummary };
 
 export function UsersListNested({ organization }: { organization: Organization }) {
   const { data: session } = useSession();
@@ -53,16 +52,11 @@ export function UsersListNested({ organization }: { organization: Organization }
   const usersQ = useUsers({ organizationId: organization.id });
   const deactivate = useUserTransition('deactivate');
   const reactivate = useUserTransition('reactivate');
-  const resend = useResendInvitation();
-  const revokeInv = useRevokeInvitation();
 
-  const [showInvite, setShowInvite] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [resetTarget, setResetTarget] = useState<UserSummary | null>(null);
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
 
-  // Same DataTable primitives as workspaces: per-org URL prefix so each
-  // org's user table keeps its own sort/search/filter independently.
-  // /v1/users isn't paginated server-side yet (small row counts per org);
-  // when it gains paging this is the only place that needs to change.
   const [tableState, tableActions] = useDataTableState({
     storageKey: 'users-table',
     urlKey: `users.${organization.slug}`,
@@ -71,33 +65,26 @@ export function UsersListNested({ organization }: { organization: Organization }
 
   const isManager = session?.isInternalManager ?? false;
   const isOrgAdmin = session?.effectiveRole === 'organization_admin';
-  const canInvite = (isManager || isOrgAdmin) && organization.organizationStatus === 'active';
+  const canAdd = (isManager || isOrgAdmin) && organization.organizationStatus === 'active';
   const isSelf = (u: UserSummary) => session?.userId === u.id;
 
   function buildMenu(u: UserSummary): DropdownMenuItem[] {
     const items: DropdownMenuItem[] = [];
-    if (u.status === 'pending_invite') {
+    if (u.status === 'active' || u.status === 'pending_invite') {
       items.push({
-        key: 'resend',
-        label: 'Resend invitation',
-        icon: RefreshCcw,
-        onSelect: () => onResend(u),
+        key: 'reset-password',
+        label: 'Reset password…',
+        icon: KeyRound,
+        onSelect: () => setResetTarget(u),
       });
-      items.push({
-        key: 'revoke',
-        label: 'Revoke invitation',
-        icon: Trash2,
-        variant: 'danger',
-        divider: true,
-        onSelect: () => setConfirm({ kind: 'revoke-invite', user: u }),
-      });
-      return items;
     }
     if (u.status === 'active') {
       items.push({
         key: 'deactivate',
         label: 'Deactivate',
         icon: Pause,
+        variant: 'danger',
+        divider: true,
         disabled: isSelf(u),
         onSelect: () => setConfirm({ kind: 'deactivate', user: u }),
       });
@@ -112,15 +99,6 @@ export function UsersListNested({ organization }: { organization: Organization }
     return items;
   }
 
-  async function onResend(u: UserSummary) {
-    try {
-      await resend.mutateAsync(u.id);
-      toast.push('success', `Invitation resent to ${u.email}.`);
-    } catch (err) {
-      toast.push('error', describeError(err));
-    }
-  }
-
   async function runConfirmed() {
     if (!confirm) return;
     const u = confirm.user;
@@ -128,12 +106,9 @@ export function UsersListNested({ organization }: { organization: Organization }
       if (confirm.kind === 'deactivate') {
         await deactivate.mutateAsync({ id: u.id, expectedRowVersion: u.rowVersion });
         toast.push('success', `Deactivated ${u.displayName}.`);
-      } else if (confirm.kind === 'reactivate') {
+      } else {
         await reactivate.mutateAsync({ id: u.id, expectedRowVersion: u.rowVersion });
         toast.push('success', `Reactivated ${u.displayName}.`);
-      } else {
-        await revokeInv.mutateAsync({ id: u.id, organizationId: u.organizationId });
-        toast.push('success', `Revoked invitation for ${u.email}.`);
       }
       setConfirm(null);
     } catch (err) {
@@ -150,7 +125,7 @@ export function UsersListNested({ organization }: { organization: Organization }
       accessor: (u) => (
         <div>
           <div className="font-medium text-foreground">{u.displayName}</div>
-          <div className="text-xs text-muted-foreground">{u.email}</div>
+          <div className="font-mono text-xs text-muted-foreground">@{u.username}</div>
         </div>
       ),
     },
@@ -165,16 +140,6 @@ export function UsersListNested({ organization }: { organization: Organization }
       header: 'Status',
       sortKey: 'status',
       accessor: (u) => <Badge tone={STATUS_TONE[u.status]}>{u.status.replace('_', ' ')}</Badge>,
-    },
-    {
-      key: 'verified',
-      header: 'Email verified',
-      sortKey: 'verified',
-      accessor: (u) => (
-        <span className="text-xs text-muted-foreground">
-          {u.emailVerifiedAt ? '✓ verified' : '— pending'}
-        </span>
-      ),
     },
     {
       key: 'last',
@@ -206,10 +171,6 @@ export function UsersListNested({ organization }: { organization: Organization }
     },
   ];
 
-  // Client-side search + filter + sort + paginate over the in-memory
-  // /v1/users response. Same shape as WorkspaceListNested — when
-  // /v1/users gains server-side paging, the only block that needs to
-  // change is this one.
   const allRows = usersQ.data ?? [];
   const statusFilter = tableState.filters.status as UserSummary['status'] | undefined;
 
@@ -221,7 +182,7 @@ export function UsersListNested({ organization }: { organization: Organization }
       rows = rows.filter(
         (u) =>
           u.displayName.toLowerCase().includes(q) ||
-          u.email.toLowerCase().includes(q),
+          u.username.toLowerCase().includes(q),
       );
     }
     return rows;
@@ -237,9 +198,6 @@ export function UsersListNested({ organization }: { organization: Organization }
       if (column === 'role') {
         av = prettyRole(a);
         bv = prettyRole(b);
-      } else if (column === 'verified') {
-        av = a.emailVerifiedAt ?? '';
-        bv = b.emailVerifiedAt ?? '';
       } else if (column === 'lastLoginAt') {
         av = a.lastLoginAt ?? '';
         bv = b.lastLoginAt ?? '';
@@ -261,13 +219,12 @@ export function UsersListNested({ organization }: { organization: Organization }
     exportRowsToCsv(
       sorted,
       [
-        { key: 'name',     header: 'Name',          value: (u) => u.displayName },
-        { key: 'email',    header: 'Email',         value: (u) => u.email },
-        { key: 'role',     header: 'Role',          value: (u) => prettyRole(u) },
-        { key: 'status',   header: 'Status',        value: (u) => u.status },
-        { key: 'verified', header: 'Email verified', value: (u) => (u.emailVerifiedAt ? 'yes' : 'no') },
-        { key: 'last',     header: 'Last sign-in',  value: (u) => u.lastLoginAt ?? '' },
-        { key: 'created',  header: 'Created',       value: (u) => u.createdAt },
+        { key: 'name',     header: 'Name',         value: (u) => u.displayName },
+        { key: 'username', header: 'Username',     value: (u) => u.username },
+        { key: 'role',     header: 'Role',         value: (u) => prettyRole(u) },
+        { key: 'status',   header: 'Status',       value: (u) => u.status },
+        { key: 'last',     header: 'Last sign-in', value: (u) => u.lastLoginAt ?? '' },
+        { key: 'created',  header: 'Created',      value: (u) => u.createdAt },
       ],
       `users-${organization.slug}-${new Date().toISOString().slice(0, 10)}.csv`,
     );
@@ -294,7 +251,7 @@ export function UsersListNested({ organization }: { organization: Organization }
         onColumnVisibilityChange={tableActions.setColumnVisibility}
         search={tableState.search}
         onSearchChange={tableActions.setSearch}
-        searchPlaceholder="Search by name or email"
+        searchPlaceholder="Search by name or username"
         density={tableState.density}
         onDensityChange={tableActions.setDensity}
         onExport={allRows.length > 0 ? onExport : undefined}
@@ -330,13 +287,13 @@ export function UsersListNested({ organization }: { organization: Organization }
                 })),
               ]}
             />
-            {canInvite ? (
-              <Button size="sm" onClick={() => setShowInvite(true)}>
-                <UserPlus className="mr-1 h-3.5 w-3.5" /> Invite user
+            {canAdd ? (
+              <Button size="sm" onClick={() => setShowAdd(true)}>
+                <UserPlus className="mr-1 h-3.5 w-3.5" /> Add user
               </Button>
             ) : organization.organizationStatus !== 'active' ? (
               <span className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
-                Invitations locked
+                User management locked
               </span>
             ) : null}
           </>
@@ -362,9 +319,9 @@ export function UsersListNested({ organization }: { organization: Organization }
                   ? 'No users match the current filters.'
                   : 'No users yet in this organization.'}
               </span>
-              {!tableState.search && !statusFilter && canInvite ? (
-                <Button size="sm" variant="outline" onClick={() => setShowInvite(true)}>
-                  <Plus className="mr-1 h-3.5 w-3.5" /> Invite the first user
+              {!tableState.search && !statusFilter && canAdd ? (
+                <Button size="sm" variant="outline" onClick={() => setShowAdd(true)}>
+                  <Plus className="mr-1 h-3.5 w-3.5" /> Add the first user
                 </Button>
               ) : null}
             </div>
@@ -381,21 +338,98 @@ export function UsersListNested({ organization }: { organization: Organization }
         ) : null}
       </div>
 
-      <InviteUserDialog open={showInvite} onClose={() => setShowInvite(false)} organization={organization} />
+      <AddUserDialog open={showAdd} onClose={() => setShowAdd(false)} organization={organization} />
+
+      <ResetPasswordDialog target={resetTarget} onClose={() => setResetTarget(null)} />
 
       <ConfirmDialog
         open={confirm !== null}
         onClose={() => setConfirm(null)}
         onConfirm={runConfirmed}
-        busy={deactivate.isPending || reactivate.isPending || revokeInv.isPending}
-        variant={
-          confirm?.kind === 'deactivate' || confirm?.kind === 'revoke-invite' ? 'danger' : 'default'
-        }
+        busy={deactivate.isPending || reactivate.isPending}
+        variant={confirm?.kind === 'deactivate' ? 'danger' : 'default'}
         title={confirmTitle(confirm)}
         description={confirmDescription(confirm)}
         confirmLabel={confirmCta(confirm)}
       />
     </div>
+  );
+}
+
+function ResetPasswordDialog({
+  target,
+  onClose,
+}: {
+  target: UserSummary | null;
+  onClose: () => void;
+}) {
+  const reset = useAdminResetPassword();
+  const toast = useToast();
+  const [password, setPassword] = useState('');
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useMemo(() => {
+    if (target) {
+      setPassword('');
+      setSubmitError(null);
+    }
+  }, [target]);
+
+  if (!target) return null;
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitError(null);
+    try {
+      await reset.mutateAsync({ id: target!.id, password });
+      toast.push('success', `Password reset for ${target!.displayName}.`);
+      onClose();
+    } catch (err) {
+      setSubmitError(describeError(err));
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={() => (reset.isPending ? undefined : onClose())}
+      title={`Reset password for ${target.displayName}`}
+      description={`Set a new password for @${target.username}. Share it with them securely; they can change it after sign-in.`}
+      footer={
+        <>
+          <Button variant="outline" type="button" onClick={onClose} disabled={reset.isPending}>
+            Cancel
+          </Button>
+          <Button type="submit" form="reset-password-form" disabled={reset.isPending || password.length < 12}>
+            {reset.isPending ? 'Resetting…' : 'Reset password'}
+          </Button>
+        </>
+      }
+    >
+      <form id="reset-password-form" onSubmit={onSubmit} className="flex flex-col gap-3">
+        <FormField label="New password" required hint="Minimum 12 characters.">
+          {(p) => (
+            <Input
+              {...p}
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={12}
+              maxLength={200}
+              autoComplete="new-password"
+              className="font-mono text-xs"
+              autoFocus
+            />
+          )}
+        </FormField>
+        {submitError ? (
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            {submitError}
+          </div>
+        ) : null}
+      </form>
+    </Dialog>
   );
 }
 
@@ -418,9 +452,8 @@ function confirmTitle(c: ConfirmAction | null): string {
   if (!c) return '';
   const name = c.user.displayName;
   switch (c.kind) {
-    case 'deactivate':    return `Deactivate ${name}?`;
-    case 'reactivate':    return `Reactivate ${name}?`;
-    case 'revoke-invite': return `Revoke invitation for ${name}?`;
+    case 'deactivate': return `Deactivate ${name}?`;
+    case 'reactivate': return `Reactivate ${name}?`;
   }
 }
 function confirmDescription(c: ConfirmAction | null): string {
@@ -430,15 +463,12 @@ function confirmDescription(c: ConfirmAction | null): string {
       return 'Deactivated users can no longer sign in. Existing sessions stay live until they expire — use admin revoke to force sign-out everywhere immediately.';
     case 'reactivate':
       return 'Restore the user to active. They can sign in again with their existing password.';
-    case 'revoke-invite':
-      return 'Invalidates the invitation link and removes the pending user record. You can invite the same email again later.';
   }
 }
 function confirmCta(c: ConfirmAction | null): string {
   if (!c) return 'Confirm';
   switch (c.kind) {
-    case 'deactivate':    return 'Deactivate';
-    case 'reactivate':    return 'Reactivate';
-    case 'revoke-invite': return 'Revoke';
+    case 'deactivate': return 'Deactivate';
+    case 'reactivate': return 'Reactivate';
   }
 }

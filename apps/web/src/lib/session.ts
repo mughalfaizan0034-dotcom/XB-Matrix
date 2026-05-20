@@ -16,7 +16,9 @@ export interface SessionUser {
     | 'ai_agent'
     | 'system';
   readonly organizationId: string | null;
-  readonly email: string;
+  readonly username: string;
+  /** Email is optional in the auth-pivot phase — admins create users without one. */
+  readonly email: string | null;
   readonly displayName: string;
   readonly userKind: 'internal' | 'organization';
   readonly role: string | null;
@@ -72,7 +74,7 @@ export function useSignIn() {
   const qc = useQueryClient();
   const router = useRouter();
   return useMutation({
-    mutationFn: (vars: { email: string; password: string }) =>
+    mutationFn: (vars: { username: string; password: string; rememberDevice?: boolean }) =>
       api.post<SignInResponse>('/v1/auth/sign-in', vars),
     onSuccess: (data) => {
       // Sign-in returns just the user; the session starts with no active

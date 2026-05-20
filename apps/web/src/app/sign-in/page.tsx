@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Button, FormField, Input, useToast } from '@xb/ui';
 import { describeError, useSession, useSignIn } from '@/lib/session';
 
@@ -39,8 +38,9 @@ function SignInForm() {
   const toast = useToast();
   const { data: user } = useSession();
   const signIn = useSignIn();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberDevice, setRememberDevice] = useState(false);
   const next = search?.get('next') ?? '/dashboard';
 
   useEffect(() => {
@@ -50,7 +50,7 @@ function SignInForm() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await signIn.mutateAsync({ email, password });
+      await signIn.mutateAsync({ username, password, rememberDevice });
       toast.push('success', 'Signed in.');
     } catch (err) {
       toast.push('error', describeError(err));
@@ -60,15 +60,19 @@ function SignInForm() {
   return (
     <SignInShell>
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
-        <FormField label="Email" required>
+        <FormField label="Username" required>
           {(p) => (
             <Input
               {...p}
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
+              minLength={3}
+              maxLength={120}
             />
           )}
         </FormField>
@@ -86,16 +90,25 @@ function SignInForm() {
           )}
         </FormField>
 
-        <Button type="submit" disabled={signIn.isPending || !email || !password}>
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={rememberDevice}
+            onChange={(e) => setRememberDevice(e.target.checked)}
+            className="h-4 w-4 rounded border-border"
+          />
+          <span>Remember this device for 30 days</span>
+        </label>
+
+        <Button type="submit" disabled={signIn.isPending || !username || !password}>
           {signIn.isPending ? 'Signing in…' : 'Continue'}
         </Button>
 
-        <Link
-          href="/forgot-password"
-          className="text-center text-xs text-muted-foreground hover:text-foreground"
-        >
-          Forgot password?
-        </Link>
+        {/*
+          Forgot-password is removed until email infrastructure
+          (resend.com) is wired. Until then, an administrator can
+          reset a user's password directly from Settings → Users.
+        */}
       </form>
     </SignInShell>
   );

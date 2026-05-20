@@ -14,8 +14,12 @@ import { rateLimit } from '../lib/rate-limit.js';
 import { ok } from '../lib/http-helpers.js';
 
 const SignInBody = z.object({
-  email: z.string().trim().toLowerCase().email(),
+  // Username-first auth (2026-05-20 pivot). Email-based sign-in
+  // returns when resend.com is wired up. Lower-cased here so the
+  // lookup is case-insensitive while preserving display casing.
+  username: z.string().trim().toLowerCase().min(1).max(120),
   password: z.string().min(1).max(200),
+  rememberDevice: z.boolean().optional(),
 });
 
 const ForgotBody = z.object({
@@ -31,28 +35,40 @@ const VerifyEmailBody = z.object({
   token: z.string().min(20).max(200),
 });
 
+const REMEMBER_DEVICE_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+const DEFAULT_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;           // 7 days
+
 function setSessionCookie(
   res: import('fastify').FastifyReply,
   cookieName: string,
   token: string,
+  rememberDevice = false,
 ): void {
   res.setCookie(cookieName, token, {
     path: '/',
     httpOnly: true,
     secure: true,
     sameSite: 'none',
-    maxAge: 60 * 60 * 24 * 7,
+    // Browser-side cookie lifetime matches the server-side session TTL
+    // so the cookie doesn't outlive the row (or vice-versa).
+    maxAge: rememberDevice ? REMEMBER_DEVICE_COOKIE_MAX_AGE : DEFAULT_COOKIE_MAX_AGE,
   });
 }
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   app.post('/sign-in', async (req, res) => {
     const body = SignInBody.parse(req.body);
-    const session = await signIn(app, body.email, body.password, {
+    const session = await signIn(app, body.username, body.password, {
       userAgent: req.headers['user-agent'] ?? null,
       ipAddress: req.ip ?? null,
+      rememberDevice: body.rememberDevice,
     });
-    setSessionCookie(res, app.config.auth.sessionCookieName, session.token);
+    setSessionCookie(
+      res,
+      app.config.auth.sessionCookieName,
+      session.token,
+      body.rememberDevice,
+    );
     return ok({ user: session.user }, req.id);
   });
 

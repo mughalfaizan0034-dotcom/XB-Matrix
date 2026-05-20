@@ -7,7 +7,9 @@ import { api } from './api-client';
 export interface UserSummary {
   readonly id: string;
   readonly actorId: string;
-  readonly email: string;
+  readonly username: string;
+  /** Email is optional in the auth-pivot phase. */
+  readonly email: string | null;
   readonly displayName: string;
   readonly userKind: 'internal' | 'organization';
   readonly organizationId: string | null;
@@ -18,6 +20,40 @@ export interface UserSummary {
   readonly lastLoginAt: string | null;
   readonly createdAt: string;
   readonly rowVersion: number;
+}
+
+// --- Direct user creation (PRIMARY path 2026-05-20) -----------------
+
+export type CreateUserRole =
+  | 'internal_manager'
+  | 'internal_staff'
+  | 'organization_admin'
+  | 'organization_user';
+
+export interface CreateUserInput {
+  readonly username: string;
+  readonly displayName: string;
+  readonly password: string;
+  readonly role: CreateUserRole;
+  readonly organizationId?: string | null;
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateUserInput) =>
+      api.post<{ user: UserSummary }>('/v1/users', input).then((r) => r.user),
+    onSuccess: (u) => {
+      qc.invalidateQueries({ queryKey: usersKey(u.organizationId) });
+    },
+  });
+}
+
+export function useAdminResetPassword() {
+  return useMutation({
+    mutationFn: ({ id, password }: { id: string; password: string }) =>
+      api.post<{ reset: boolean }>(`/v1/users/${id}/reset-password`, { password }),
+  });
 }
 
 export function usersKey(orgId: string | null): readonly string[] {
