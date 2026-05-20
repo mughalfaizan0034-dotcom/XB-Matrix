@@ -12,21 +12,16 @@ import {
 import { cn } from '@xb/ui/lib/cn';
 import { useCreateUpload, UPLOAD_KINDS, type UploadKind } from '@/lib/api-uploads';
 import { describeError, useActiveWorkspace } from '@/lib/session';
+import { groupKindsByCategory, UPLOAD_KIND_META } from '@/lib/upload-kind-labels';
 
 const MAX_BYTES = 32 * 1024 * 1024; // matches server-side cap in routes/uploads.ts
 
-const KIND_LABEL: Record<UploadKind, string> = {
-  generic:          'Generic file',
-  amazon_sales:     'Amazon — sales',
-  amazon_inventory: 'Amazon — inventory',
-  amazon_ads:       'Amazon — ads (PPC)',
-  walmart_sales:    'Walmart — sales',
-  sales:            'Sales (legacy)',
-  inventory:        'Inventory (legacy)',
-  ad_spend:         'Ad spend (legacy)',
-  shipments:        'Shipments',
-  returns:          'Returns',
-};
+// Dropdown is grouped by operational category (Sales / Inventory /
+// Advertising / Other). Per-platform formats sit as options under each
+// group via <optgroup>. See lib/upload-kind-labels.ts for the source
+// of truth on labels — the History column, the Templates panel, and
+// this dropdown all read from it.
+const KIND_GROUPS = groupKindsByCategory(UPLOAD_KINDS);
 
 interface Props {
   readonly open: boolean;
@@ -126,13 +121,21 @@ export function UploadDialog({ open, onClose }: Props) {
     >
       {noActiveWorkspace ? null : (
         <div className="flex flex-col gap-4">
-          <FormField label="Kind" hint="Pick the dataset type. Defaults to generic.">
+          <FormField
+            label="Operational category & source format"
+            hint="Each category accepts one or more platform-specific source formats. Same canonical entity downstream — pick whichever matches your file."
+          >
             {(p) => (
               <Select {...p} value={kind} onChange={(e) => setKind(e.target.value as UploadKind)}>
-                {UPLOAD_KINDS.map((k) => (
-                  <option key={k} value={k}>
-                    {KIND_LABEL[k]}
-                  </option>
+                {KIND_GROUPS.map((g) => (
+                  <optgroup key={g.category} label={g.categoryLabel}>
+                    {g.kinds.map((k) => (
+                      <option key={k} value={k}>
+                        {UPLOAD_KIND_META[k].platformLabel}
+                        {UPLOAD_KIND_META[k].legacy ? ' (legacy)' : ''}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </Select>
             )}

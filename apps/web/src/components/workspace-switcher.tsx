@@ -99,7 +99,12 @@ export function WorkspaceSwitcher() {
   }, [open]);
 
   if (!user) return null;
-  if (!isLoading && (!accessible || accessible.length === 0)) return null;
+  // Note: we used to return null here when `accessible` was empty, but
+  // that hid the entire switcher for a brand-new manager with no
+  // workspaces yet — leaving them stuck in "All workspaces · cross-org
+  // view" with no obvious way out. We now always render the button and
+  // surface an explicit empty state + management link inside the
+  // dropdown so the user always has a next step.
 
   // Auto-pick the active workspace's org so the flyout opens at the
   // group the user is most likely browsing first.
@@ -215,6 +220,40 @@ export function WorkspaceSwitcher() {
                     </button>
                     <div className="my-1 h-px bg-border" aria-hidden="true" />
                   </>
+                ) : null}
+
+                {/* Empty + loading states. A fresh manager often lands
+                    here before any orgs/workspaces exist — give them a
+                    clear path to Settings instead of a silent void. */}
+                {isLoading && grouped.length === 0 ? (
+                  <div className="px-2.5 py-3 text-center text-xs text-muted-foreground">
+                    Loading workspaces…
+                  </div>
+                ) : null}
+                {!isLoading && grouped.length === 0 ? (
+                  <div className="flex flex-col gap-2 px-2.5 py-3 text-xs">
+                    <div className="text-muted-foreground">
+                      {user.isInternalManager
+                        ? 'No active workspaces in any organization yet.'
+                        : 'No workspaces are available to you yet.'}
+                    </div>
+                    {user.isInternalManager ? (
+                      <Link
+                        href="/settings"
+                        onClick={() => {
+                          setOpen(false);
+                          setActiveOrgId(null);
+                        }}
+                        className="inline-flex items-center gap-1.5 self-start rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground hover:bg-muted"
+                      >
+                        Open Settings to create one
+                      </Link>
+                    ) : (
+                      <div className="text-muted-foreground">
+                        Ask your administrator to grant access.
+                      </div>
+                    )}
+                  </div>
                 ) : null}
 
                 {grouped.map((group) => {

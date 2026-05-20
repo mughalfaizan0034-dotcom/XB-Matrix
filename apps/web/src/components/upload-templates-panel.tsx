@@ -1,25 +1,33 @@
 'use client';
 
-import { Download, FileText, Info } from 'lucide-react';
-import { Badge, Button, Card, CardContent } from '@xb/ui';
+import { useState } from 'react';
+import { Download, FileText, Info, Layers } from 'lucide-react';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@xb/ui';
 import { downloadCsv } from '@xb/ui';
 
 /**
- * Downloadable CSV templates for every spec-aligned upload kind. One
- * file per kind. Columns + sample rows are the source of truth for
- * what each validator expects — they MUST stay in lockstep with the
- * matching validator in apps/api/src/uploads/validators/.
+ * Templates panel — grouped by operational category, not by marketplace.
  *
- * Connector-agnostic by design: Amazon, Walmart, and future Shopify /
- * TikTok / eBay templates all sit side-by-side as separate kinds. The
- * UI never assumes "marketplace = Amazon". Templates use each
- * platform's native field names; mappers translate to the
- * marketplace-agnostic Normalized* contracts downstream.
+ * The user-facing entity is the business operation (Sales Performance,
+ * Inventory Position, Advertising Performance, …). Marketplaces /
+ * platforms are SOURCE FORMATS feeding each category. Same operational
+ * data may flow in from Amazon, Walmart, Shopify, TikTok Shop, … —
+ * the UI must reflect that downstream the platform aggregates ALL of
+ * them into one centralized intelligence layer.
+ *
+ * Implementation today: per-platform validators are still distinct
+ * upload kinds underneath (amazon_sales, walmart_sales, …) so the
+ * existing parser pipeline keeps working. The UI groups them under
+ * their operational category as "supported source formats". A future
+ * canonical phase replaces them with one normalized kind per category;
+ * the mapping layer already produces the marketplace-agnostic
+ * Normalized* shape that consumes them, so engines/dashboards never
+ * see the per-platform kinds.
  */
 
-interface Template {
-  readonly kind: string;
-  readonly title: string;
+interface SourceFormat {
+  readonly kind: string;             // current per-platform upload kind
+  readonly platform: string;         // display label, e.g. "Amazon"
   readonly description: string;
   readonly filename: string;
   readonly headers: ReadonlyArray<string>;
@@ -27,326 +35,324 @@ interface Template {
   readonly notes: ReadonlyArray<string>;
 }
 
-const TEMPLATES: ReadonlyArray<Template> = [
+interface OperationalCategory {
+  readonly id: string;
+  readonly title: string;             // "Sales Performance"
+  readonly summary: string;            // what business question this answers
+  readonly canonicalEntity: string;    // e.g. "channel_sales"
+  readonly dimensions: ReadonlyArray<string>; // marketplace / region / fulfillment / ad_platform / ...
+  readonly formats: ReadonlyArray<SourceFormat>;
+  readonly comingSoon?: boolean;
+}
+
+const CATEGORIES: ReadonlyArray<OperationalCategory> = [
   {
-    kind: 'amazon_sales',
-    title: 'Amazon sales',
-    description:
-      'Period-aggregated sales by (channel × SKU). Sessions, orders, units, sales, refunds — each split total + B2B.',
-    filename: 'amazon_sales_template.csv',
-    headers: [
-      'action',
-      'uid',
-      'start_date',
-      'end_date',
-      'channel',
-      'sku',
-      'sessions_total',
-      'sessions_b2b',
-      'orders_total',
-      'orders_b2b',
-      'units_total',
-      'units_b2b',
-      'sales_total',
-      'sales_b2b',
-      'refunds_total',
-      'refunds_b2b',
-    ],
-    sampleRows: [
-      [
-        'upsert',
-        '2026-05-01-amazon_us-WIDGET-A',
-        '2026-05-01',
-        '2026-05-07',
-        'amazon_us',
-        'WIDGET-A',
-        1250,
-        180,
-        52,
-        8,
-        72,
-        12,
-        '899.50',
-        '142.40',
-        '12.00',
-        '0.00',
-      ],
-      [
-        'upsert',
-        '2026-05-01-amazon_us-WIDGET-B',
-        '2026-05-01',
-        '2026-05-07',
-        'amazon_us',
-        'WIDGET-B',
-        832,
-        45,
-        28,
-        3,
-        28,
-        3,
-        '684.40',
-        '73.50',
-        '0.00',
-        '0.00',
-      ],
-    ],
-    notes: [
-      'action: upsert | delete',
-      'uid: stable, caller-supplied unique key (e.g. period-channel-sku)',
-      'B2B columns must be ≤ their _total counterparts',
-      'start_date ≤ end_date',
+    id: 'sales',
+    title: 'Sales Performance',
+    summary:
+      'Period-aggregated sales by SKU across every selling channel — sessions, orders, units, revenue, refunds. The same SKU may show up across Amazon US, Amazon CA, Walmart, Shopify, TikTok Shop in one upload.',
+    canonicalEntity: 'channel_sales',
+    dimensions: ['marketplace', 'region', 'period', 'sku', 'fulfillment'],
+    formats: [
+      {
+        kind: 'amazon_sales',
+        platform: 'Amazon',
+        description:
+          'Amazon Business Report shape. Sessions, orders, units, sales, refunds — each split total + B2B per (channel × SKU × period).',
+        filename: 'amazon_sales_template.csv',
+        headers: [
+          'action', 'uid', 'start_date', 'end_date', 'channel', 'sku',
+          'sessions_total', 'sessions_b2b', 'orders_total', 'orders_b2b',
+          'units_total', 'units_b2b', 'sales_total', 'sales_b2b',
+          'refunds_total', 'refunds_b2b',
+        ],
+        sampleRows: [
+          ['upsert', '2026-05-01-amazon_us-WIDGET-A', '2026-05-01', '2026-05-07',
+           'amazon_us', 'WIDGET-A',
+           1250, 180, 52, 8, 72, 12, '899.50', '142.40', '12.00', '0.00'],
+          ['upsert', '2026-05-01-amazon_us-WIDGET-B', '2026-05-01', '2026-05-07',
+           'amazon_us', 'WIDGET-B',
+           832, 45, 28, 3, 28, 3, '684.40', '73.50', '0.00', '0.00'],
+        ],
+        notes: [
+          'action: upsert | delete',
+          'uid: stable, caller-supplied (e.g. period-channel-sku)',
+          'B2B columns must be ≤ their _total counterparts',
+          'start_date ≤ end_date',
+        ],
+      },
+      {
+        kind: 'walmart_sales',
+        platform: 'Walmart',
+        description:
+          'Walmart Item Performance shape. Walmart-native fields (item_id / gtin / page_views / gmv); the mapper translates to the same canonical sales shape Amazon produces.',
+        filename: 'walmart_sales_template.csv',
+        headers: [
+          'action', 'uid', 'start_date', 'end_date', 'marketplace',
+          'item_id', 'gtin', 'page_views', 'orders', 'units',
+          'gmv', 'refunds', 'currency',
+        ],
+        sampleRows: [
+          ['upsert', '2026-05-01-walmart_us-WMT-1001', '2026-05-01', '2026-05-07',
+           'walmart_us', 'WMT-1001', '0012345678905',
+           940, 38, 46, '612.40', '8.00', 'USD'],
+          ['upsert', '2026-05-01-walmart_us-WMT-1002', '2026-05-01', '2026-05-07',
+           'walmart_us', 'WMT-1002', '0012345678912',
+           612, 21, 21, '478.20', '0.00', 'USD'],
+        ],
+        notes: [
+          'item_id resolves to your platform_sku alias',
+          'gtin (UPC/EAN) is an optional fallback — products already mapped on Amazon by UPC resolve here automatically',
+          'orders ≤ page_views',
+        ],
+      },
     ],
   },
   {
-    kind: 'amazon_inventory',
-    title: 'Amazon inventory',
-    description:
-      'Point-in-time inventory positions per (channel × SKU). Total + partitions (receiving / fc_transfer / reserved / damaged).',
-    filename: 'amazon_inventory_template.csv',
-    headers: [
-      'action',
-      'uid',
-      'date',
-      'channel',
-      'sku',
-      'total',
-      'receiving',
-      'fc_transfer',
-      'reserved',
-      'damaged',
-    ],
-    sampleRows: [
-      [
-        'upsert',
-        '2026-05-07-amazon_us-WIDGET-A',
-        '2026-05-07',
-        'amazon_us',
-        'WIDGET-A',
-        420,
-        80,
-        15,
-        30,
-        2,
-      ],
-      [
-        'upsert',
-        '2026-05-07-amazon_us-WIDGET-B',
-        '2026-05-07',
-        'amazon_us',
-        'WIDGET-B',
-        150,
-        20,
-        5,
-        8,
-        0,
-      ],
-    ],
-    notes: [
-      'action: upsert | delete',
-      'uid: stable, caller-supplied (e.g. date-channel-sku)',
-      'receiving + fc_transfer + reserved + damaged must be ≤ total',
-      'total = physical position; the rest are partitions of it',
+    id: 'inventory',
+    title: 'Inventory Position',
+    summary:
+      'Point-in-time inventory positions per SKU across every pool — FBA per country, FBM, 3PL, owned warehouses, retail. Each pool reports total + per-state partitions (available / reserved / inbound / transfer / damaged).',
+    canonicalEntity: 'channel_inventory',
+    dimensions: ['marketplace', 'region', 'fulfillment_type', 'inventory_location', 'inventory_state'],
+    formats: [
+      {
+        kind: 'amazon_inventory',
+        platform: 'Amazon (FBA)',
+        description:
+          'Amazon FBA inventory ledger shape — one row per (channel × SKU × date) with total + receiving / fc_transfer / reserved / damaged partitions.',
+        filename: 'amazon_inventory_template.csv',
+        headers: ['action', 'uid', 'date', 'channel', 'sku', 'total', 'receiving', 'fc_transfer', 'reserved', 'damaged'],
+        sampleRows: [
+          ['upsert', '2026-05-07-amazon_us-WIDGET-A', '2026-05-07', 'amazon_us', 'WIDGET-A', 420, 80, 15, 30, 2],
+          ['upsert', '2026-05-07-amazon_us-WIDGET-B', '2026-05-07', 'amazon_us', 'WIDGET-B', 150, 20, 5, 8, 0],
+        ],
+        notes: [
+          'receiving + fc_transfer + reserved + damaged ≤ total',
+          'total = physical position; the rest are partitions of it',
+          'Mapper splits each row into one canonical row per inventory_state',
+        ],
+      },
     ],
   },
   {
-    kind: 'amazon_ads',
-    title: 'Amazon ads (PPC)',
-    description:
-      'Period-aggregated ad performance per campaign × SKU. Impressions, clicks, cost, attributed orders, attributed sales.',
-    filename: 'amazon_ads_template.csv',
-    headers: [
-      'action',
-      'uid',
-      'start_date',
-      'end_date',
-      'campaign_name',
-      'campaign_type',
-      'sku_name',
-      'impressions',
-      'clicks',
-      'orders',
-      'total_cost',
-      'sales',
-      'currency',
-      'platform',
-      'target_platform',
-    ],
-    sampleRows: [
-      [
-        'upsert',
-        '2026-05-01-WIDGET-A-SP',
-        '2026-05-01',
-        '2026-05-07',
-        'Widget A — SP',
-        'sponsored_products',
-        'WIDGET-A',
-        18450,
-        420,
-        28,
-        '142.50',
-        '599.40',
-        'USD',
-        'amazon',
-        'amazon_us',
-      ],
-      [
-        'upsert',
-        '2026-05-01-WIDGET-B-SP',
-        '2026-05-01',
-        '2026-05-07',
-        'Widget B — SP',
-        'sponsored_products',
-        'WIDGET-B',
-        9820,
-        180,
-        12,
-        '68.90',
-        '294.30',
-        'USD',
-        'amazon',
-        'amazon_us',
-      ],
-    ],
-    notes: [
-      'action: upsert | delete',
-      'campaign_type examples: sponsored_products, sponsored_brands, sponsored_display',
-      'clicks must be ≤ impressions',
-      'currency: 3-letter ISO (USD, GBP, EUR…)',
-      'target_platform: marketplace targeted (amazon_us, amazon_uk, …)',
+    id: 'advertising',
+    title: 'Advertising Performance',
+    summary:
+      'Period-aggregated ad spend + attributed sales per campaign / SKU / ad platform. Amazon Ads, Walmart Connect, Meta Ads, Google Ads all aggregate into one blended TACOS once they flow in.',
+    canonicalEntity: 'channel_ads',
+    dimensions: ['ad_platform', 'target_marketplace', 'region', 'campaign', 'sku'],
+    formats: [
+      {
+        kind: 'amazon_ads',
+        platform: 'Amazon Ads',
+        description:
+          'Sponsored Products / Brands / Display reports. Impressions, clicks, cost, attributed orders + sales per (campaign × SKU × period).',
+        filename: 'amazon_ads_template.csv',
+        headers: [
+          'action', 'uid', 'start_date', 'end_date', 'campaign_name', 'campaign_type',
+          'sku_name', 'impressions', 'clicks', 'orders',
+          'total_cost', 'sales', 'currency', 'platform', 'target_platform',
+        ],
+        sampleRows: [
+          ['upsert', '2026-05-01-WIDGET-A-SP', '2026-05-01', '2026-05-07',
+           'Widget A — SP', 'sponsored_products', 'WIDGET-A',
+           18450, 420, 28, '142.50', '599.40', 'USD', 'amazon', 'amazon_us'],
+          ['upsert', '2026-05-01-WIDGET-B-SP', '2026-05-01', '2026-05-07',
+           'Widget B — SP', 'sponsored_products', 'WIDGET-B',
+           9820, 180, 12, '68.90', '294.30', 'USD', 'amazon', 'amazon_us'],
+        ],
+        notes: [
+          'clicks ≤ impressions',
+          'target_platform: marketplace the spend drove into (amazon_us, amazon_uk, …)',
+          'Aggregate campaign rows (no single SKU) may use ALL / * for sku_name',
+        ],
+      },
     ],
   },
   {
-    kind: 'walmart_sales',
-    title: 'Walmart sales',
-    description:
-      'Walmart Item Performance: period-aggregated by (marketplace × item). Walmart-native fields (item_id, page_views, gmv); mapper translates to the same NormalizedSale shape Amazon produces.',
-    filename: 'walmart_sales_template.csv',
-    headers: [
-      'action',
-      'uid',
-      'start_date',
-      'end_date',
-      'marketplace',
-      'item_id',
-      'gtin',
-      'page_views',
-      'orders',
-      'units',
-      'gmv',
-      'refunds',
-      'currency',
-    ],
-    sampleRows: [
-      [
-        'upsert',
-        '2026-05-01-walmart_us-WMT-1001',
-        '2026-05-01',
-        '2026-05-07',
-        'walmart_us',
-        'WMT-1001',
-        '0012345678905',
-        940,
-        38,
-        46,
-        '612.40',
-        '8.00',
-        'USD',
-      ],
-      [
-        'upsert',
-        '2026-05-01-walmart_us-WMT-1002',
-        '2026-05-01',
-        '2026-05-07',
-        'walmart_us',
-        'WMT-1002',
-        '0012345678912',
-        612,
-        21,
-        21,
-        '478.20',
-        '0.00',
-        'USD',
-      ],
-    ],
-    notes: [
-      'action: upsert | delete',
-      'uid: stable, caller-supplied (e.g. period-marketplace-item)',
-      'item_id: Walmart item identifier (resolves to platform_sku alias)',
-      'gtin: optional. When item_id has no alias yet, the mapper falls back to GTIN — so a product mapped via Amazon UPC resolves on Walmart too with no extra mapping',
-      'orders must be ≤ page_views',
-      'currency: 3-letter ISO',
-    ],
+    id: 'warehouse_inventory',
+    title: 'Warehouse Inventory',
+    summary:
+      'Non-FBA inventory pools — owned warehouses, 3PLs, retail. Feeds the same canonical inventory layer as marketplace inventory; the dimension distinguishes them (fulfillment_type, inventory_location_code).',
+    canonicalEntity: 'channel_inventory',
+    dimensions: ['inventory_location', 'fulfillment_type', 'inventory_state', 'ownership'],
+    formats: [],
+    comingSoon: true,
+  },
+  {
+    id: 'settlement',
+    title: 'Settlement',
+    summary:
+      'Marketplace financial settlements — fees, deductions, payouts. Drives the profitability engine alongside sales + ad spend + COGS.',
+    canonicalEntity: 'channel_settlement',
+    dimensions: ['marketplace', 'account', 'settlement_period', 'fee_type'],
+    formats: [],
+    comingSoon: true,
+  },
+  {
+    id: 'forecast_input',
+    title: 'Forecast Input',
+    summary:
+      'Operator-supplied forecast adjustments, promotion calendars, seasonality overrides. Feeds the forecasting engine alongside historical sales velocity.',
+    canonicalEntity: 'forecast_inputs',
+    dimensions: ['sku', 'period', 'adjustment_type'],
+    formats: [],
+    comingSoon: true,
   },
 ];
 
 export function UploadTemplatesPanel() {
-  function onDownload(t: Template) {
-    const lines: string[] = [t.headers.join(',')];
-    for (const row of t.sampleRows) {
-      lines.push(row.map(serializeCell).join(','));
-    }
-    downloadCsv(lines.join('\r\n') + '\r\n', t.filename);
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
         <p>
-          Download a template, fill in your data, then upload it back via the{' '}
-          <span className="font-medium text-foreground">Upload Files</span> tab. The validator
-          enforces these exact columns + types — extra columns are allowed and ignored.
+          Uploads are grouped by <span className="font-medium text-foreground">operational category</span> —
+          Sales Performance, Inventory Position, Advertising Performance, … — not by marketplace.
+          The same business entity may flow in from many platforms; the marketplace lives as a column
+          inside the dataset (<code className="font-mono">marketplace</code>,{' '}
+          <code className="font-mono">channel</code>,{' '}
+          <code className="font-mono">source_platform</code>), and the platform normalizes into one
+          centralized intelligence layer downstream.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        {TEMPLATES.map((t) => (
-          <Card key={t.kind}>
-            <CardContent className="flex h-full flex-col gap-3 pt-5">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <span className="font-medium text-foreground">{t.title}</span>
-                <Badge tone="neutral">{t.kind}</Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">{t.description}</p>
-
-              <details className="text-xs">
-                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                  Columns ({t.headers.length})
-                </summary>
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {t.headers.map((h) => (
-                    <code
-                      key={h}
-                      className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground"
-                    >
-                      {h}
-                    </code>
-                  ))}
-                </div>
-              </details>
-
-              <details className="text-xs">
-                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                  Validation notes
-                </summary>
-                <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-foreground">
-                  {t.notes.map((n) => (
-                    <li key={n}>{n}</li>
-                  ))}
-                </ul>
-              </details>
-
-              <div className="mt-auto">
-                <Button size="sm" variant="outline" onClick={() => onDownload(t)}>
-                  <Download className="mr-1 h-3.5 w-3.5" />
-                  Download CSV
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="flex flex-col gap-4">
+        {CATEGORIES.map((c) => (
+          <CategoryCard key={c.id} category={c} />
         ))}
       </div>
+    </div>
+  );
+}
+
+function CategoryCard({ category }: { category: OperationalCategory }) {
+  // Default-open the first format so operators see what's available
+  // without an extra click. Multiple formats stay collapsed.
+  const [openFormat, setOpenFormat] = useState<string | null>(
+    category.formats[0]?.kind ?? null,
+  );
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-col gap-1.5 pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-muted-foreground" />
+            {category.title}
+          </CardTitle>
+          {category.comingSoon ? (
+            <Badge tone="neutral">coming soon</Badge>
+          ) : (
+            <Badge tone="success">{category.formats.length} source format{category.formats.length === 1 ? '' : 's'}</Badge>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">{category.summary}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="font-medium text-foreground">canonical:</span>
+          <code className="font-mono text-[10px]">{category.canonicalEntity}</code>
+          <span>·</span>
+          <span className="font-medium text-foreground">dimensions:</span>
+          {category.dimensions.map((d) => (
+            <code key={d} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">
+              {d}
+            </code>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0">
+        {category.formats.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-6 text-center text-xs text-muted-foreground">
+            Source formats land here as connectors ship. Until then, this category lives in
+            the spec — engines and dashboards already plan around its dimensions.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Supported source formats
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {category.formats.map((f) => (
+                <button
+                  key={f.kind}
+                  type="button"
+                  onClick={() => setOpenFormat(f.kind)}
+                  className={
+                    openFormat === f.kind
+                      ? 'rounded-md border border-navy bg-navy/5 px-2.5 py-1.5 text-xs font-medium text-navy'
+                      : 'rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }
+                >
+                  {f.platform}
+                  <span className="ml-1.5 font-mono text-[10px] opacity-70">{f.kind}</span>
+                </button>
+              ))}
+            </div>
+
+            {openFormat ? (
+              <SourceFormatDetail
+                format={category.formats.find((f) => f.kind === openFormat)!}
+              />
+            ) : null}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SourceFormatDetail({ format }: { format: SourceFormat }) {
+  function onDownload() {
+    const lines: string[] = [format.headers.join(',')];
+    for (const row of format.sampleRows) {
+      lines.push(row.map(serializeCell).join(','));
+    }
+    downloadCsv(lines.join('\r\n') + '\r\n', format.filename);
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-border bg-muted/10 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-2">
+          <FileText className="mt-0.5 h-4 w-4 text-muted-foreground" />
+          <div>
+            <div className="text-xs font-medium text-foreground">{format.platform} source format</div>
+            <p className="text-xs text-muted-foreground">{format.description}</p>
+          </div>
+        </div>
+        <Button size="sm" variant="outline" onClick={onDownload}>
+          <Download className="mr-1 h-3.5 w-3.5" />
+          Download CSV
+        </Button>
+      </div>
+
+      <details className="text-xs">
+        <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+          Columns ({format.headers.length})
+        </summary>
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {format.headers.map((h) => (
+            <code
+              key={h}
+              className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground"
+            >
+              {h}
+            </code>
+          ))}
+        </div>
+      </details>
+
+      <details className="text-xs">
+        <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+          Validation notes
+        </summary>
+        <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-foreground">
+          {format.notes.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
+        </ul>
+      </details>
     </div>
   );
 }

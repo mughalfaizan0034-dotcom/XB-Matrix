@@ -39,6 +39,7 @@ import {
   type UploadStatus,
   type UploadSummary,
 } from '@/lib/api-uploads';
+import { UPLOAD_KIND_META } from '@/lib/upload-kind-labels';
 import { UploadDialog } from '@/components/upload-dialog';
 import { UploadDetailDrawer } from '@/components/upload-detail-drawer';
 
@@ -192,9 +193,20 @@ export default function UploadsPage() {
       cols.push(
         {
           key: 'kind',
-          header: 'Kind',
+          header: 'Category · source',
           sortKey: 'kind',
-          accessor: (u) => <span className="text-sm text-foreground capitalize">{u.uploadKind.replace('_', ' ')}</span>,
+          accessor: (u) => {
+            const meta = UPLOAD_KIND_META[u.uploadKind];
+            return (
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm text-foreground">{meta.categoryLabel}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {meta.platformLabel}
+                  {meta.legacy ? ' · legacy' : ''}
+                </span>
+              </div>
+            );
+          },
         },
         {
           key: 'size',
@@ -261,7 +273,9 @@ export default function UploadsPage() {
       [
         { key: 'filename',     header: 'Filename',     value: (u) => u.originalFilename },
         { key: 'workspace',    header: 'Workspace',    value: (u) => workspaceById.get(u.workspaceId) ?? u.workspaceId },
-        { key: 'kind',         header: 'Kind',         value: (u) => u.uploadKind },
+        { key: 'category',     header: 'Category',     value: (u) => UPLOAD_KIND_META[u.uploadKind].categoryLabel },
+        { key: 'source',       header: 'Source format', value: (u) => UPLOAD_KIND_META[u.uploadKind].platformLabel },
+        { key: 'kind',         header: 'Kind (id)',    value: (u) => u.uploadKind },
         { key: 'contentType',  header: 'Content type', value: (u) => u.contentType },
         { key: 'size',         header: 'Size (bytes)', value: (u) => u.fileSizeBytes },
         { key: 'status',       header: 'Status',       value: (u) => u.uploadStatus },
@@ -317,18 +331,19 @@ export default function UploadsPage() {
         title="Uploads"
         description={subtitle}
         actions={
-          <Button
-            size="sm"
-            onClick={() => setShowUpload(true)}
-            disabled={crossWorkspace}
-            title={
-              crossWorkspace
-                ? 'Pick a workspace from the topbar switcher to upload a file.'
-                : undefined
-            }
-          >
-            <Plus className="mr-1 h-3.5 w-3.5" /> New upload
-          </Button>
+          crossWorkspace ? (
+            <Link
+              href="/select-workspace?next=/uploads"
+              className="inline-flex items-center gap-1.5 rounded-md bg-navy px-3 py-1.5 text-xs font-medium text-white hover:bg-navy/90"
+              title="Uploads write into one workspace — pick one to continue."
+            >
+              <Plus className="h-3.5 w-3.5" /> Pick a workspace to upload
+            </Link>
+          ) : (
+            <Button size="sm" onClick={() => setShowUpload(true)}>
+              <Plus className="mr-1 h-3.5 w-3.5" /> New upload
+            </Button>
+          )
         }
       />
 
@@ -351,22 +366,22 @@ export default function UploadsPage() {
                   <div className="font-medium text-foreground">New upload</div>
                   <p className="text-xs text-muted-foreground">
                     {crossWorkspace
-                      ? 'Uploads write into one workspace. Pick a workspace from the topbar switcher to start a new upload — history and templates remain available here without one.'
+                      ? 'Uploads write into one workspace. Pick a workspace below to start a new upload — history and templates stay available here without one.'
                       : 'Drop a CSV / XLSX / JSON. Max 32 MB. Pick the matching kind so the right validator runs.'}
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  onClick={() => setShowUpload(true)}
-                  disabled={crossWorkspace}
-                  title={
-                    crossWorkspace
-                      ? 'Pick a workspace from the topbar switcher to upload a file.'
-                      : undefined
-                  }
-                >
-                  <UploadIcon className="mr-1 h-3.5 w-3.5" /> Upload a file
-                </Button>
+                {crossWorkspace ? (
+                  <Link
+                    href="/select-workspace?next=/uploads"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-navy px-3 py-1.5 text-xs font-medium text-white hover:bg-navy/90"
+                  >
+                    <UploadIcon className="h-3.5 w-3.5" /> Pick a workspace
+                  </Link>
+                ) : (
+                  <Button size="sm" onClick={() => setShowUpload(true)}>
+                    <UploadIcon className="mr-1 h-3.5 w-3.5" /> Upload a file
+                  </Button>
+                )}
               </CardContent>
             </Card>
 
@@ -401,7 +416,7 @@ export default function UploadsPage() {
                                 {' · '}
                               </>
                             ) : null}
-                            {u.uploadKind} · {formatDateTime(u.createdAt)}
+                            {UPLOAD_KIND_META[u.uploadKind].compactLabel} · {formatDateTime(u.createdAt)}
                           </div>
                         </button>
                         <Badge tone={STATUS_TONE[u.uploadStatus]}>{STATUS_LABEL[u.uploadStatus]}</Badge>
