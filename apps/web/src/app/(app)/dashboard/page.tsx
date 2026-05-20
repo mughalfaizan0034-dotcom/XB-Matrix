@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Building2, Layers, ArrowRight } from 'lucide-react';
+import { useMemo } from 'react';
+import { Building2, Layers, ArrowRight, Upload as UploadIcon } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -23,6 +24,10 @@ import {
   useSetActiveWorkspace,
   type AccessibleWorkspace,
 } from '@/lib/api-workspaces-switch';
+import { useSalesOrders } from '@/lib/api-sales';
+import { useInventory } from '@/lib/api-inventory';
+
+const DAYS_30_MS = 30 * 24 * 60 * 60 * 1000;
 
 export default function DashboardPage() {
   const { data: user } = useSession();
@@ -62,6 +67,47 @@ export default function DashboardPage() {
 }
 
 function ActiveDashboard({ workspace }: { workspace: ActiveWorkspaceSummary }) {
+  // Stable 30-day window keyed off "today" — recomputes per mount, which
+  // is fine for dashboard purposes (no need to be reactive across midnight).
+  const { dateFrom, dateTo } = useMemo(() => {
+    const today = new Date();
+    const since = new Date(today.getTime() - DAYS_30_MS + 24 * 60 * 60 * 1000); // 30 days inclusive
+    return {
+      dateFrom: since.toISOString().slice(0, 10),
+      dateTo: today.toISOString().slice(0, 10),
+    };
+  }, []);
+
+  const salesQ = useSalesOrders({
+    workspaceId: workspace.id,
+    dateFrom,
+    dateTo,
+    // pageSize=1 — we only need aggregates, not the row data. Saves
+    // bandwidth on workspaces with large order volumes.
+    page: 0,
+    pageSize: 1,
+  });
+  const invQ = useInventory({
+    workspaceId: workspace.id,
+    page: 0,
+    pageSize: 1,
+  });
+
+  const sales = salesQ.data?.aggregates;
+  const inv = invQ.data?.aggregates;
+
+  // Days of stock cover = on-hand / (units sold per day over 30d).
+  // Honest fallback: '—' when we don't have both halves.
+  const stockCoverDays = useMemo(() => {
+    if (!sales || !inv) return null;
+    if (sales.totalQuantity <= 0 || inv.totalOnHand <= 0) return null;
+    const dailyVelocity = sales.totalQuantity / 30;
+    return inv.totalOnHand / dailyVelocity;
+  }, [sales, inv]);
+
+  const salesEmpty = !!sales && sales.totalOrders === 0;
+  const invEmpty = !!inv && inv.totalOnHand === 0 && inv.distinctSkus === 0;
+
   return (
     <>
       <Card>
@@ -98,38 +144,127 @@ function ActiveDashboard({ workspace }: { workspace: ActiveWorkspaceSummary }) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
-            <Metric label="Revenue (30d)" value="—" hint="awaiting engine output" />
+            <Metric
+              label="Revenue (30d)"
+              value={
+                salesQ.isLoading
+                  ? '—'
+                  : sales && sales.totalOrders > 0
+                    ? formatTotal(sales.totalGross)
+                    : '0'
+              }
+              hint={salesQ.isLoading ? 'loading…' : 'sum of total_price; mixed currencies shown raw'}
+            />
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <Metric label="Ad spend (30d)" value="—" hint="awaiting engine output" />
+            <Metric
+              label="Orders (30d)"
+              value={salesQ.isLoading ? '—' : (sales?.totalOrders ?? 0).toLocaleString()}
+              hint={`since ${dateFrom}`}
+            />
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <Metric label="Units sold" value="—" hint="awaiting engine output" />
+            <Metric
+              label="Units (30d)"
+              value={salesQ.isLoading ? '—' : (sales?.totalQuantity ?? 0).toLocaleString()}
+              hint="sum of order quantity"
+            />
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <Metric label="Stock cover" value="—" hint="awaiting engine output" />
+            <Metric
+              label="Stock cover"
+              value={
+                stockCoverDays !== null
+                  ? `${stockCoverDays.toFixed(1)} d`
+                  : '—'
+              }
+              hint={
+                stockCoverDays !== null
+                  ? 'on-hand ÷ (units/30d)'
+                  : !sales || !inv
+                    ? 'loading…'
+                    : 'needs sales + inventory data'
+              }
+            />
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Foundation phase</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Business logic engines are intentionally not implemented yet. Metric tiles render the
-            shell scoped to the active workspace; values populate once the uploads + calculations
-            pipeline lands.
-          </p>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardContent className="pt-6">
+            <Metric
+              label="On hand"
+              value={invQ.isLoading ? '—' : (inv?.totalOnHand ?? 0).toLocaleString()}
+              hint="latest snapshot per SKU"
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <Metric
+              label="Distinct SKUs"
+              value={invQ.isLoading ? '—' : (inv?.distinctSkus ?? 0).toLocaleString()}
+              hint="in latest inventory"
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <Metric
+              label="Warehouses"
+              value={invQ.isLoading ? '—' : (inv?.distinctWarehouses ?? 0).toLocaleString()}
+              hint="locations covered"
+            />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <Metric
+              label="Inventory valuation"
+              value={
+                invQ.isLoading
+                  ? '—'
+                  : inv && Number(inv.totalValuation) > 0
+                    ? formatTotal(inv.totalValuation)
+                    : '—'
+              }
+              hint={
+                invQ.isLoading
+                  ? 'loading…'
+                  : inv && Number(inv.totalValuation) > 0
+                    ? 'sum where unit_cost set'
+                    : 'add unit_cost to your inventory CSV'
+              }
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {(salesEmpty && invEmpty) ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Get started</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-start gap-3">
+            <p className="text-sm text-muted-foreground">
+              No data in this workspace yet. Upload a sales or inventory CSV to start populating the
+              dashboard.
+            </p>
+            <Link href="/uploads">
+              <Button size="sm" variant="outline">
+                <UploadIcon className="mr-1 h-3.5 w-3.5" /> Open Uploads
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
     </>
   );
 }
@@ -208,8 +343,11 @@ function NoWorkspaceState({
         </div>
         {accessible.length > quickPicks.length ? (
           <p className="mt-3 text-xs text-muted-foreground">
-            +{accessible.length - quickPicks.length} more — use the workspace switcher in the topbar
-            to find them.
+            +{accessible.length - quickPicks.length} more —{' '}
+            <Link href="/select-workspace" className="underline-offset-2 hover:underline">
+              view all
+            </Link>
+            .
           </p>
         ) : null}
       </CardContent>
@@ -224,4 +362,10 @@ function prettyType(t: AccessibleWorkspace['workspaceType']): string {
     case 'warehouse':    return 'Warehouse';
     case 'omni_channel': return 'Omni-channel';
   }
+}
+
+function formatTotal(amount: string): string {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return amount;
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
