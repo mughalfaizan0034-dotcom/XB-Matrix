@@ -33,8 +33,12 @@ export function useSetActiveWorkspace() {
       api
         .post<{ active: AccessibleWorkspace | null }>('/v1/workspaces/active', { workspaceId })
         .then((r) => r.active),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
-    },
+    // Returning the invalidation Promise makes mutateAsync await it, so
+    // by the time the caller's `await setActive.mutateAsync(...)` resolves
+    // the /me refetch has also resolved. Without this, the toast fires
+    // and the sidebar gating runs on stale (null) activeWorkspace data,
+    // which made the user see "needs a workspace" toasts on modules they
+    // had just unlocked.
+    onSuccess: () => qc.invalidateQueries({ queryKey: SESSION_QUERY_KEY }),
   });
 }

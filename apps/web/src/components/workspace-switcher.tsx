@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   Building2,
   Check,
@@ -8,6 +9,7 @@ import {
   ChevronRight,
   Globe,
   Layers,
+  List,
 } from 'lucide-react';
 import { Portal, Z_LAYER, useOverlayPosition, useToast } from '@xb/ui';
 import { cn } from '@xb/ui/lib/cn';
@@ -165,7 +167,12 @@ export function WorkspaceSwitcher() {
 
       {open ? (
         <>
-          {/* ---- Root panel: orgs --------------------------------------- */}
+          {/* ---- Root panel: orgs ---------------------------------------
+              Three-section layout (sticky header, scrollable middle,
+              sticky footer) so the org list scrolls internally when
+              there are many orgs but "View all" and "Clear" stay
+              reachable without scrolling. Caps the panel total at
+              ~480px and the org list at ~320px (≈8 rows). */}
           <Portal>
             <div
               ref={setRootEl}
@@ -175,88 +182,111 @@ export function WorkspaceSwitcher() {
                 top: rootPos?.top ?? -9999,
                 left: rootPos?.left ?? -9999,
                 zIndex: Z_LAYER.popover,
-                maxHeight: rootPos?.maxHeight,
+                maxHeight: rootPos?.maxHeight ?? 480,
                 visibility: rootPos ? 'visible' : 'hidden',
                 opacity: rootPos ? 1 : 0,
               }}
-              className="w-64 overflow-auto rounded-md border border-border bg-card p-1 shadow-xb-md"
+              className="flex w-64 flex-col rounded-md border border-border bg-card shadow-xb-md"
               onMouseLeave={scheduleCloseFlyout}
               onMouseEnter={cancelCloseFlyout}
             >
-              <div className="px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="flex-shrink-0 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 {user.isInternalManager ? 'All organizations' : 'Workspaces'}
               </div>
-              <div className="my-1 h-px bg-border" aria-hidden="true" />
+              <div className="h-px flex-shrink-0 bg-border" aria-hidden="true" />
 
-              {active ? (
-                <>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => pickWorkspace(null, '')}
-                    onMouseEnter={() => {
-                      cancelCloseFlyout();
-                      setActiveOrgId(null);
-                    }}
-                    className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-sm text-foreground hover:bg-muted"
-                  >
-                    <Globe className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                    <span className="flex-1 truncate">All workspaces</span>
-                  </button>
-                  <div className="my-1 h-px bg-border" aria-hidden="true" />
-                </>
-              ) : null}
+              {/* Scroll region — every org row lives here so the list
+                  caps at ~8 visible items with a scrollbar past that. */}
+              <div className="min-h-0 flex-1 overflow-y-auto p-1">
+                {active ? (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => pickWorkspace(null, '')}
+                      onMouseEnter={() => {
+                        cancelCloseFlyout();
+                        setActiveOrgId(null);
+                      }}
+                      className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-sm text-foreground hover:bg-muted"
+                    >
+                      <Globe className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                      <span className="flex-1 truncate">All workspaces</span>
+                    </button>
+                    <div className="my-1 h-px bg-border" aria-hidden="true" />
+                  </>
+                ) : null}
 
-              {grouped.map((group) => {
-                const isActiveOrg = group.organizationId === activeOrgId;
-                const hasActiveWs = group.workspaces.some((w) => w.id === active?.id);
-                return (
-                  <button
-                    key={group.organizationId}
-                    ref={(el) => {
-                      orgRowRefs.current[group.organizationId] = el;
-                    }}
-                    type="button"
-                    role="menuitem"
-                    aria-haspopup="menu"
-                    aria-expanded={isActiveOrg}
-                    onMouseEnter={() => {
-                      cancelCloseFlyout();
-                      setActiveOrgId(group.organizationId);
-                    }}
-                    onFocus={() => {
-                      cancelCloseFlyout();
-                      setActiveOrgId(group.organizationId);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'ArrowRight' || e.key === 'Enter') {
-                        e.preventDefault();
+                {grouped.map((group) => {
+                  const isActiveOrg = group.organizationId === activeOrgId;
+                  const hasActiveWs = group.workspaces.some((w) => w.id === active?.id);
+                  return (
+                    <button
+                      key={group.organizationId}
+                      ref={(el) => {
+                        orgRowRefs.current[group.organizationId] = el;
+                      }}
+                      type="button"
+                      role="menuitem"
+                      aria-haspopup="menu"
+                      aria-expanded={isActiveOrg}
+                      onMouseEnter={() => {
                         cancelCloseFlyout();
                         setActiveOrgId(group.organizationId);
-                      }
-                    }}
-                    className={cn(
-                      'flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-sm transition-colors',
-                      isActiveOrg ? 'bg-muted text-foreground' : 'text-foreground hover:bg-muted',
-                    )}
-                  >
-                    <Building2 className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate">
-                      <span className="block truncate">{group.organizationName}</span>
-                      <span className="block truncate text-[10px] text-muted-foreground">
-                        {group.workspaces.length} workspace
-                        {group.workspaces.length === 1 ? '' : 's'}
-                        {hasActiveWs ? ' · current' : ''}
+                      }}
+                      onFocus={() => {
+                        cancelCloseFlyout();
+                        setActiveOrgId(group.organizationId);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowRight' || e.key === 'Enter') {
+                          e.preventDefault();
+                          cancelCloseFlyout();
+                          setActiveOrgId(group.organizationId);
+                        }
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-sm transition-colors',
+                        isActiveOrg ? 'bg-muted text-foreground' : 'text-foreground hover:bg-muted',
+                      )}
+                    >
+                      <Building2 className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">
+                        <span className="block truncate">{group.organizationName}</span>
+                        <span className="block truncate text-[10px] text-muted-foreground">
+                          {group.workspaces.length} workspace
+                          {group.workspaces.length === 1 ? '' : 's'}
+                          {hasActiveWs ? ' · current' : ''}
+                        </span>
                       </span>
-                    </span>
-                    <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                  </button>
-                );
-              })}
+                      <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Sticky footer — always visible, no matter how long the
+                  org list grows. "View all" routes to the dedicated
+                  picker page with search + collapsible tree. */}
+              <div className="h-px flex-shrink-0 bg-border" aria-hidden="true" />
+              <Link
+                href="/select-workspace"
+                onClick={() => {
+                  setOpen(false);
+                  setActiveOrgId(null);
+                }}
+                className="flex flex-shrink-0 items-center gap-2 rounded-b-md px-3 py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <List className="h-3.5 w-3.5" />
+                <span>View all workspaces</span>
+              </Link>
             </div>
           </Portal>
 
-          {/* ---- Flyout: workspaces for activeOrgId --------------------- */}
+          {/* ---- Flyout: workspaces for activeOrgId ---------------------
+              Same three-section layout. Caps total at ~480px and the
+              workspace list at ~360px so very long lists scroll inside
+              the flyout instead of overflowing the viewport. */}
           {activeGroup ? (
             <Portal>
               <div
@@ -267,11 +297,11 @@ export function WorkspaceSwitcher() {
                   top: flyoutPos?.top ?? -9999,
                   left: flyoutPos?.left ?? -9999,
                   zIndex: Z_LAYER.popover,
-                  maxHeight: flyoutPos?.maxHeight,
+                  maxHeight: flyoutPos?.maxHeight ?? 480,
                   visibility: flyoutPos ? 'visible' : 'hidden',
                   opacity: flyoutPos ? 1 : 0,
                 }}
-                className="w-64 overflow-auto rounded-md border border-border bg-card p-1 shadow-xb-md"
+                className="flex w-64 flex-col rounded-md border border-border bg-card shadow-xb-md"
                 onMouseEnter={cancelCloseFlyout}
                 onMouseLeave={scheduleCloseFlyout}
                 onKeyDown={(e) => {
@@ -282,34 +312,36 @@ export function WorkspaceSwitcher() {
                   }
                 }}
               >
-                <div className="truncate px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="flex-shrink-0 truncate px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                   {activeGroup.organizationName}
                 </div>
-                <div className="my-1 h-px bg-border" aria-hidden="true" />
-                {activeGroup.workspaces.map((ws) => {
-                  const isActive = ws.id === active?.id;
-                  return (
-                    <button
-                      key={ws.id}
-                      type="button"
-                      role="menuitem"
-                      onClick={() => pickWorkspace(ws, ws.workspaceName)}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-sm transition-colors',
-                        isActive ? 'bg-navy-50/60 text-foreground' : 'text-foreground hover:bg-muted',
-                      )}
-                    >
-                      <Layers className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate">
-                        <span className="block truncate">{ws.workspaceName}</span>
-                        <span className="block truncate text-[10px] text-muted-foreground">
-                          {prettyType(ws.workspaceType)}
+                <div className="h-px flex-shrink-0 bg-border" aria-hidden="true" />
+                <div className="min-h-0 flex-1 overflow-y-auto p-1">
+                  {activeGroup.workspaces.map((ws) => {
+                    const isActive = ws.id === active?.id;
+                    return (
+                      <button
+                        key={ws.id}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => pickWorkspace(ws, ws.workspaceName)}
+                        className={cn(
+                          'flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-sm transition-colors',
+                          isActive ? 'bg-navy-50/60 text-foreground' : 'text-foreground hover:bg-muted',
+                        )}
+                      >
+                        <Layers className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1 truncate">
+                          <span className="block truncate">{ws.workspaceName}</span>
+                          <span className="block truncate text-[10px] text-muted-foreground">
+                            {prettyType(ws.workspaceType)}
+                          </span>
                         </span>
-                      </span>
-                      {isActive ? <Check className="h-3.5 w-3.5 text-navy" /> : null}
-                    </button>
-                  );
-                })}
+                        {isActive ? <Check className="h-3.5 w-3.5 text-navy" /> : null}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </Portal>
           ) : null}
