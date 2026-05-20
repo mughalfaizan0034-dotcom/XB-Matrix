@@ -13,7 +13,7 @@ export interface UserSummary {
   readonly displayName: string;
   readonly userKind: 'internal' | 'organization';
   readonly organizationId: string | null;
-  readonly internalRole: 'manager' | 'staff' | null;
+  readonly internalRole: 'super_admin' | 'manager' | 'staff' | null;
   readonly orgRole: 'admin' | 'user' | null;
   readonly status: 'active' | 'deactivated' | 'pending_invite';
   readonly emailVerifiedAt: string | null;
@@ -25,6 +25,7 @@ export interface UserSummary {
 // --- Direct user creation (PRIMARY path 2026-05-20) -----------------
 
 export type CreateUserRole =
+  | 'super_admin'
   | 'internal_manager'
   | 'internal_staff'
   | 'organization_admin'

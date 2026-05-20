@@ -73,7 +73,7 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
     formats: [
       {
         kind: 'sales_performance',
-        platform: 'Omnichannel (recommended)',
+        platform: 'Omnichannel',
         description:
           'One normalized template covering every sales channel. Mix Amazon, Walmart, Shopify, TikTok Shop, eBay, Etsy rows in a single upload — the marketplace column distinguishes them, and downstream engines see one blended sales fact per SKU.',
         filename: 'sales_performance_template.csv',
@@ -99,41 +99,6 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
           ['add', '2026-05-01-tiktokshop-WIDGET-A', '2026-05-01', '2026-05-07',
            'dtc', 'tiktokshop', 'WIDGET-A',
            412, 0, 18, 0, 22, 0, '275.50', '0.00', '0.00', '0.00'],
-        ],
-      },
-      {
-        kind: 'amazon_sales',
-        platform: 'Amazon adapter',
-        description:
-          'Optional convenience adapter for the Amazon Business Report native shape (no marketplace column; channel field used instead). Mapper translates rows into the same canonical sales shape the omnichannel template produces.',
-        filename: 'amazon_sales_template.csv',
-        headers: [
-          'action', 'uid', 'start_date', 'end_date', 'channel', 'sku',
-          'sessions_total', 'sessions_b2b', 'orders_total', 'orders_b2b',
-          'units_total', 'units_b2b', 'sales_total', 'sales_b2b',
-          'refunds_total', 'refunds_b2b',
-        ],
-        sampleRows: [
-          ['add', '2026-05-01-amazon_us-WIDGET-A', '2026-05-01', '2026-05-07',
-           'amazon_us', 'WIDGET-A',
-           1250, 180, 52, 8, 72, 12, '899.50', '142.40', '12.00', '0.00'],
-        ],
-      },
-      {
-        kind: 'walmart_sales',
-        platform: 'Walmart adapter',
-        description:
-          'Optional convenience adapter for Walmart Item Performance shape (item_id / gtin / page_views / gmv). Mapper translates to the same canonical sales shape.',
-        filename: 'walmart_sales_template.csv',
-        headers: [
-          'action', 'uid', 'start_date', 'end_date', 'marketplace',
-          'item_id', 'gtin', 'page_views', 'orders', 'units',
-          'gmv', 'refunds', 'currency',
-        ],
-        sampleRows: [
-          ['add', '2026-05-01-walmart_us-WMT-1001', '2026-05-01', '2026-05-07',
-           'walmart_us', 'WMT-1001', '0012345678905',
-           940, 38, 46, '612.40', '8.00', 'USD'],
         ],
       },
     ],
@@ -166,7 +131,7 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
     formats: [
       {
         kind: 'inventory_position',
-        platform: 'Omnichannel (recommended)',
+        platform: 'Omnichannel',
         description:
           'One normalized template covering every inventory pool. Mix Amazon FBA per country, Walmart FBM, owned warehouses, 3PL pools, retail stock in a single upload — the marketplace column distinguishes the pool, and downstream engines see one blended inventory position per SKU.',
         filename: 'inventory_position_template.csv',
@@ -177,17 +142,6 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
           ['add', '2026-05-07-walmart.com-WIDGET-A', '2026-05-07', 'fbm', 'walmart.com', 'WIDGET-A', 95, 25, 0, 4, 0],
           ['add', '2026-05-07-warehouse-WIDGET-A', '2026-05-07', 'owned', 'warehouse', 'WIDGET-A', 1200, 0, 0, 0, 6],
           ['add', '2026-05-07-3pl-WIDGET-A', '2026-05-07', '3pl', '3pl', 'WIDGET-A', 240, 0, 0, 0, 0],
-        ],
-      },
-      {
-        kind: 'amazon_inventory',
-        platform: 'Amazon FBA adapter',
-        description:
-          'Optional adapter for Amazon FBA inventory ledger native shape (no marketplace column; channel field used instead). Mapper translates to the same canonical inventory shape.',
-        filename: 'amazon_inventory_template.csv',
-        headers: ['action', 'uid', 'date', 'channel', 'sku', 'total', 'receiving', 'fc_transfer', 'reserved', 'damaged'],
-        sampleRows: [
-          ['add', '2026-05-07-amazon_us-WIDGET-A', '2026-05-07', 'amazon_us', 'WIDGET-A', 420, 80, 15, 30, 2],
         ],
       },
     ],
@@ -223,7 +177,7 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
     formats: [
       {
         kind: 'advertising_performance',
-        platform: 'Omnichannel (recommended)',
+        platform: 'Omnichannel',
         description:
           'One normalized template covering every ad platform. Mix Amazon Ads, Walmart Connect, Meta Ads, Google Ads, TikTok Ads campaigns in a single upload. The platform column identifies the ad source; target_marketplace identifies where the spend drove demand — both matter for blended TACOS.',
         filename: 'advertising_performance_template.csv',
@@ -248,23 +202,6 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
           ['add', '2026-05-01-tiktok-WIDGET-A', '2026-05-01', '2026-05-07',
            'Widget A — Discovery', 'social', 'tiktokads.com', 'tiktokshop', 'WIDGET-A',
            28000, 280, 7, '95.00', '180.00', 'USD'],
-        ],
-      },
-      {
-        kind: 'amazon_ads',
-        platform: 'Amazon Ads adapter',
-        description:
-          'Optional adapter for Amazon Ads native shape (uses platform/target_platform field names instead of target_marketplace). Mapper translates to the same canonical ads shape.',
-        filename: 'amazon_ads_template.csv',
-        headers: [
-          'action', 'uid', 'start_date', 'end_date', 'campaign_name', 'campaign_type',
-          'sku_name', 'impressions', 'clicks', 'orders',
-          'total_cost', 'sales', 'currency', 'platform', 'target_platform',
-        ],
-        sampleRows: [
-          ['add', '2026-05-01-WIDGET-A-SP', '2026-05-01', '2026-05-07',
-           'Widget A — SP', 'sponsored_products', 'WIDGET-A',
-           18450, 420, 28, '142.50', '599.40', 'USD', 'amazon', 'amazon_us'],
         ],
       },
     ],

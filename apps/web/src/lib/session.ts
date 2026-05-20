@@ -9,6 +9,7 @@ export interface SessionUser {
   readonly actorId: string;
   readonly actorKind: 'internal_user' | 'organization_user' | 'system' | 'api_key' | 'ai_agent' | 'system_job' | 'connector';
   readonly effectiveRole:
+    | 'super_admin'
     | 'internal_manager'
     | 'internal_staff'
     | 'organization_admin'

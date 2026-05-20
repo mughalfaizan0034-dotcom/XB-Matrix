@@ -2269,3 +2269,66 @@ in `xb_intelligence.recommendations` with full provenance.
 shape that all future canonical / engine / UI work for inventory,
 WMS, replenishment, forecasting, and SKU-detail follows.
 
+
+---
+
+# Part 7 — Recent operating decisions (2026-05-21)
+
+Concise log of decisions that override earlier sections. Newest wins.
+
+## Uploads — single omnichannel file per dataset
+
+There are NO per-marketplace uploads or templates. One normalized file
+per operational dataset:
+
+- **Sales Performance** — `sales_performance`
+- **Inventory Position** — `inventory_position`
+- **Advertising Performance** — `advertising_performance`
+
+Every marketplace's rows go in the SAME file. The `marketplace` column
+(sales/inventory) and `platform` + `target_marketplace` columns (ads)
+are what the internal engine uses for all math — blended TACOS,
+omnichannel DOS, per-channel slicing. Per-marketplace upload kinds
+(`amazon_sales`, `walmart_sales`, …) and "adapter" templates are
+removed from the UI. Validators/mappers for them may remain in the
+backend tree but are not surfaced.
+
+Templates page shows download buttons ONLY. All guidance moves into a
+separate branded **Download Guide** PDF — no inline metadata walls.
+
+## Auth — username-first, no email
+
+- Sign-in is **username + password**. No email anywhere in the user
+  flow. `email` column is nullable + unused; remove legacy email code
+  (invitations, verification, forgot/reset-password) as encountered.
+- Admins **create users directly** (username, display name, password,
+  retype password, role). No invitation/email roundtrip.
+- "Remember this device" → 30-day session; default 7 days.
+- No forgot-password in the UI. Admins reset passwords directly.
+
+## Role hierarchy (5 tiers)
+
+```
+super_admin        — exactly ONE. Provisioned only via DB migration.
+                     NOT creatable from any API/UI. Full bypass.
+internal_manager   — creates internal_staff + org roles. Full bypass.
+                     Cannot create super_admin or another manager.
+internal_staff     — platform-wide read.
+organization_admin — full access within own org; manages its users.
+organization_user  — operational access within own org.
+```
+
+User-management actions are labelled **"Remove user"** (soft delete),
+not "Deactivate".
+
+## Reports — fixed set
+
+Only: **Sales Report, Ads Report, Inventory Report, Warehouse
+Inventory (coming soon)**. No forecasting page — DOS targets are
+captured at workspace creation and a future internal engine consumes
+them. Remove any other report types.
+
+## Style directive
+
+Keep UI lean. No metadata walls, no speculative "planned" lists in the
+operator-facing UI. Operational dataset first; everything else trimmed.

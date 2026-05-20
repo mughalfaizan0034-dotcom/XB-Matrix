@@ -19,7 +19,7 @@ export interface UserSummary {
   readonly displayName: string;
   readonly userKind: 'internal' | 'organization';
   readonly organizationId: string | null;
-  readonly internalRole: 'manager' | 'staff' | null;
+  readonly internalRole: 'super_admin' | 'manager' | 'staff' | null;
   readonly orgRole: 'admin' | 'user' | null;
   readonly status: 'active' | 'deactivated' | 'pending_invite';
   readonly emailVerifiedAt: string | null;
@@ -36,7 +36,7 @@ interface UserRow {
   display_name: string;
   user_kind: 'internal' | 'organization';
   organization_id: string | null;
-  internal_user_role: 'manager' | 'staff' | null;
+  internal_user_role: 'super_admin' | 'manager' | 'staff' | null;
   organization_user_role: 'admin' | 'user' | null;
   user_status: 'active' | 'deactivated' | 'pending_invite';
   email_verified_at: Date | null;
@@ -163,6 +163,7 @@ export async function getUser(
 //   - others: rejected
 
 export type CreateUserRole =
+  | 'super_admin'
   | 'internal_manager'
   | 'internal_staff'
   | 'organization_admin'
@@ -178,7 +179,7 @@ export interface CreateUserInput {
 }
 
 function isInternalRole(role: CreateUserRole): boolean {
-  return role === 'internal_manager' || role === 'internal_staff';
+  return role === 'super_admin' || role === 'internal_manager' || role === 'internal_staff';
 }
 
 export async function createUser(
@@ -209,13 +210,35 @@ export async function createUser(
     );
   }
 
-  // Authorization: manager OR org-admin-in-own-org.
-  if (actor.isInternalManager) {
-    // ok
+  // Super admin is locked — provisioned only via DB migration. No API
+  // path (not even from another super admin) can create one. Operator
+  // direction 2026-05-20: there is exactly one super admin.
+  if (input.role === 'super_admin') {
+    throw new ForbiddenError(
+      'Super admin is provisioned only via database migration. Not creatable from the API.',
+      'super_admin_locked',
+    );
+  }
+
+  // Tiered authorization for the remaining roles:
+  //   super_admin       → can create internal_manager / internal_staff / organization_*
+  //   internal_manager  → can create internal_staff + organization_*
+  //                       (NOT another internal_manager)
+  //   organization_admin→ can create organization_* in OWN org
+  //   others            → no user creation
+  if (actor.effectiveRole === 'super_admin') {
+    // can create anyone except super_admin (gated above)
+  } else if (actor.effectiveRole === 'internal_manager') {
+    if (input.role === 'internal_manager') {
+      throw new ForbiddenError(
+        'Only super admins can create other internal managers.',
+        'role_scope',
+      );
+    }
   } else if (actor.effectiveRole === 'organization_admin') {
     if (isInternalRole(input.role)) {
       throw new ForbiddenError(
-        'Only internal managers can create internal users.',
+        'Organization admins cannot create internal users.',
         'role_scope',
       );
     }
@@ -227,7 +250,7 @@ export async function createUser(
     }
   } else {
     throw new ForbiddenError(
-      'Only internal managers and organization admins can create users.',
+      'Only super admins, internal managers, and organization admins can create users.',
       'not_authorized',
     );
   }
@@ -289,9 +312,11 @@ export async function createUser(
           displayName,
           hash,
           isInternalRole(input.role)
-            ? input.role === 'internal_manager'
-              ? 'manager'
-              : 'staff'
+            ? input.role === 'super_admin'
+              ? 'super_admin'
+              : input.role === 'internal_manager'
+                ? 'manager'
+                : 'staff'
             : null,
           isInternalRole(input.role)
             ? null

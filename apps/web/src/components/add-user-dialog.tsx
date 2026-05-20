@@ -31,6 +31,7 @@ interface Props {
 }
 
 const ROLE_LABEL: Record<CreateUserRole, string> = {
+  super_admin:        'Super admin',
   internal_manager:   'Internal · Manager',
   internal_staff:     'Internal · Staff',
   organization_admin: 'Org · Admin',
@@ -48,7 +49,18 @@ export function AddUserDialog({ open, onClose, organization }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [created, setCreated] = useState<UserSummary | null>(null);
 
-  const isManager = session?.isInternalManager ?? false;
+  // Tiered create permissions (mirrors users-service.createUser):
+  //   super_admin       → can create internal_manager + internal_staff + org_*
+  //   internal_manager  → can create internal_staff + org_*
+  //   organization_admin→ can create org_* in own org only
+  //
+  // super_admin role is LOCKED — provisioned only via DB migration,
+  // never creatable from the API. There's exactly one. No option for
+  // it in the dropdown.
+  const isSuperAdmin = session?.effectiveRole === 'super_admin';
+  const isInternalManager = session?.effectiveRole === 'internal_manager';
+  const canCreateManagers = isSuperAdmin;
+  const canCreateInternal = isSuperAdmin || isInternalManager;
 
   useEffect(() => {
     if (open) {
@@ -212,14 +224,15 @@ export function AddUserDialog({ open, onClose, organization }: Props) {
           <FormField label="Role" required>
             {(p) => (
               <Select {...p} value={role} onChange={(e) => setRole(e.target.value as CreateUserRole)}>
+                {/* Tiered options — match server-side createUser auth (users-service.ts):
+                      super_admin       → any role
+                      internal_manager  → internal_staff + organization_*
+                      organization_admin→ organization_* in own org */}
                 <option value="organization_user">Org · User</option>
                 <option value="organization_admin">Org · Admin</option>
-                {isManager ? (
-                  <>
-                    <option value="internal_staff">Internal · Staff</option>
-                    <option value="internal_manager">Internal · Manager</option>
-                  </>
-                ) : null}
+                {canCreateInternal ? <option value="internal_staff">Internal · Staff</option> : null}
+                {canCreateManagers ? <option value="internal_manager">Internal · Manager</option> : null}
+                {/* Super admin is intentionally NOT offered — provisioned only via DB migration */}
               </Select>
             )}
           </FormField>

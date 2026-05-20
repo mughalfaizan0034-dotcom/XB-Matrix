@@ -68,7 +68,8 @@ const EMPTY_MATRIX: Record<ModuleKey, ReadonlyArray<PermissionAction>> = Object.
  * Baseline role matrix. This is a stand-in until Spec 2 (Permission Truth Table)
  * lands — those values will be loaded from the DB / config instead of hardcoded.
  *
- *   internal_manager      → bypass via InternalManagerProvider (this is unused for managers)
+ *   super_admin           → bypass via InternalManagerProvider (matrix unused)
+ *   internal_manager      → bypass via InternalManagerProvider (matrix unused)
  *   internal_staff        → view on every module
  *   organization_admin    → full on every module within their org, plus settings admin
  *   organization_user     → view+edit on operational modules; no settings
@@ -76,6 +77,7 @@ const EMPTY_MATRIX: Record<ModuleKey, ReadonlyArray<PermissionAction>> = Object.
  *   system                → bypass; gets system_job kind in audit, no resolver gate
  */
 const DEFAULT_MATRIX: RoleMatrix = Object.freeze({
+  super_admin: ALL_MODULES_FULL,
   internal_manager: ALL_MODULES_FULL,
   internal_staff: ALL_MODULES_VIEW,
   organization_admin: { ...ALL_MODULES_FULL, settings: ALL },

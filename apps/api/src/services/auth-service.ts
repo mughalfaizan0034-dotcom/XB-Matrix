@@ -58,7 +58,7 @@ interface UserRow {
   display_name: string;
   password_hash: string;
   user_status: 'active' | 'deactivated' | 'pending_invite';
-  internal_user_role: 'manager' | 'staff' | null;
+  internal_user_role: 'super_admin' | 'manager' | 'staff' | null;
   organization_user_role: 'admin' | 'user' | null;
   email_verified_at: Date | null;
 }
@@ -109,14 +109,20 @@ async function loadUserById(app: FastifyInstance, userId: string): Promise<UserR
 
 function computeEffectiveRole(row: UserRow): EffectiveRole {
   if (row.user_kind === 'internal') {
-    return row.internal_user_role === 'manager' ? 'internal_manager' : 'internal_staff';
+    if (row.internal_user_role === 'super_admin') return 'super_admin';
+    if (row.internal_user_role === 'manager') return 'internal_manager';
+    return 'internal_staff';
   }
   return row.organization_user_role === 'admin' ? 'organization_admin' : 'organization_user';
 }
 
 function toAuthenticatedUser(row: UserRow): AuthenticatedUser {
   const effectiveRole = computeEffectiveRole(row);
-  const isInternalManager = effectiveRole === 'internal_manager';
+  // Both super_admin AND internal_manager get the RLS/resolver bypass
+  // flag. The role-tier distinction matters in createUser authorization
+  // (super_admin can create managers; manager cannot), not in bypass.
+  const isInternalManager =
+    effectiveRole === 'super_admin' || effectiveRole === 'internal_manager';
   return {
     userId: row.id as UserId,
     actorId: row.actor_id as ActorId,

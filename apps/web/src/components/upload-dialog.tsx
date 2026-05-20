@@ -10,18 +10,21 @@ import {
   useToast,
 } from '@xb/ui';
 import { cn } from '@xb/ui/lib/cn';
-import { useCreateUpload, UPLOAD_KINDS, type UploadKind } from '@/lib/api-uploads';
+import { useCreateUpload, type UploadKind } from '@/lib/api-uploads';
 import { describeError, useActiveWorkspace } from '@/lib/session';
-import { groupKindsByCategory, UPLOAD_KIND_META } from '@/lib/upload-kind-labels';
 
 const MAX_BYTES = 32 * 1024 * 1024; // matches server-side cap in routes/uploads.ts
 
-// Dropdown is grouped by operational category (Sales / Inventory /
-// Advertising / Other). Per-platform formats sit as options under each
-// group via <optgroup>. See lib/upload-kind-labels.ts for the source
-// of truth on labels — the History column, the Templates panel, and
-// this dropdown all read from it.
-const KIND_GROUPS = groupKindsByCategory(UPLOAD_KINDS);
+// Only the omnichannel operational datasets are offered. Per-marketplace
+// upload kinds were removed — every dataset has exactly one normalized
+// template with marketplace as a column. `generic` stays for arbitrary
+// passthrough files.
+const KIND_OPTIONS: ReadonlyArray<{ value: UploadKind; label: string }> = [
+  { value: 'sales_performance',        label: 'Sales Performance' },
+  { value: 'inventory_position',       label: 'Inventory Position' },
+  { value: 'advertising_performance',  label: 'Advertising Performance' },
+  { value: 'generic',                  label: 'Generic file (no validator)' },
+];
 
 interface Props {
   readonly open: boolean;
@@ -122,20 +125,15 @@ export function UploadDialog({ open, onClose }: Props) {
       {noActiveWorkspace ? null : (
         <div className="flex flex-col gap-4">
           <FormField
-            label="Operational dataset & ingestion path"
-            hint="Pick the operational dataset (Sales Performance, Inventory Position, …) and then which ingestion path matches your file. Every path lands in the same centralized intelligence layer downstream — marketplace stays as a column dimension, not a separate entity."
+            label="Operational dataset"
+            hint="One file per dataset type — put every marketplace's rows in the same file. The marketplace column inside the file is what the engine uses; there are no per-marketplace uploads."
           >
             {(p) => (
               <Select {...p} value={kind} onChange={(e) => setKind(e.target.value as UploadKind)}>
-                {KIND_GROUPS.map((g) => (
-                  <optgroup key={g.category} label={g.categoryLabel}>
-                    {g.kinds.map((k) => (
-                      <option key={k} value={k}>
-                        {UPLOAD_KIND_META[k].platformLabel}
-                        {UPLOAD_KIND_META[k].legacy ? ' (legacy)' : ''}
-                      </option>
-                    ))}
-                  </optgroup>
+                {KIND_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
                 ))}
               </Select>
             )}

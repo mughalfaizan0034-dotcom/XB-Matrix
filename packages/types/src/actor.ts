@@ -22,14 +22,23 @@ export type ActorKind = (typeof ACTOR_KINDS)[number];
  * Derived from `user.user_kind` + (`internal_user_role` | `organization_user_role`)
  * at sign-in time.
  *
+ *   internal_user / super_admin     → super_admin
  *   internal_user / manager         → internal_manager
  *   internal_user / staff           → internal_staff
  *   organization_user / admin       → organization_admin
  *   organization_user / user        → organization_user
  *   ai_agent (autonomous)           → ai_agent
  *   system (jobs, no user backing)  → system
+ *
+ * Role hierarchy (who can create whom):
+ *   super_admin       — can create: any role (including other super_admins, internal_managers)
+ *   internal_manager  — can create: internal_staff + organization_admin + organization_user
+ *                       (NOT super_admin, NOT another internal_manager)
+ *   organization_admin— can create: organization_admin + organization_user in OWN org
+ *   others            — no user creation
  */
 export const EFFECTIVE_ROLES = [
+  'super_admin',
   'internal_manager',
   'internal_staff',
   'organization_admin',
@@ -47,5 +56,15 @@ export interface ActorContext {
   readonly organizationId: OrganizationId | null;
   readonly sessionId: SessionId | null;
   readonly requestId: RequestId;
+  /**
+   * RLS + resolver bypass flag. TRUE for both super_admin AND
+   * internal_manager — both tiers have wide platform access. The
+   * difference between them is only the createUser authorization
+   * (super_admin can create managers; manager cannot).
+   *
+   * For code that specifically needs the super_admin distinction
+   * (e.g., creating other super_admins), check
+   * effectiveRole === 'super_admin' explicitly.
+   */
   readonly isInternalManager: boolean;
 }

@@ -32,6 +32,9 @@ export function ConfirmDialog({
   busy = false,
   children,
 }: ConfirmDialogProps) {
+  // Description is rendered by Dialog in the header area; don't
+  // also pass it as body fallback or it shows up twice. Custom body
+  // content via `children` still renders inside the dialog body.
   return (
     <Dialog
       open={open}
@@ -54,11 +57,7 @@ export function ConfirmDialog({
         </>
       }
     >
-      {children ?? (
-        <p className="text-sm text-muted-foreground">
-          {description ?? 'Are you sure you want to continue?'}
-        </p>
-      )}
+      {children ?? (description ? null : <p className="text-sm text-muted-foreground">Are you sure you want to continue?</p>)}
     </Dialog>
   );
 }

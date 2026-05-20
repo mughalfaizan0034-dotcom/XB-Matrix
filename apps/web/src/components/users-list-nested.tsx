@@ -435,6 +435,7 @@ function ResetPasswordDialog({
 
 function prettyRole(u: UserSummary): string {
   if (u.userKind === 'internal') {
+    if (u.internalRole === 'super_admin') return 'Super admin';
     return u.internalRole === 'manager' ? 'Internal manager' : 'Internal staff';
   }
   return u.orgRole === 'admin' ? 'Organization admin' : 'Organization user';
