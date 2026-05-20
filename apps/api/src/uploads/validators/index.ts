@@ -6,11 +6,19 @@ import { salesValidator } from './sales.js';
 import { inventoryValidator } from './inventory.js';
 // Spec-aligned validators — Part 1 §Uploads templates. Parse + validate +
 // produce summary. Canonical insertion lands when Spec 3 §10.9+ DDL ships.
+// PRIMARY operational templates — omnichannel normalized shape, one
+// per operational dataset. Marketplace/platform lives as a column on
+// each row. See CLAUDE.md "uploads are operational categories".
+import { salesPerformanceValidator } from './sales-performance.js';
+import { inventoryPositionValidator } from './inventory-position.js';
+import { advertisingPerformanceValidator } from './advertising-performance.js';
+
+// SECONDARY per-marketplace ADAPTERS — preserve native field names at
+// the edge for operators exporting straight from the platform. Translate
+// to the same Normalized* contract downstream. Demoted in the UI.
 import { amazonSalesValidator } from './amazon-sales.js';
 import { amazonInventoryValidator } from './amazon-inventory.js';
 import { amazonAdsValidator } from './amazon-ads.js';
-// Second-marketplace connector — proves the validator + mapper
-// abstraction is marketplace-agnostic. See CLAUDE.md Part 4.
 import { walmartSalesValidator } from './walmart-sales.js';
 import type { UploadValidator } from './types.js';
 
@@ -20,12 +28,15 @@ import type { UploadValidator } from './types.js';
  * and add it here. upload-service dispatches by kind automatically.
  */
 const VALIDATORS: Map<UploadKind, UploadValidator> = new Map([
-  [salesValidator.kind, salesValidator],
-  [inventoryValidator.kind, inventoryValidator],
+  [salesPerformanceValidator.kind, salesPerformanceValidator],
+  [inventoryPositionValidator.kind, inventoryPositionValidator],
+  [advertisingPerformanceValidator.kind, advertisingPerformanceValidator],
   [amazonSalesValidator.kind, amazonSalesValidator],
   [amazonInventoryValidator.kind, amazonInventoryValidator],
   [amazonAdsValidator.kind, amazonAdsValidator],
   [walmartSalesValidator.kind, walmartSalesValidator],
+  [salesValidator.kind, salesValidator],
+  [inventoryValidator.kind, inventoryValidator],
 ]);
 
 export function getValidator(kind: UploadKind): UploadValidator | null {

@@ -26,40 +26,72 @@ export type UploadCategory =
 export interface KindMeta {
   readonly category: UploadCategory;
   readonly categoryLabel: string;     // "Sales Performance"
-  readonly platformLabel: string;     // "Amazon" / "Walmart" / null for non-platform kinds
+  readonly platformLabel: string;     // "Omnichannel" / "Amazon" / "Walmart" / ...
   readonly compactLabel: string;       // "Sales · Amazon" — for table cells
   readonly fullLabel: string;          // "Sales Performance — Amazon" — for dropdowns
+  readonly /** PRIMARY normalized kind for its category. */ primary?: boolean;
+  readonly /** Per-marketplace adapter rather than the normalized kind. */ adapter?: boolean;
   readonly legacy?: boolean;
 }
 
 export const UPLOAD_KIND_META: Record<UploadKind, KindMeta> = {
+  // PRIMARY omnichannel datasets — one per operational category.
+  sales_performance: {
+    category: 'sales',
+    categoryLabel: 'Sales Performance',
+    platformLabel: 'Omnichannel',
+    compactLabel: 'Sales Performance',
+    fullLabel: 'Sales Performance (omnichannel)',
+    primary: true,
+  },
+  inventory_position: {
+    category: 'inventory',
+    categoryLabel: 'Inventory Position',
+    platformLabel: 'Omnichannel',
+    compactLabel: 'Inventory Position',
+    fullLabel: 'Inventory Position (omnichannel)',
+    primary: true,
+  },
+  advertising_performance: {
+    category: 'advertising',
+    categoryLabel: 'Advertising Performance',
+    platformLabel: 'Omnichannel',
+    compactLabel: 'Advertising Performance',
+    fullLabel: 'Advertising Performance (omnichannel)',
+    primary: true,
+  },
+  // SECONDARY per-marketplace adapters — preserve native field names.
   amazon_sales: {
     category: 'sales',
     categoryLabel: 'Sales Performance',
-    platformLabel: 'Amazon',
-    compactLabel: 'Sales · Amazon',
-    fullLabel: 'Sales Performance — Amazon',
+    platformLabel: 'Amazon adapter',
+    compactLabel: 'Sales · Amazon adapter',
+    fullLabel: 'Sales Performance — Amazon adapter',
+    adapter: true,
   },
   walmart_sales: {
     category: 'sales',
     categoryLabel: 'Sales Performance',
-    platformLabel: 'Walmart',
-    compactLabel: 'Sales · Walmart',
-    fullLabel: 'Sales Performance — Walmart',
+    platformLabel: 'Walmart adapter',
+    compactLabel: 'Sales · Walmart adapter',
+    fullLabel: 'Sales Performance — Walmart adapter',
+    adapter: true,
   },
   amazon_inventory: {
     category: 'inventory',
     categoryLabel: 'Inventory Position',
-    platformLabel: 'Amazon (FBA)',
-    compactLabel: 'Inventory · Amazon (FBA)',
-    fullLabel: 'Inventory Position — Amazon (FBA)',
+    platformLabel: 'Amazon FBA adapter',
+    compactLabel: 'Inventory · Amazon FBA adapter',
+    fullLabel: 'Inventory Position — Amazon FBA adapter',
+    adapter: true,
   },
   amazon_ads: {
     category: 'advertising',
     categoryLabel: 'Advertising Performance',
-    platformLabel: 'Amazon Ads',
-    compactLabel: 'Ads · Amazon',
-    fullLabel: 'Advertising Performance — Amazon Ads',
+    platformLabel: 'Amazon Ads adapter',
+    compactLabel: 'Ads · Amazon adapter',
+    fullLabel: 'Advertising Performance — Amazon Ads adapter',
+    adapter: true,
   },
   generic: {
     category: 'other',

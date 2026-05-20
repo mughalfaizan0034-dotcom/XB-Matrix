@@ -53,14 +53,79 @@ export async function tryResolve(
  */
 export function normalizeMarketplaceCode(raw: string): string {
   const k = raw.trim().toLowerCase().replace(/\s+/g, '_');
-  // Common Amazon variants
-  if (k === 'amazon' || k === 'amazon_us' || k === 'atvpdkikx0der') return 'amazon_us';
-  if (k === 'amazon_ca' || k === 'a2eufneub5z2v') return 'amazon_ca';
-  if (k === 'amazon_uk' || k === 'amazon_gb' || k === 'a1f83g8c2aro7p') return 'amazon_uk';
-  if (k === 'amazon_de' || k === 'a1pa6795ukmfr9') return 'amazon_de';
-  if (k === 'amazon_mx' || k === 'a1am78c64um0y8') return 'amazon_mx';
-  // DTC + other channels — leave snake_case
-  return k;
+
+  // Canonical .com-style vocabulary (2026-05-20 omnichannel direction).
+  // Templates use these values; mapper normalizes to internal codes
+  // so downstream canonical tables stay stable.
+  switch (k) {
+    case 'amazon':
+    case 'amazon.com':
+    case 'amazon_us':
+    case 'atvpdkikx0der':       return 'amazon_us';
+    case 'amazon.ca':
+    case 'amazon_ca':
+    case 'a2eufneub5z2v':       return 'amazon_ca';
+    case 'amazon.co.uk':
+    case 'amazon_uk':
+    case 'amazon_gb':
+    case 'a1f83g8c2aro7p':      return 'amazon_uk';
+    case 'amazon.de':
+    case 'amazon_de':
+    case 'a1pa6795ukmfr9':      return 'amazon_de';
+    case 'amazon.com.mx':
+    case 'amazon_mx':
+    case 'a1am78c64um0y8':      return 'amazon_mx';
+    case 'walmart':
+    case 'walmart.com':
+    case 'walmart_us':          return 'walmart_us';
+    case 'walmart.ca':
+    case 'walmart_ca':          return 'walmart_ca';
+    case 'shopify':             return 'shopify';
+    case 'tiktokshop':
+    case 'tiktok_shop':         return 'tiktokshop';
+    case 'ebay.com':
+    case 'ebay_us':             return 'ebay_us';
+    case 'ebay.co.uk':
+    case 'ebay_uk':             return 'ebay_uk';
+    case 'etsy.com':
+    case 'etsy_us':             return 'etsy_us';
+    case 'warehouse':           return 'warehouse';
+    case '3pl':                 return '3pl';
+    case 'retail':              return 'retail';
+    default:                    return k; // unknown → snake_case passthrough
+  }
+}
+
+/**
+ * Ad-platform canonical code. Templates use the user-facing
+ * vocabulary (amazonads.com, walmartconnect.com, meta.com,
+ * googleads.com, tiktokads.com); mapper normalizes to short stable
+ * codes used by xb_canonical.channel_ads + engines.
+ */
+export function normalizeAdPlatformCode(raw: string): string {
+  const k = raw.trim().toLowerCase().replace(/\s+/g, '_');
+  switch (k) {
+    case 'amazon':
+    case 'amazon_ads':
+    case 'amazonads':
+    case 'amazonads.com':       return 'amazon_ads';
+    case 'walmart_connect':
+    case 'walmartconnect':
+    case 'walmartconnect.com':  return 'walmart_connect';
+    case 'meta':
+    case 'meta_ads':
+    case 'meta.com':
+    case 'facebook_ads':        return 'meta_ads';
+    case 'google':
+    case 'google_ads':
+    case 'googleads':
+    case 'googleads.com':       return 'google_ads';
+    case 'tiktok':
+    case 'tiktok_ads':
+    case 'tiktokads':
+    case 'tiktokads.com':       return 'tiktok_ads';
+    default:                    return k;
+  }
 }
 
 /**

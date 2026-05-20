@@ -16,20 +16,24 @@ export const UPLOAD_KINDS = [
   // exports, arbitrary files.
   'generic',
 
-  // Spec-aligned structured kinds (Part 1 §Uploads, Part 3 direction).
-  // Validators parse + validate against the documented template column
-  // lists. Canonical insertion lands when Spec 3 §10.9+ DDL ships
-  // (sales_performance_period, inventory_position, ppc_performance_period).
+  // Omnichannel normalized templates — the PRIMARY operational
+  // upload kinds (2026-05-20 direction). One template per dataset,
+  // with marketplace/platform as a column dimension. A single file
+  // can carry rows from any combination of marketplaces. See
+  // memory/feedback_uploads_are_operational_categories.
+  'sales_performance',
+  'inventory_position',
+  'advertising_performance',
+
+  // Per-marketplace ADAPTERS — keep their platform's native field
+  // names at the ingestion edge for convenience when an operator
+  // exports straight from the platform. The mapper translates these
+  // to the same Normalized* contract the omnichannel templates
+  // produce. Demoted in the UI; still accessible as advanced
+  // ingestion paths.
   'amazon_sales',
   'amazon_inventory',
   'amazon_ads',
-
-  // Second-marketplace connector — architectural validation that the
-  // Connector → Validator → Mapper → NormalizedEntity pipeline is
-  // marketplace-agnostic. Walmart uses its native field names at the
-  // edge (item_id, page_views, gmv); the mapper translates to the
-  // same NormalizedSale shape Amazon produces. More platforms (Shopify,
-  // TikTok Shop, eBay, …) plug in the same way.
   'walmart_sales',
 
   // LEGACY kinds shipped before the spec landed. Validators here write

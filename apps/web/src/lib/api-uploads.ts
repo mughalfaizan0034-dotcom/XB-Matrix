@@ -7,15 +7,22 @@ import { api } from './api-client';
 export type UploadStatus = 'queued' | 'uploading' | 'validating' | 'ready' | 'failed';
 
 export const UPLOAD_KINDS = [
-  // Generic passthrough — no validator, no canonical.
-  'generic',
+  // PRIMARY omnichannel templates — one normalized shape per operational
+  // dataset. Marketplace/platform is a column inside the row.
+  'sales_performance',
+  'inventory_position',
+  'advertising_performance',
 
-  // Spec-aligned structured kinds. Each one has a validator + mapper
-  // pair under apps/api/src/uploads/{validators,mappers}/.
+  // SECONDARY per-marketplace adapters — preserve platform-native
+  // field names at the ingestion edge. Mappers translate to the same
+  // Normalized* contract. Demoted in the UI.
   'amazon_sales',
   'amazon_inventory',
   'amazon_ads',
   'walmart_sales',
+
+  // Generic passthrough — no validator, no canonical.
+  'generic',
 
   // LEGACY kinds — kept so existing uploads still display correctly.
   // No new uploads should be created against these.

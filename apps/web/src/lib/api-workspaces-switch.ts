@@ -38,24 +38,25 @@ export function useSetActiveWorkspace() {
       api
         .post<{ active: AccessibleWorkspace | null }>('/v1/workspaces/active', { workspaceId })
         .then((r) => r.active),
-    // Three-step cache reconciliation so the UI flips deterministically
-    // regardless of any in-flight /me refetch race:
-    //   1) Cancel any in-flight /me request — if one was mid-flight
-    //      with the OLD active workspace it would clobber our update.
-    //   2) Optimistically merge the workspace the server confirmed
-    //      straight into the cached /me payload. useSession +
-    //      useActiveWorkspace both read this key, so the UI flips
-    //      synchronously on the next render.
-    //   3) Force-refetch /me (not just invalidate) so observers
-    //      converge with the server's authoritative state. refetchQueries
-    //      is awaited end-to-end, so by the time mutateAsync resolves
-    //      every cache + observer is up-to-date.
+    // The backend reloads the active workspace from the database after
+    // the UPDATE commits (see workspace-service.selectActiveWorkspace),
+    // so the response is the authoritative state — no need for a /me
+    // refetch race afterwards.
+    //
+    //   1) Cancel any in-flight /me to stop a stale response from
+    //      overwriting our update.
+    //   2) Merge the server-confirmed workspace into the cached /me
+    //      payload synchronously. useSession + useActiveWorkspace both
+    //      read this key, so the UI flips immediately.
+    //   3) Mark the query as fresh (not just invalidated) so it doesn't
+    //      refetch on the next mount and risk clobbering. Naturally
+    //      goes stale after staleTime; the next legitimate refetch
+    //      will pick up any concurrent changes.
     onSuccess: async (active) => {
       await qc.cancelQueries({ queryKey: SESSION_QUERY_KEY });
       qc.setQueryData<MeShape | undefined>(SESSION_QUERY_KEY, (prev) =>
         prev ? { ...prev, activeWorkspace: active } : { user: null, activeWorkspace: active },
       );
-      await qc.refetchQueries({ queryKey: SESSION_QUERY_KEY, exact: true });
     },
   });
 }

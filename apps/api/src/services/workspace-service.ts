@@ -199,7 +199,25 @@ export async function selectActiveWorkspace(
       throw new NotFoundError('session', sessionId);
     }
   });
-  return match;
+
+  // Reload from DB so the response reflects what's actually persisted,
+  // not just the lookup match. This is the authoritative reading the
+  // frontend trusts — if loadActiveWorkspaceForSession returns null
+  // here despite a non-zero rowCount above, something is genuinely
+  // broken (FK constraint deferred, replication lag, JOIN filter
+  // mismatch) and we want to surface it instead of returning success.
+  const reloaded = await loadActiveWorkspaceForSession(app, sessionId);
+  if (!reloaded) {
+    app.log.error(
+      { sessionId, workspaceId },
+      'session UPDATE reported success but reload returned null — inconsistency',
+    );
+    throw new SemanticError(
+      'Workspace switch did not persist. Refresh and try again.',
+      'switch_did_not_persist',
+    );
+  }
+  return reloaded;
 }
 
 /**
