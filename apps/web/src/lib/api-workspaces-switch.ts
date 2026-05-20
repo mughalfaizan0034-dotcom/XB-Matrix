@@ -26,6 +26,11 @@ export function useAccessibleWorkspaces() {
   });
 }
 
+interface MeShape {
+  readonly user: unknown;
+  readonly activeWorkspace: AccessibleWorkspace | null;
+}
+
 export function useSetActiveWorkspace() {
   const qc = useQueryClient();
   return useMutation({
@@ -33,12 +38,21 @@ export function useSetActiveWorkspace() {
       api
         .post<{ active: AccessibleWorkspace | null }>('/v1/workspaces/active', { workspaceId })
         .then((r) => r.active),
-    // Returning the invalidation Promise makes mutateAsync await it, so
-    // by the time the caller's `await setActive.mutateAsync(...)` resolves
-    // the /me refetch has also resolved. Without this, the toast fires
-    // and the sidebar gating runs on stale (null) activeWorkspace data,
-    // which made the user see "needs a workspace" toasts on modules they
-    // had just unlocked.
-    onSuccess: () => qc.invalidateQueries({ queryKey: SESSION_QUERY_KEY }),
+    // Two-step cache update so the UI flips immediately regardless of
+    // the /me refetch race:
+    //   1) Optimistically merge the workspace the server just confirmed
+    //      into the cached /me payload — useSession + useActiveWorkspace
+    //      both read this. Without this, observers occasionally saw the
+    //      stale (null) activeWorkspace because the invalidation race
+    //      between mutation resolve + refetch isn't fully deterministic.
+    //   2) Then invalidate so /me is also re-fetched from the server,
+    //      catching any drift (e.g., the server has more info than the
+    //      mutation response carries).
+    onSuccess: (active) => {
+      qc.setQueryData<MeShape | undefined>(SESSION_QUERY_KEY, (prev) =>
+        prev ? { ...prev, activeWorkspace: active } : prev,
+      );
+      return qc.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
+    },
   });
 }

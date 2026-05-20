@@ -167,11 +167,17 @@ export async function selectActiveWorkspace(
 ): Promise<AccessibleWorkspace | null> {
   if (workspaceId === null) {
     await app.withConnection(actor, async (client) => {
-      await client.query(
+      const result = await client.query(
         `UPDATE xb_core.sessions SET active_workspace_id = NULL, last_seen_at = now()
           WHERE id = $1 AND revoked_at IS NULL`,
         [sessionId],
       );
+      // If the session row vanished or got revoked between the JWT
+      // check and now, throw — silently returning success would leave
+      // the client thinking the switch worked when it didn't.
+      if ((result.rowCount ?? 0) === 0) {
+        throw new NotFoundError('session', sessionId);
+      }
     });
     return null;
   }
@@ -183,12 +189,15 @@ export async function selectActiveWorkspace(
   }
 
   await app.withConnection(actor, async (client) => {
-    await client.query(
+    const result = await client.query(
       `UPDATE xb_core.sessions
           SET active_workspace_id = $2, last_seen_at = now()
         WHERE id = $1 AND revoked_at IS NULL`,
       [sessionId, workspaceId],
     );
+    if ((result.rowCount ?? 0) === 0) {
+      throw new NotFoundError('session', sessionId);
+    }
   });
   return match;
 }
