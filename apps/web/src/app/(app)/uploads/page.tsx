@@ -2,7 +2,15 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { Building2, Layers, MoreHorizontal, Plus, RefreshCcw, Upload as UploadIcon } from 'lucide-react';
+import {
+  Building2,
+  Globe2,
+  Layers,
+  MoreHorizontal,
+  Plus,
+  RefreshCcw,
+  Upload as UploadIcon,
+} from 'lucide-react';
 import {
   Badge,
   Button,
@@ -24,6 +32,7 @@ import {
 import { UploadTemplatesPanel } from '@/components/upload-templates-panel';
 import { UploadValidationErrorsPanel } from '@/components/upload-validation-errors-panel';
 import { useActiveWorkspace, useSession, describeError } from '@/lib/session';
+import { useWorkspaces } from '@/lib/api-workspaces';
 import {
   useRetryUpload,
   useUploads,
@@ -51,9 +60,30 @@ const STATUS_LABEL: Record<UploadStatus, string> = {
 
 const UPLOAD_PAGE_STORAGE = 'uploads-table';
 
+/**
+ * Uploads module.
+ *
+ * Workspace context behavior:
+ *   - Active workspace pinned → page is fully operational. New uploads
+ *     go to that workspace; history / errors / logs scoped to it.
+ *   - "All workspaces" (no active workspace) → page renders in
+ *     read-only cross-workspace mode. History / Validation Errors /
+ *     Templates / Processing Logs all work. Only the New Upload
+ *     mutation is gated, because creating a file requires choosing
+ *     exactly one workspace to write into.
+ *
+ * Rationale: operations managers regularly need cross-workspace
+ * visibility (monitoring, validation oversight, audit) without first
+ * pinning a single workspace. Forcing a workspace selection to even
+ * see the module is operational friction that doesn't match how the
+ * rest of the platform is heading (CLAUDE.md Part 1 — "operational
+ * control center" direction).
+ */
 export default function UploadsPage() {
   const { data: user } = useSession();
   const { data: activeWorkspace } = useActiveWorkspace();
+  const crossWorkspace = !activeWorkspace;
+
   const [tableState, tableActions] = useDataTableState({
     storageKey: UPLOAD_PAGE_STORAGE,
     urlKey: 'uploads',
@@ -62,21 +92,32 @@ export default function UploadsPage() {
   });
 
   const statusFilter = (tableState.filters.status as UploadStatus | undefined) ?? undefined;
+  const workspaceFilter = (tableState.filters.workspaceId as string | undefined) ?? undefined;
 
-  const uploadsQ = useUploads(
-    activeWorkspace
-      ? {
-          workspaceId: activeWorkspace.id,
-          q: tableState.search.trim() || undefined,
-          status: statusFilter,
-          sort: tableState.sort
-            ? `${tableState.sort.direction === 'desc' ? '-' : ''}${tableState.sort.column}`
-            : '-createdAt',
-          page: tableState.page,
-          pageSize: tableState.pageSize,
-        }
-      : undefined,
-  );
+  // Workspace catalog for the cross-workspace view's filter + name
+  // resolution. Skips the request when a single workspace is pinned —
+  // we already have its name on `activeWorkspace`.
+  const workspacesQ = useWorkspaces({});
+  const workspaceById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const w of workspacesQ.data ?? []) m.set(w.id, w.workspaceName);
+    if (activeWorkspace) m.set(activeWorkspace.id, activeWorkspace.workspaceName);
+    return m;
+  }, [workspacesQ.data, activeWorkspace]);
+
+  const uploadsQ = useUploads({
+    // In cross-workspace mode pass undefined — backend lists across the
+    // actor's accessible scope (org for org users, platform-wide for
+    // internal managers). Workspace filter chip narrows it further.
+    workspaceId: activeWorkspace?.id ?? workspaceFilter,
+    q: tableState.search.trim() || undefined,
+    status: statusFilter,
+    sort: tableState.sort
+      ? `${tableState.sort.direction === 'desc' ? '-' : ''}${tableState.sort.column}`
+      : '-createdAt',
+    page: tableState.page,
+    pageSize: tableState.pageSize,
+  });
 
   const [showUpload, setShowUpload] = useState(false);
   const [openUploadId, setOpenUploadId] = useState<string | null>(null);
@@ -109,106 +150,108 @@ export default function UploadsPage() {
   }
 
   const COLUMNS: ReadonlyArray<ColumnDef<UploadSummary>> = useMemo(
-    () => [
-      {
-        key: 'filename',
-        header: 'File',
-        sortKey: 'filename',
-        hideable: false,
-        accessor: (u) => (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setOpenUploadId(u.id);
-            }}
-            className="text-left font-medium text-foreground hover:text-navy"
-          >
-            <span className="block truncate">{u.originalFilename}</span>
-            <span className="block text-[11px] text-muted-foreground">{u.contentType}</span>
-          </button>
-        ),
-      },
-      {
-        key: 'kind',
-        header: 'Kind',
-        sortKey: 'kind',
-        accessor: (u) => <span className="text-sm text-foreground capitalize">{u.uploadKind.replace('_', ' ')}</span>,
-      },
-      {
-        key: 'size',
-        header: 'Size',
-        sortKey: 'size',
-        numeric: true,
-        accessor: (u) => <span data-numeric="true">{humanSize(u.fileSizeBytes)}</span>,
-      },
-      {
-        key: 'status',
-        header: 'Status',
-        sortKey: 'status',
-        accessor: (u) => <Badge tone={STATUS_TONE[u.uploadStatus]}>{STATUS_LABEL[u.uploadStatus]}</Badge>,
-      },
-      {
-        key: 'retries',
-        header: 'Retries',
-        numeric: true,
-        accessor: (u) => (
-          <span data-numeric="true" className="text-xs text-muted-foreground">
-            {u.retryCount}
-          </span>
-        ),
-      },
-      {
-        key: 'createdAt',
-        header: 'Uploaded',
-        sortKey: 'createdAt',
-        accessor: (u) => (
-          <span data-numeric="true" className="text-xs text-muted-foreground">
-            {formatDateTime(u.createdAt)}
-          </span>
-        ),
-      },
-      {
-        key: 'actions',
-        header: '',
-        width: '48px',
-        hideable: false,
-        accessor: (u) => (
-          <DropdownMenu
-            align="end"
-            trigger={
-              <span className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground">
-                <MoreHorizontal className="h-4 w-4" />
-              </span>
-            }
-            items={buildRowMenu(u)}
-          />
-        ),
-      },
-    ],
-    // Intentionally empty: buildRowMenu reads from refs (retry mutation,
-    // toast); recreating the columns on every render would defeat memoization.
+    () => {
+      const cols: Array<ColumnDef<UploadSummary>> = [
+        {
+          key: 'filename',
+          header: 'File',
+          sortKey: 'filename',
+          hideable: false,
+          accessor: (u) => (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenUploadId(u.id);
+              }}
+              className="text-left font-medium text-foreground hover:text-navy"
+            >
+              <span className="block truncate">{u.originalFilename}</span>
+              <span className="block text-[11px] text-muted-foreground">{u.contentType}</span>
+            </button>
+          ),
+        },
+      ];
+      // Workspace column only renders in cross-workspace mode — when a
+      // workspace is pinned, every row belongs to the same one and the
+      // column would be pure noise.
+      if (crossWorkspace) {
+        cols.push({
+          key: 'workspace',
+          header: 'Workspace',
+          accessor: (u) => {
+            const name = workspaceById.get(u.workspaceId);
+            return name ? (
+              <span className="text-sm text-foreground">{name}</span>
+            ) : (
+              <span className="font-mono text-[11px] text-muted-foreground">{u.workspaceId.slice(0, 8)}…</span>
+            );
+          },
+        });
+      }
+      cols.push(
+        {
+          key: 'kind',
+          header: 'Kind',
+          sortKey: 'kind',
+          accessor: (u) => <span className="text-sm text-foreground capitalize">{u.uploadKind.replace('_', ' ')}</span>,
+        },
+        {
+          key: 'size',
+          header: 'Size',
+          sortKey: 'size',
+          numeric: true,
+          accessor: (u) => <span data-numeric="true">{humanSize(u.fileSizeBytes)}</span>,
+        },
+        {
+          key: 'status',
+          header: 'Status',
+          sortKey: 'status',
+          accessor: (u) => <Badge tone={STATUS_TONE[u.uploadStatus]}>{STATUS_LABEL[u.uploadStatus]}</Badge>,
+        },
+        {
+          key: 'retries',
+          header: 'Retries',
+          numeric: true,
+          accessor: (u) => (
+            <span data-numeric="true" className="text-xs text-muted-foreground">
+              {u.retryCount}
+            </span>
+          ),
+        },
+        {
+          key: 'createdAt',
+          header: 'Uploaded',
+          sortKey: 'createdAt',
+          accessor: (u) => (
+            <span data-numeric="true" className="text-xs text-muted-foreground">
+              {formatDateTime(u.createdAt)}
+            </span>
+          ),
+        },
+        {
+          key: 'actions',
+          header: '',
+          width: '48px',
+          hideable: false,
+          accessor: (u) => (
+            <DropdownMenu
+              align="end"
+              trigger={
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground">
+                  <MoreHorizontal className="h-4 w-4" />
+                </span>
+              }
+              items={buildRowMenu(u)}
+            />
+          ),
+        },
+      );
+      return cols;
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [crossWorkspace, workspaceById],
   );
-
-  if (!activeWorkspace) {
-    return (
-      <div className="flex flex-col gap-6 p-6 lg:p-8">
-        <PageHeader
-          title="Uploads"
-          description="Raw dataset ingestion. Uploads are workspace-scoped and feed the canonical pipeline."
-        />
-        <Card>
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            {user?.isInternalManager
-              ? 'Pick a workspace from the topbar switcher to see and create uploads.'
-              : 'Pick a workspace to begin.'}
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   const rows = uploadsQ.data?.items ?? [];
 
@@ -217,6 +260,7 @@ export default function UploadsPage() {
       rows,
       [
         { key: 'filename',     header: 'Filename',     value: (u) => u.originalFilename },
+        { key: 'workspace',    header: 'Workspace',    value: (u) => workspaceById.get(u.workspaceId) ?? u.workspaceId },
         { key: 'kind',         header: 'Kind',         value: (u) => u.uploadKind },
         { key: 'contentType',  header: 'Content type', value: (u) => u.contentType },
         { key: 'size',         header: 'Size (bytes)', value: (u) => u.fileSizeBytes },
@@ -225,7 +269,7 @@ export default function UploadsPage() {
         { key: 'sha256',       header: 'SHA-256',      value: (u) => u.sha256 },
         { key: 'createdAt',    header: 'Created',      value: (u) => u.createdAt },
       ],
-      `uploads-${activeWorkspace!.workspaceName}-${new Date().toISOString().slice(0, 10)}.csv`,
+      `uploads-${activeWorkspace?.workspaceName ?? 'all-workspaces'}-${new Date().toISOString().slice(0, 10)}.csv`,
     );
   }
 
@@ -240,35 +284,56 @@ export default function UploadsPage() {
           onRemove: () => tableActions.clearFilter('status'),
         }
       : null,
+    crossWorkspace && workspaceFilter
+      ? {
+          key: 'workspace',
+          label: `Workspace: ${workspaceById.get(workspaceFilter) ?? workspaceFilter.slice(0, 8)}`,
+          onRemove: () => tableActions.clearFilter('workspaceId'),
+        }
+      : null,
   ].filter(Boolean) as Array<{ key: string; label: string; onRemove: () => void }>;
 
-  // Tabs follow the spec (Part 1 §Uploads): Files / History / Validation
-  // Errors / Templates / Processing Logs. Files = new-upload affordance +
-  // recent uploads (compact). History = full filterable/sortable DataTable.
-  // Validation Errors = drill into failed uploads. Templates = downloadable
-  // CSV templates. Processing Logs = (placeholder) per-upload event log.
+  // Header subtitle: pinned workspace gets the org/workspace breadcrumb;
+  // cross-workspace mode shows a clear "all workspaces" indicator with
+  // the actor's effective scope (org name or platform-wide for managers).
+  const subtitle = activeWorkspace ? (
+    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+      <Building2 className="h-3.5 w-3.5" />
+      <span>{activeWorkspace.organizationName}</span>
+      <span aria-hidden="true">·</span>
+      <Layers className="h-3.5 w-3.5" />
+      <span>{activeWorkspace.workspaceName}</span>
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+      <Globe2 className="h-3.5 w-3.5" />
+      <span>All workspaces · cross-org view</span>
+    </span>
+  );
+
   return (
     <div className="flex flex-col gap-5 p-6 lg:p-8">
       <PageHeader
         title="Uploads"
-        description={
-          <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Building2 className="h-3.5 w-3.5" />
-            <span>{activeWorkspace.organizationName}</span>
-            <span aria-hidden="true">·</span>
-            <Layers className="h-3.5 w-3.5" />
-            <span>{activeWorkspace.workspaceName}</span>
-          </span>
-        }
+        description={subtitle}
         actions={
-          <Button size="sm" onClick={() => setShowUpload(true)}>
+          <Button
+            size="sm"
+            onClick={() => setShowUpload(true)}
+            disabled={crossWorkspace}
+            title={
+              crossWorkspace
+                ? 'Pick a workspace from the topbar switcher to upload a file.'
+                : undefined
+            }
+          >
             <Plus className="mr-1 h-3.5 w-3.5" /> New upload
           </Button>
         }
       />
 
       <Tabs<'files' | 'history' | 'errors' | 'templates' | 'logs'>
-        defaultValue="files"
+        defaultValue={crossWorkspace ? 'history' : 'files'}
         items={[
           { key: 'files',     label: 'Upload Files' },
           { key: 'history',   label: 'Upload History' },
@@ -277,7 +342,7 @@ export default function UploadsPage() {
           { key: 'logs',      label: 'Processing Logs' },
         ]}
       >
-        {/* ---- Upload Files: new upload + most recent --------------- */}
+        {/* ---- Upload Files ----------------------------------------- */}
         <TabPanel tabKey="files" className="pt-4">
           <div className="flex flex-col gap-3">
             <Card>
@@ -285,26 +350,39 @@ export default function UploadsPage() {
                 <div>
                   <div className="font-medium text-foreground">New upload</div>
                   <p className="text-xs text-muted-foreground">
-                    Drop a CSV / XLSX / JSON. Max 32 MB. Pick the matching kind so the right
-                    validator runs.
+                    {crossWorkspace
+                      ? 'Uploads write into one workspace. Pick a workspace from the topbar switcher to start a new upload — history and templates remain available here without one.'
+                      : 'Drop a CSV / XLSX / JSON. Max 32 MB. Pick the matching kind so the right validator runs.'}
                   </p>
                 </div>
-                <Button size="sm" onClick={() => setShowUpload(true)}>
+                <Button
+                  size="sm"
+                  onClick={() => setShowUpload(true)}
+                  disabled={crossWorkspace}
+                  title={
+                    crossWorkspace
+                      ? 'Pick a workspace from the topbar switcher to upload a file.'
+                      : undefined
+                  }
+                >
                   <UploadIcon className="mr-1 h-3.5 w-3.5" /> Upload a file
                 </Button>
               </CardContent>
             </Card>
 
-            {/* Recent uploads (compact list) — last 5, sortable by created_at desc.
-                Full filterable view lives in the History tab. */}
+            {/* Recent uploads — five most recent in the current scope.
+                In cross-workspace mode this shows the five most recent
+                across every accessible workspace. */}
             <Card>
               <CardContent className="pt-5">
                 <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Recent uploads
+                  {crossWorkspace ? 'Recent uploads (across workspaces)' : 'Recent uploads'}
                 </div>
                 {rows.length === 0 ? (
                   <p className="py-6 text-center text-sm text-muted-foreground">
-                    No uploads yet for this workspace.
+                    {crossWorkspace
+                      ? 'No uploads across your accessible workspaces yet.'
+                      : 'No uploads yet for this workspace.'}
                   </p>
                 ) : (
                   <ul className="divide-y divide-border">
@@ -317,6 +395,12 @@ export default function UploadsPage() {
                         >
                           <div className="truncate text-sm font-medium text-foreground">{u.originalFilename}</div>
                           <div className="truncate text-xs text-muted-foreground">
+                            {crossWorkspace ? (
+                              <>
+                                {workspaceById.get(u.workspaceId) ?? u.workspaceId.slice(0, 8)}
+                                {' · '}
+                              </>
+                            ) : null}
                             {u.uploadKind} · {formatDateTime(u.createdAt)}
                           </div>
                         </button>
@@ -330,95 +414,132 @@ export default function UploadsPage() {
           </div>
         </TabPanel>
 
-        {/* ---- Upload History: full DataTable ----------------------- */}
+        {/* ---- Upload History --------------------------------------- */}
         <TabPanel tabKey="history" className="pt-4">
-      <div className="flex flex-col gap-3">
-        <DataTableToolbar<UploadSummary>
-          columns={COLUMNS}
-          columnVisibility={tableState.columnVisibility}
-          onColumnVisibilityChange={tableActions.setColumnVisibility}
-          search={tableState.search}
-          onSearchChange={tableActions.setSearch}
-          searchPlaceholder="Search by filename"
-          density={tableState.density}
-          onDensityChange={tableActions.setDensity}
-          onExport={rows.length > 0 ? onExport : undefined}
-          chips={chips}
-          onClearAllFilters={chips.length > 0 ? tableActions.clearAllFilters : undefined}
-          trailing={
-            <DropdownMenu
-              align="end"
-              width="w-48"
-              header={
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Filter by status
+          <div className="flex flex-col gap-3">
+            <DataTableToolbar<UploadSummary>
+              columns={COLUMNS}
+              columnVisibility={tableState.columnVisibility}
+              onColumnVisibilityChange={tableActions.setColumnVisibility}
+              search={tableState.search}
+              onSearchChange={tableActions.setSearch}
+              searchPlaceholder="Search by filename"
+              density={tableState.density}
+              onDensityChange={tableActions.setDensity}
+              onExport={rows.length > 0 ? onExport : undefined}
+              chips={chips}
+              onClearAllFilters={chips.length > 0 ? tableActions.clearAllFilters : undefined}
+              trailing={
+                <div className="flex items-center gap-1.5">
+                  {/* Workspace filter only available in cross-workspace mode. */}
+                  {crossWorkspace ? (
+                    <DropdownMenu
+                      align="end"
+                      width="w-64"
+                      header={
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Filter by workspace
+                        </div>
+                      }
+                      trigger={
+                        <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
+                          {workspaceFilter
+                            ? `Workspace: ${workspaceById.get(workspaceFilter) ?? workspaceFilter.slice(0, 8)}`
+                            : 'Workspace'}
+                        </span>
+                      }
+                      items={[
+                        {
+                          key: '__all__',
+                          label: 'All workspaces',
+                          trailing: workspaceFilter ? null : <span aria-hidden="true">✓</span>,
+                          onSelect: () => tableActions.clearFilter('workspaceId'),
+                        },
+                        ...((workspacesQ.data ?? []).map((w) => ({
+                          key: w.id,
+                          label: w.workspaceName,
+                          trailing: workspaceFilter === w.id ? <span aria-hidden="true">✓</span> : null,
+                          onSelect: () => tableActions.setFilter('workspaceId', w.id),
+                        }))),
+                      ]}
+                    />
+                  ) : null}
+                  <DropdownMenu
+                    align="end"
+                    width="w-48"
+                    header={
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Filter by status
+                      </div>
+                    }
+                    trigger={
+                      <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
+                        {statusFilter ? `Status: ${statusFilter}` : 'Status'}
+                      </span>
+                    }
+                    items={[
+                      {
+                        key: 'all',
+                        label: 'All statuses',
+                        trailing: statusFilter ? null : <span aria-hidden="true">✓</span>,
+                        onSelect: () => tableActions.clearFilter('status'),
+                      },
+                      ...(['queued', 'uploading', 'validating', 'ready', 'failed'] as const).map((s) => ({
+                        key: s,
+                        label: STATUS_LABEL[s],
+                        trailing: statusFilter === s ? <span aria-hidden="true">✓</span> : null,
+                        onSelect: () => tableActions.setFilter('status', s),
+                      })),
+                    ]}
+                  />
                 </div>
               }
-              trigger={
-                <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
-                  {statusFilter ? `Status: ${statusFilter}` : 'Status'}
-                </span>
-              }
-              items={[
-                {
-                  key: 'all',
-                  label: 'All statuses',
-                  trailing: statusFilter ? null : <span aria-hidden="true">✓</span>,
-                  onSelect: () => tableActions.clearFilter('status'),
-                },
-                ...(['queued', 'uploading', 'validating', 'ready', 'failed'] as const).map((s) => ({
-                  key: s,
-                  label: STATUS_LABEL[s],
-                  trailing: statusFilter === s ? <span aria-hidden="true">✓</span> : null,
-                  onSelect: () => tableActions.setFilter('status', s),
-                })),
-              ]}
             />
-          }
-        />
 
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <DataTable
-            columns={COLUMNS}
-            rows={rows}
-            rowKey={(u) => u.id}
-            loading={uploadsQ.isLoading}
-            density={tableState.density}
-            sort={tableState.sort}
-            onSortChange={tableActions.setSort}
-            columnVisibility={tableState.columnVisibility}
-            onColumnVisibilityChange={tableActions.setColumnVisibility}
-            className="rounded-none border-0"
-            onRowClick={(u) => setOpenUploadId(u.id)}
-            emptyState={
-              <div className="flex flex-col items-center gap-3 py-6">
-                <span className="text-sm">
-                  {tableState.search || statusFilter
-                    ? 'No uploads match the current filters.'
-                    : 'No uploads yet for this workspace.'}
-                </span>
-                {!tableState.search && !statusFilter ? (
-                  <Button size="sm" variant="outline" onClick={() => setShowUpload(true)}>
-                    <UploadIcon className="mr-1 h-3.5 w-3.5" /> Upload the first file
-                  </Button>
-                ) : null}
-              </div>
-            }
-          />
-          {uploadsQ.data && uploadsQ.data.total > tableState.pageSize ? (
-            <DataTablePagination
-              page={tableState.page}
-              pageSize={tableState.pageSize}
-              total={uploadsQ.data.total}
-              onPageChange={tableActions.setPage}
-              onPageSizeChange={tableActions.setPageSize}
-            />
-          ) : null}
-        </div>
-      </div>
+            <div className="overflow-hidden rounded-lg border border-border bg-card">
+              <DataTable
+                columns={COLUMNS}
+                rows={rows}
+                rowKey={(u) => u.id}
+                loading={uploadsQ.isLoading}
+                density={tableState.density}
+                sort={tableState.sort}
+                onSortChange={tableActions.setSort}
+                columnVisibility={tableState.columnVisibility}
+                onColumnVisibilityChange={tableActions.setColumnVisibility}
+                className="rounded-none border-0"
+                onRowClick={(u) => setOpenUploadId(u.id)}
+                emptyState={
+                  <div className="flex flex-col items-center gap-3 py-6">
+                    <span className="text-sm">
+                      {chips.length > 0
+                        ? 'No uploads match the current filters.'
+                        : crossWorkspace
+                          ? 'No uploads across your accessible workspaces yet.'
+                          : 'No uploads yet for this workspace.'}
+                    </span>
+                    {chips.length === 0 && !crossWorkspace ? (
+                      <Button size="sm" variant="outline" onClick={() => setShowUpload(true)}>
+                        <UploadIcon className="mr-1 h-3.5 w-3.5" /> Upload the first file
+                      </Button>
+                    ) : null}
+                  </div>
+                }
+              />
+              {uploadsQ.data && uploadsQ.data.total > tableState.pageSize ? (
+                <DataTablePagination
+                  page={tableState.page}
+                  pageSize={tableState.pageSize}
+                  total={uploadsQ.data.total}
+                  onPageChange={tableActions.setPage}
+                  onPageSizeChange={tableActions.setPageSize}
+                />
+              ) : null}
+            </div>
+          </div>
         </TabPanel>
 
-        {/* ---- Validation Errors --------------------------------- */}
+        {/* ---- Validation Errors ------------------------------------ */}
         <TabPanel tabKey="errors" className="pt-4">
           <UploadValidationErrorsPanel
             uploads={rows}
@@ -426,12 +547,12 @@ export default function UploadsPage() {
           />
         </TabPanel>
 
-        {/* ---- Templates ----------------------------------------- */}
+        {/* ---- Templates (workspace-independent) -------------------- */}
         <TabPanel tabKey="templates" className="pt-4">
           <UploadTemplatesPanel />
         </TabPanel>
 
-        {/* ---- Processing Logs (placeholder) -------------------- */}
+        {/* ---- Processing Logs (placeholder) ------------------------ */}
         <TabPanel tabKey="logs" className="pt-4">
           <Card>
             <CardContent className="py-10 text-center text-sm text-muted-foreground">
@@ -453,7 +574,14 @@ export default function UploadsPage() {
         Files are stored privately in your workspace's bucket. Spec-aligned validators
         (amazon_sales, amazon_inventory, amazon_ads, walmart_sales) validate the
         templates; the mapping layer translates rows to platform-agnostic normalized
-        entities; canonical insertion lands once Spec 3 canonical tables ship. See{' '}
+        entities; canonical insertion lands once Spec 3 canonical tables ship.
+        {crossWorkspace && user?.isInternalManager ? (
+          <>
+            {' '}You're viewing every workspace you have access to — internal-manager
+            scope.
+          </>
+        ) : null}{' '}
+        See{' '}
         <Link href="/settings" className="underline-offset-2 hover:underline">
           Settings
         </Link>{' '}
