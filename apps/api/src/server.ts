@@ -27,6 +27,7 @@ import { uploadRoutes } from './routes/uploads.js';
 import { salesRoutes } from './routes/sales.js';
 import { inventoryRoutes } from './routes/inventory.js';
 import { skuAliasRoutes } from './routes/sku-aliases.js';
+import { unresolvedSkuRoutes } from './routes/unresolved-sku.js';
 
 export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   const app = Fastify({
@@ -92,6 +93,7 @@ export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   await app.register(salesRoutes, { prefix: '/v1/sales' });
   await app.register(inventoryRoutes, { prefix: '/v1/inventory' });
   await app.register(skuAliasRoutes, { prefix: '/v1/sku-aliases' });
+  await app.register(unresolvedSkuRoutes, { prefix: '/v1/unresolved-sku' });
 
   return app;
 }

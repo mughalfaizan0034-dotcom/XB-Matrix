@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Building2, Layers, AlertTriangle, Plus, Trash2, MoreHorizontal } from 'lucide-react';
+import Link from 'next/link';
+import { Building2, Layers, AlertTriangle, Plus, Trash2, MoreHorizontal, Inbox } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -256,9 +257,17 @@ export default function SkuAliasesPage() {
           </span>
         }
         actions={
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="mr-1 h-3.5 w-3.5" /> New alias
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/sku-aliases/unresolved"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Inbox className="h-3.5 w-3.5" /> Unresolved queue
+            </Link>
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <Plus className="mr-1 h-3.5 w-3.5" /> New alias
+            </Button>
+          </div>
         }
       />
 
