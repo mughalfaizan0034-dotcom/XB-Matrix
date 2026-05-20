@@ -1327,4 +1327,311 @@ have callers in the API + UI. A migration plan needs to:
 1. Add the new canonical tables per spec
 2. Build new validators that write to them using the new template column lists
 3. Replace API list services + frontend pages to read the new tables
-4. Drop the temporary tables in a clean follow-up migration once nothing references them
+4. Bridge existing data via a one-time migration (sales_orders → sales_performance_period etc) so test uploads survive
+5. Leave the old tables in place; drop in a clean follow-up once nothing references them
+
+---
+
+# Part 3 — Platform direction, completed state, next priorities
+
+> Latest direction document (received 2026-05-20). The goal of this
+> section is to keep future sessions on-track with the *why* behind the
+> work, not just the *what*.
+
+## Core platform philosophy
+
+XB Matrix is **not** a dashboard app. It is a **centralized operational
+intelligence platform** for ecommerce agencies and brands.
+
+**Uploads = Inputs. Reports/Insights = Outputs.** Everything revolves
+around a centralized ingestion + calculation engine pipeline.
+
+## Canonical system flow
+
+```
+Raw Uploads
+   ↓
+Validation Layer
+   ↓
+Canonical Tables
+   ↓
+Summary Tables
+   ↓
+Calculation Engines
+   ↓
+Intelligence Layer
+   ↓
+Reports / Insights / Recommendations / Dashboards
+```
+
+**Critical rules:**
+
+- Uploads are raw operational/business inputs.
+- Dashboards/reports are generated outputs.
+- All analytics derive from canonicalized data only.
+- No dashboard should calculate directly from uploaded files.
+- Frontend NEVER calculates business metrics; backend engines do.
+
+## Current completed foundation (production today)
+
+- multi-tenant architecture
+- organizations
+- workspaces
+- auth lifecycle (sign-in / sign-out / sessions)
+- invitations
+- email verification
+- password reset
+- workspace-aware sessions
+- resolver-based permission architecture
+- audit logging
+- Cloud Run + Cloud SQL + BigQuery + GCS infra
+- workspace-aware dashboard shell (placeholder metrics)
+- enterprise CRUD lifecycle (suspend / archive / soft-delete / restore)
+- uploads foundation beginning (file upload + GCS storage + status lifecycle)
+
+## Upload kinds (intended, per direction doc)
+
+The validator registry should eventually cover:
+
+| Kind | Purpose |
+|---|---|
+| `amazon_sales` | Amazon sales business reports |
+| `amazon_inventory` | Amazon inventory positions |
+| `amazon_ads` | Amazon advertising / PPC |
+| `amazon_settlement` | Amazon settlement reports (financial) |
+| `shipment` | Shipment data (FBA, DTC transfers) |
+| `sku_master` | SKU master / catalog uploads |
+| `warehouse_inventory` | Non-FBA warehouse inventory |
+| `generic` | Passthrough storage only — PDFs / unsupported exports / arbitrary files |
+
+Each structured upload kind needs:
+
+- upload contract
+- schema validator
+- versioning
+- parsing engine
+- canonical transformation logic
+- validation report
+- audit trail
+- retry / reprocess support
+
+**Structured uploads are preferred.** Generic is fallback storage only.
+
+## Upload lifecycle architecture
+
+```
+Upload
+  ↓
+Validation
+  ↓
+Accepted / Rejected rows
+  ↓
+Canonicalization
+  ↓
+Summary refresh
+  ↓
+Engine recalculation
+  ↓
+Dashboard refresh
+  ↓
+Insight generation
+```
+
+## Uploads module UI expectations
+
+- upload queue + history
+- processing statuses
+- validation error viewer
+- downloadable error reports
+- audit logs
+- workspace / org scoping
+- async processing via Cloud Tasks
+- GCS-backed file storage
+- upload detail drawer
+- reprocess / retry support (later)
+
+## Calculation engine direction
+
+The system is built around **centralized reusable engines**, not
+page-specific calculations.
+
+| Engine | Purpose |
+|---|---|
+| Sales aggregation | Period rollups, channel splits, B2B/B2C breakouts |
+| Inventory health | Stockout risk, overstock, aging |
+| DOS calculations | Days-of-stock per SKU per channel |
+| Replenishment | Reorder quantities, shipment proposals |
+| Shipment recommendation | What to ship, when, where |
+| PPC analytics | ACOS, TACOS, ROAS, waste, scaling |
+| Profitability | Per-SKU contribution margin, marketplace P&L |
+| Forecasting | Demand projection by SKU + channel |
+| Anomaly / insight | Detection + ranking of operational issues |
+
+### Engine architectural principle
+
+Engines operate on **canonical tables and summary tables only**.
+
+Never:
+- directly on uploaded spreadsheets
+- directly inside frontend pages
+- directly inside report views
+
+### Engine architecture expectations
+
+- versioned engines (`engine_key` + `engine_version` per Spec 3 PACK_ENGINE_VERSION)
+- deterministic calculations
+- async execution
+- idempotent processing
+- engine metadata recorded with outputs
+- auditability of every engine run
+- future AI augmentation (optional layer)
+
+## Reports direction
+
+Reports are **generated outputs from engines**, not uploaded files.
+
+| Report | Engine source |
+|---|---|
+| Sales summary | Sales aggregation |
+| Inventory health | Inventory health |
+| Shipment recommendation | Shipment + replenishment |
+| Profitability | Profitability |
+| PPC | PPC analytics |
+| DOS analysis | DOS + inventory |
+| Executive summary | Aggregator across all engines |
+| Forecast reports | Forecasting |
+
+### Reports lifecycle
+
+```
+Engine Output
+  ↓
+Report Generation
+  ↓
+GCS Reports Bucket
+  ↓
+Reports Module
+  ↓
+Download / Archive
+```
+
+Reports auto-archive after 30 days; **analytical data remains
+permanently in DB** (canonical tables never deleted by retention).
+
+## Dashboard direction
+
+Dashboards should become:
+
+- workspace-aware
+- engine-driven (no in-page math)
+- near real-time
+- operationally actionable
+
+**Not** static chart pages.
+
+Future dashboard blocks:
+
+- inventory health
+- low stock alerts
+- replenishment recommendations
+- sales velocity
+- ad performance
+- profitability
+- operational anomalies
+- AI-generated insights
+
+## Data architecture direction
+
+| Layer | Where |
+|---|---|
+| Raw tables (`xb_raw.*`) | Postgres — landing pad for upload contents |
+| Canonical tables (`xb_canonical.*`) | Postgres — normalized period-bucketed facts |
+| Summary tables (`xb_summary.*`) | Postgres — pre-aggregated, UI-facing |
+| Intelligence tables (`xb_intelligence.*`) | Postgres — engine outputs (forecasts, insights, recs) |
+| Long-term analytics | BigQuery — historical, large-scale, archive |
+
+Postgres remains: operational source of truth, transactional layer,
+active dashboard/query layer.
+
+BigQuery eventually supports: historical analytics, large-scale
+reporting, intelligence workloads, long-term archives.
+
+## AI direction
+
+The platform must remain **provider-agnostic**.
+
+| Tier | Providers |
+|---|---|
+| Current / free-first | Groq, OpenRouter, Ollama |
+| Future paid | OpenAI, Claude, Gemini, enterprise providers |
+
+**AI is optional and pluggable.** Core platform functionality must NOT
+depend on paid models.
+
+Future AI use cases:
+
+- operational copilots
+- conversational analytics
+- AI recommendations
+- anomaly explanations
+- inventory planning assistant
+- forecasting assistant
+- chatbot support
+
+## UI/UX direction (already established)
+
+- Enterprise operational platform — not consumer SaaS styling
+- Navy / orange brand theme
+- Quicksand titles, Inter body, Inter tabular numbers for all metrics
+- Workspace-aware context throughout
+- Nested organization / workspace management
+- Enterprise overlay architecture (portaled, layered z-index)
+- Scalable DataTable primitives
+- Audit-first workflows
+- Soft-delete lifecycle everywhere
+
+## Next major architectural priorities (in order)
+
+1. Enterprise DataTable foundation ✅ (shipped)
+2. **Upload management system** ← in progress; needs tabs (Files / History / Validation Errors / Templates / Processing Logs) + spec-aligned validators
+3. **Permissions matrix UI** ← Spec 3 §10.6 DDL exists; workspace × user × access_level with page-level overrides + Custom auto-state
+4. **Workspace-scoped dashboards** ← engine-driven once engines exist
+5. **Calculation engine implementation** ← awaiting Spec 3 continuation (canonical + summary table DDL)
+6. **Reports generation engine** ← awaiting engine outputs
+7. **Forecasting / intelligence layers**
+8. **AI copilots / chatbots**
+
+## Most important implementation rule going forward
+
+Everything operational must flow through:
+
+```
+Upload → Canonical Data → Engine → Insight / Report / UI
+```
+
+**Avoid:**
+
+- page-specific business logic
+- spreadsheet-style calculations inside frontend components
+- engines reading directly from raw uploads or summary-less canonical
+- dashboards aggregating live data instead of reading pre-computed summaries
+
+---
+
+# Notes on this build session
+
+Tracking what's in code today vs the spec, so future sessions don't
+forget the work-in-progress:
+
+| Area | Current state | Spec-aligned target | Status |
+|---|---|---|---|
+| Sales validator | columns: order_id/sku/quantity/unit_price/currency/order_date/marketplace | columns: action/uid/start_date/end_date/channel/sku/sessions×{total,b2b}/orders×{total,b2b}/units×{total,b2b}/sales×{total,b2b}/refunds×{total,b2b} | needs rewrite |
+| Inventory validator | columns: sku/warehouse/snapshot_date/on_hand/reserved/available/inbound/unit_cost/currency | columns: action/uid/date/channel/sku/total/receiving/fc_transfer/reserved/damaged | needs rewrite |
+| Ads / PPC validator | (reverted before commit) | columns: action/uid/start_date/end_date/campaign_name/campaign_type/sku_name/impressions/clicks/orders/total_cost/sales/currency/platform/target_platform | needs build |
+| sales_orders canonical table | per-order grain, exists | `sales_performance_period` (period grain, monthly partitions) | bridge then drop |
+| inventory_snapshots canonical | warehouse-point-in-time, exists | `inventory_position` (date-partitioned) | bridge then drop |
+| /uploads page | single table view | 5-tab structure (Files / History / Validation Errors / Templates / Processing Logs) | needs UI restructure |
+| Sidebar | 9 items | 11 items (+ Forecasting + Insights) | needs update |
+| Settings tabs | Workspaces / Users / Permissions(soon) / Audit / Billing(soon) / Integrations(soon) | + Warehouses / Forecast Rules / Upload Templates / Diagnostics | needs update |
+| Engines | none | Sales/PPC/Inventory/DOS/Replenishment/Forecasting/Profitability/Anomaly | awaiting spec continuation |
+
