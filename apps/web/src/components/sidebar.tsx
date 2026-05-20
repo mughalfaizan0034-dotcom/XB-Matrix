@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   LayoutDashboard,
   Megaphone,
+  Package,
   Settings,
   ShoppingBag,
   Truck,
@@ -30,6 +31,7 @@ const NAV: ReadonlyArray<NavItem> = [
   { label: 'Uploads',       href: '/uploads'        , icon: Upload },
   { label: 'Reports',       href: '/reports'        , icon: FileSpreadsheet },
   { label: 'Unit Economics', href: '/unit-economics', icon: BarChart3 },
+  { label: 'SKU Aliases',   href: '/sku-aliases'    , icon: Package },
   { label: 'Settings',      href: '/settings'       , icon: Settings },
 ];
 
@@ -75,7 +77,7 @@ export function Sidebar() {
       <div className="border-t border-border p-3 text-xs text-muted-foreground">
         {/* Stays below V1.0.0 until the final launch. Bump on every push —
             patch most of the time, minor for bigger slices. */}
-        V0.6.2
+        V0.7.0
       </div>
     </aside>
   );
