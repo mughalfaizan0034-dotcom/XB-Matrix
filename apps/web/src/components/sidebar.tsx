@@ -25,7 +25,7 @@ interface NavItem {
 const NAV: ReadonlyArray<NavItem> = [
   { label: 'Dashboard',     href: '/dashboard'      , icon: LayoutDashboard },
   { label: 'Sales',         href: '/sales'          , icon: ShoppingBag },
-  { label: 'PPC',           href: '/ppc'            , icon: Megaphone },
+  { label: 'Advertisements', href: '/ppc'           , icon: Megaphone },
   { label: 'Inventory',     href: '/inventory'      , icon: Boxes },
   { label: 'Shipments',     href: '/shipments'      , icon: Truck },
   { label: 'Uploads',       href: '/uploads'        , icon: Upload },
@@ -77,7 +77,7 @@ export function Sidebar() {
       <div className="border-t border-border p-3 text-xs text-muted-foreground">
         {/* Stays below V1.0.0 until the final launch. Bump on every push —
             patch most of the time, minor for bigger slices. */}
-        V0.16.0
+        V0.16.1
       </div>
     </aside>
   );
