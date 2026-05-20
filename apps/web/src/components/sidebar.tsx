@@ -73,7 +73,9 @@ export function Sidebar() {
         })}
       </nav>
       <div className="border-t border-border p-3 text-xs text-muted-foreground">
-        v0.1.0 · foundation
+        {/* Stays below V1.0.0 until the final launch. Bump on every push —
+            patch most of the time, minor for bigger slices. */}
+        V0.5.0
       </div>
     </aside>
   );
