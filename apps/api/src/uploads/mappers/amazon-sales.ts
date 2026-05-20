@@ -17,7 +17,7 @@ import {
  * decoupled at the type level (changing one doesn't ripple).
  */
 export interface AmazonSalesRow {
-  readonly action: 'upsert' | 'delete';
+  readonly action: 'add' | 'update' | 'remove';
   readonly uid: string;
   readonly startDate: string;
   readonly endDate: string;

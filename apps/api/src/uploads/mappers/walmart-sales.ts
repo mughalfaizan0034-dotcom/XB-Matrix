@@ -19,7 +19,7 @@ import {
  * sessionsTotal, salesTotal, etc., uniformly across every connector.
  */
 export interface WalmartSalesRow {
-  readonly action: 'upsert' | 'delete';
+  readonly action: 'add' | 'update' | 'remove';
   readonly uid: string;
   readonly startDate: string;
   readonly endDate: string;

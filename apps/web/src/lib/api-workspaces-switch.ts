@@ -38,21 +38,24 @@ export function useSetActiveWorkspace() {
       api
         .post<{ active: AccessibleWorkspace | null }>('/v1/workspaces/active', { workspaceId })
         .then((r) => r.active),
-    // Two-step cache update so the UI flips immediately regardless of
-    // the /me refetch race:
-    //   1) Optimistically merge the workspace the server just confirmed
-    //      into the cached /me payload — useSession + useActiveWorkspace
-    //      both read this. Without this, observers occasionally saw the
-    //      stale (null) activeWorkspace because the invalidation race
-    //      between mutation resolve + refetch isn't fully deterministic.
-    //   2) Then invalidate so /me is also re-fetched from the server,
-    //      catching any drift (e.g., the server has more info than the
-    //      mutation response carries).
-    onSuccess: (active) => {
+    // Three-step cache reconciliation so the UI flips deterministically
+    // regardless of any in-flight /me refetch race:
+    //   1) Cancel any in-flight /me request — if one was mid-flight
+    //      with the OLD active workspace it would clobber our update.
+    //   2) Optimistically merge the workspace the server confirmed
+    //      straight into the cached /me payload. useSession +
+    //      useActiveWorkspace both read this key, so the UI flips
+    //      synchronously on the next render.
+    //   3) Force-refetch /me (not just invalidate) so observers
+    //      converge with the server's authoritative state. refetchQueries
+    //      is awaited end-to-end, so by the time mutateAsync resolves
+    //      every cache + observer is up-to-date.
+    onSuccess: async (active) => {
+      await qc.cancelQueries({ queryKey: SESSION_QUERY_KEY });
       qc.setQueryData<MeShape | undefined>(SESSION_QUERY_KEY, (prev) =>
-        prev ? { ...prev, activeWorkspace: active } : prev,
+        prev ? { ...prev, activeWorkspace: active } : { user: null, activeWorkspace: active },
       );
-      return qc.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
+      await qc.refetchQueries({ queryKey: SESSION_QUERY_KEY, exact: true });
     },
   });
 }

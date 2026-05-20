@@ -19,8 +19,35 @@
 
 import type { ValidationError } from './types.js';
 
-export const ACTIONS = ['upsert', 'delete'] as const;
+/**
+ * Standardized lifecycle/action vocabulary for every operational
+ * upload kind (Spec direction: replay-safe synchronization across
+ * future API integrations, webhook syncs, ERP corrections, inventory
+ * adjustments, reconciliation workflows, idempotent processing).
+ *
+ *   add    — create the row; reject if it already exists
+ *   update — overwrite the row; reject if it doesn't exist yet
+ *   remove — soft-delete the row
+ *
+ * Legacy values (`upsert`, `delete`) are accepted as aliases during
+ * the transition so templates downloaded before the rename still
+ * validate; normalized to the new vocabulary internally. New
+ * templates ship with the standardized values.
+ */
+export const ACTIONS = ['add', 'update', 'remove'] as const;
 export type Action = (typeof ACTIONS)[number];
+
+const ACTION_ALIASES: Record<string, Action> = {
+  add:    'add',
+  insert: 'add',           // some pipelines use SQL-style names
+  create: 'add',
+  update: 'update',
+  upsert: 'update',        // legacy templates — treat as update
+  modify: 'update',
+  remove: 'remove',
+  delete: 'remove',        // legacy templates — treat as remove
+  drop:   'remove',
+};
 
 /** Header normalization: snake_case + camelCase + spaces all collapse. */
 export function normalizeColumnName(raw: string): string {
@@ -199,14 +226,15 @@ export function requiredCurrency(
   return s;
 }
 
-/** Required action ('upsert' | 'delete'). */
+/** Required action ('add' | 'update' | 'remove'), with legacy aliases. */
 export function requiredAction(ctx: ParseContext, raw: string | undefined): Action | null {
   const s = (raw ?? '').trim().toLowerCase();
   if (!s) {
     ctx.errors.push({ row: ctx.rowNumber, column: 'action', message: 'action is required.' });
     return null;
   }
-  if (!ACTIONS.includes(s as Action)) {
+  const normalized = ACTION_ALIASES[s];
+  if (!normalized) {
     ctx.errors.push({
       row: ctx.rowNumber,
       column: 'action',
@@ -214,5 +242,5 @@ export function requiredAction(ctx: ParseContext, raw: string | undefined): Acti
     });
     return null;
   }
-  return s as Action;
+  return normalized;
 }

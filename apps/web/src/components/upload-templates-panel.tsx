@@ -1,28 +1,27 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, FileText, Info, Layers } from 'lucide-react';
+import { ChevronRight, Download, Info, Layers } from 'lucide-react';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@xb/ui';
 import { downloadCsv } from '@xb/ui';
 
 /**
- * Templates panel — grouped by operational category, not by marketplace.
+ * Templates panel — operational-dataset-first.
  *
- * The user-facing entity is the business operation (Sales Performance,
- * Inventory Position, Advertising Performance, …). Marketplaces /
- * platforms are SOURCE FORMATS feeding each category. Same operational
- * data may flow in from Amazon, Walmart, Shopify, TikTok Shop, … —
- * the UI must reflect that downstream the platform aggregates ALL of
- * them into one centralized intelligence layer.
+ * Each card represents one OPERATIONAL DATASET (Sales Performance,
+ * Inventory Position, Advertising Performance, …). The card's
+ * visual weight goes to:
  *
- * Implementation today: per-platform validators are still distinct
- * upload kinds underneath (amazon_sales, walmart_sales, …) so the
- * existing parser pipeline keeps working. The UI groups them under
- * their operational category as "supported source formats". A future
- * canonical phase replaces them with one normalized kind per category;
- * the mapping layer already produces the marketplace-agnostic
- * Normalized* shape that consumes them, so engines/dashboards never
- * see the per-platform kinds.
+ *   1. The dataset identity (title, summary, canonical entity, dimensions)
+ *   2. Required attributes (what every row must carry)
+ *   3. Validation rules (what every row must satisfy)
+ *   4. Compatible ingestion connectors (small supporting line — names only)
+ *   5. Per-connector template downloads (collapsed by default)
+ *
+ * Marketplaces / connectors are NOT separate entities. They are
+ * ingestion paths into the same dataset. See CLAUDE.md
+ * "uploads are operational categories" + "UI hierarchy: operational
+ * first" memories.
  */
 
 interface SourceFormat {
@@ -32,16 +31,20 @@ interface SourceFormat {
   readonly filename: string;
   readonly headers: ReadonlyArray<string>;
   readonly sampleRows: ReadonlyArray<ReadonlyArray<string | number>>;
-  readonly notes: ReadonlyArray<string>;
 }
 
 interface OperationalCategory {
   readonly id: string;
-  readonly title: string;             // "Sales Performance"
-  readonly summary: string;            // what business question this answers
+  readonly title: string;              // "Sales Performance"
+  readonly summary: string;
   readonly canonicalEntity: string;    // e.g. "channel_sales"
-  readonly dimensions: ReadonlyArray<string>; // marketplace / region / fulfillment / ad_platform / ...
+  readonly dimensions: ReadonlyArray<string>;
+  readonly requiredAttributes: ReadonlyArray<string>;
+  readonly validationRules: ReadonlyArray<string>;
+  /** Ingestion paths feeding this dataset. */
   readonly formats: ReadonlyArray<SourceFormat>;
+  /** Future ingestion modes the operator can expect (API connectors, …). */
+  readonly futureIngestion: ReadonlyArray<string>;
   readonly comingSoon?: boolean;
 }
 
@@ -50,9 +53,23 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
     id: 'sales',
     title: 'Sales Performance',
     summary:
-      'Period-aggregated sales by SKU across every selling channel — sessions, orders, units, revenue, refunds. The same SKU may show up across Amazon US, Amazon CA, Walmart, Shopify, TikTok Shop in one upload.',
+      'Period-aggregated sales by SKU across every selling channel — sessions, orders, units, revenue, refunds. One file can mix Amazon US, Amazon CA, Walmart, Shopify, TikTok Shop rows; the marketplace lives as a column.',
     canonicalEntity: 'channel_sales',
     dimensions: ['marketplace', 'region', 'period', 'sku', 'fulfillment'],
+    requiredAttributes: [
+      'normalized SKU identifier',
+      'marketplace / channel code',
+      'period (start_date, end_date)',
+      'units, orders, revenue',
+      'currency (ISO 4217)',
+    ],
+    validationRules: [
+      'action ∈ add / update / remove (lifecycle-aware, replay-safe)',
+      'start_date ≤ end_date',
+      'all metric columns ≥ 0',
+      'B2B split columns ≤ their _total counterparts',
+      'currency is a 3-letter ISO code',
+    ],
     formats: [
       {
         kind: 'amazon_sales',
@@ -67,18 +84,12 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
           'refunds_total', 'refunds_b2b',
         ],
         sampleRows: [
-          ['upsert', '2026-05-01-amazon_us-WIDGET-A', '2026-05-01', '2026-05-07',
+          ['add', '2026-05-01-amazon_us-WIDGET-A', '2026-05-01', '2026-05-07',
            'amazon_us', 'WIDGET-A',
            1250, 180, 52, 8, 72, 12, '899.50', '142.40', '12.00', '0.00'],
-          ['upsert', '2026-05-01-amazon_us-WIDGET-B', '2026-05-01', '2026-05-07',
+          ['update', '2026-05-01-amazon_us-WIDGET-B', '2026-05-01', '2026-05-07',
            'amazon_us', 'WIDGET-B',
            832, 45, 28, 3, 28, 3, '684.40', '73.50', '0.00', '0.00'],
-        ],
-        notes: [
-          'action: upsert | delete',
-          'uid: stable, caller-supplied (e.g. period-channel-sku)',
-          'B2B columns must be ≤ their _total counterparts',
-          'start_date ≤ end_date',
         ],
       },
       {
@@ -93,19 +104,20 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
           'gmv', 'refunds', 'currency',
         ],
         sampleRows: [
-          ['upsert', '2026-05-01-walmart_us-WMT-1001', '2026-05-01', '2026-05-07',
+          ['add', '2026-05-01-walmart_us-WMT-1001', '2026-05-01', '2026-05-07',
            'walmart_us', 'WMT-1001', '0012345678905',
            940, 38, 46, '612.40', '8.00', 'USD'],
-          ['upsert', '2026-05-01-walmart_us-WMT-1002', '2026-05-01', '2026-05-07',
+          ['update', '2026-05-01-walmart_us-WMT-1002', '2026-05-01', '2026-05-07',
            'walmart_us', 'WMT-1002', '0012345678912',
            612, 21, 21, '478.20', '0.00', 'USD'],
         ],
-        notes: [
-          'item_id resolves to your platform_sku alias',
-          'gtin (UPC/EAN) is an optional fallback — products already mapped on Amazon by UPC resolve here automatically',
-          'orders ≤ page_views',
-        ],
       },
+    ],
+    futureIngestion: [
+      'Shopify, TikTok Shop, eBay, Etsy templates',
+      'Direct API connectors (Amazon SP-API, Walmart API, Shopify, TikTok)',
+      'Normalized ERP / BI exports (already in canonical shape)',
+      'Scheduled syncs + webhook ingestion',
     ],
   },
   {
@@ -115,6 +127,18 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
       'Point-in-time inventory positions per SKU across every pool — FBA per country, FBM, 3PL, owned warehouses, retail. Each pool reports total + per-state partitions (available / reserved / inbound / transfer / damaged).',
     canonicalEntity: 'channel_inventory',
     dimensions: ['marketplace', 'region', 'fulfillment_type', 'inventory_location', 'inventory_state'],
+    requiredAttributes: [
+      'normalized SKU identifier',
+      'inventory location code (FBA-US, WH-NJ, 3PL-LAX-01, …)',
+      'snapshot date',
+      'per-state quantities (available, reserved, inbound, transfer, damaged)',
+    ],
+    validationRules: [
+      'action ∈ add / update / remove',
+      'all quantities ≥ 0',
+      'sum of partition states ≤ total physical position',
+      'snapshot date is a valid calendar date',
+    ],
     formats: [
       {
         kind: 'amazon_inventory',
@@ -124,15 +148,16 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
         filename: 'amazon_inventory_template.csv',
         headers: ['action', 'uid', 'date', 'channel', 'sku', 'total', 'receiving', 'fc_transfer', 'reserved', 'damaged'],
         sampleRows: [
-          ['upsert', '2026-05-07-amazon_us-WIDGET-A', '2026-05-07', 'amazon_us', 'WIDGET-A', 420, 80, 15, 30, 2],
-          ['upsert', '2026-05-07-amazon_us-WIDGET-B', '2026-05-07', 'amazon_us', 'WIDGET-B', 150, 20, 5, 8, 0],
-        ],
-        notes: [
-          'receiving + fc_transfer + reserved + damaged ≤ total',
-          'total = physical position; the rest are partitions of it',
-          'Mapper splits each row into one canonical row per inventory_state',
+          ['add', '2026-05-07-amazon_us-WIDGET-A', '2026-05-07', 'amazon_us', 'WIDGET-A', 420, 80, 15, 30, 2],
+          ['update', '2026-05-07-amazon_us-WIDGET-B', '2026-05-07', 'amazon_us', 'WIDGET-B', 150, 20, 5, 8, 0],
         ],
       },
+    ],
+    futureIngestion: [
+      'Walmart / Shopify FBM templates',
+      '3PL connectors (ShipBob, ShipMonk, Deliverr, …)',
+      'Owned-warehouse WMS feeds',
+      'Direct API: Amazon SP-API inventory ledger, Shopify Inventory Levels',
     ],
   },
   {
@@ -142,6 +167,21 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
       'Period-aggregated ad spend + attributed sales per campaign / SKU / ad platform. Amazon Ads, Walmart Connect, Meta Ads, Google Ads all aggregate into one blended TACOS once they flow in.',
     canonicalEntity: 'channel_ads',
     dimensions: ['ad_platform', 'target_marketplace', 'region', 'campaign', 'sku'],
+    requiredAttributes: [
+      'campaign name + type',
+      'ad platform code (amazon_ads, meta_ads, google_ads, …)',
+      'target marketplace (where the spend drove into)',
+      'period (start_date, end_date)',
+      'impressions, clicks, cost, attributed sales',
+      'currency',
+    ],
+    validationRules: [
+      'action ∈ add / update / remove',
+      'clicks ≤ impressions',
+      'cost ≥ 0, attributed_sales ≥ 0',
+      'start_date ≤ end_date',
+      'aggregate campaign rows may carry sku=ALL when no single SKU applies',
+    ],
     formats: [
       {
         kind: 'amazon_ads',
@@ -155,19 +195,19 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
           'total_cost', 'sales', 'currency', 'platform', 'target_platform',
         ],
         sampleRows: [
-          ['upsert', '2026-05-01-WIDGET-A-SP', '2026-05-01', '2026-05-07',
+          ['add', '2026-05-01-WIDGET-A-SP', '2026-05-01', '2026-05-07',
            'Widget A — SP', 'sponsored_products', 'WIDGET-A',
            18450, 420, 28, '142.50', '599.40', 'USD', 'amazon', 'amazon_us'],
-          ['upsert', '2026-05-01-WIDGET-B-SP', '2026-05-01', '2026-05-07',
+          ['update', '2026-05-01-WIDGET-B-SP', '2026-05-01', '2026-05-07',
            'Widget B — SP', 'sponsored_products', 'WIDGET-B',
            9820, 180, 12, '68.90', '294.30', 'USD', 'amazon', 'amazon_us'],
         ],
-        notes: [
-          'clicks ≤ impressions',
-          'target_platform: marketplace the spend drove into (amazon_us, amazon_uk, …)',
-          'Aggregate campaign rows (no single SKU) may use ALL / * for sku_name',
-        ],
       },
+    ],
+    futureIngestion: [
+      'Walmart Connect, Meta Ads, Google Ads, TikTok Ads templates',
+      'Direct API connectors (Amazon Ads API, Meta Marketing API, Google Ads API)',
+      'Klaviyo / email-marketing attribution feeds',
     ],
   },
   {
@@ -177,28 +217,78 @@ const CATEGORIES: ReadonlyArray<OperationalCategory> = [
       'Non-FBA inventory pools — owned warehouses, 3PLs, retail. Feeds the same canonical inventory layer as marketplace inventory; the dimension distinguishes them (fulfillment_type, inventory_location_code).',
     canonicalEntity: 'channel_inventory',
     dimensions: ['inventory_location', 'fulfillment_type', 'inventory_state', 'ownership'],
+    requiredAttributes: [
+      'normalized SKU identifier',
+      'warehouse / location code',
+      'fulfillment type (owned_warehouse / 3pl / retail / dropship)',
+      'snapshot date',
+      'per-state quantities',
+      'ownership (owned / consigned / partner)',
+    ],
+    validationRules: [
+      'action ∈ add / update / remove',
+      'all quantities ≥ 0',
+      'warehouse code matches a registered warehouse in xb_master.warehouses',
+    ],
     formats: [],
+    futureIngestion: [
+      'CSV templates per WMS vendor',
+      'Direct integrations with common 3PLs and WMS systems',
+      'ERP inventory sync (NetSuite, SAP, Brightpearl, …)',
+    ],
     comingSoon: true,
   },
   {
     id: 'settlement',
-    title: 'Settlement',
+    title: 'Settlement Data',
     summary:
       'Marketplace financial settlements — fees, deductions, payouts. Drives the profitability engine alongside sales + ad spend + COGS.',
     canonicalEntity: 'channel_settlement',
     dimensions: ['marketplace', 'account', 'settlement_period', 'fee_type'],
+    requiredAttributes: [
+      'marketplace / account',
+      'settlement period',
+      'per-fee-type amounts',
+      'net payout',
+      'currency',
+    ],
+    validationRules: [
+      'action ∈ add / update / remove',
+      'fee subtotals reconcile to gross - deductions = net',
+      'currency is a 3-letter ISO code',
+    ],
     formats: [],
+    futureIngestion: [
+      'Amazon Settlement Report CSV',
+      'Walmart Settlement extract',
+      'Direct API: SP-API Finances, Walmart Settlement endpoint',
+    ],
     comingSoon: true,
   },
   {
     id: 'forecast_input',
-    title: 'Forecast Input',
+    title: 'Forecast Inputs',
     summary:
       'Operator-supplied forecast adjustments, promotion calendars, seasonality overrides. Feeds the forecasting engine alongside historical sales velocity.',
     canonicalEntity: 'forecast_inputs',
     dimensions: ['sku', 'period', 'adjustment_type'],
+    requiredAttributes: [
+      'normalized SKU identifier (or "ALL" for global adjustments)',
+      'period (start_date, end_date)',
+      'adjustment type (promotion / seasonality / event / manual_override)',
+      'adjustment magnitude (multiplier or absolute units)',
+    ],
+    validationRules: [
+      'action ∈ add / update / remove',
+      'adjustment magnitudes must be non-negative when expressed as multipliers',
+      'period bounds must not overlap with another adjustment of the same type for the same SKU',
+    ],
     formats: [],
-    comingSoon: true,
+    futureIngestion: [
+      'CSV templates for each adjustment type',
+      'Promotion calendar import from marketing tools',
+      'Direct integration with merchandising planning systems',
+    ],
   },
 ];
 
@@ -209,11 +299,11 @@ export function UploadTemplatesPanel() {
         <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
         <p>
           The product entity is the <span className="font-medium text-foreground">operational dataset</span> —
-          Sales Performance, Inventory Position, Advertising Performance, and so on. Each one accepts
-          many ingestion paths underneath (Amazon, Walmart, Shopify, future API connectors, normalized
-          ERP/BI exports). Every path lands in the same centralized intelligence layer, so engines,
-          dashboards, and reports never see "Amazon vs Walmart" — they see one blended view of your
-          business with marketplace as a filter dimension.
+          Sales Performance, Inventory Position, Advertising Performance, and so on. Every dataset
+          accepts many ingestion paths underneath (manual CSV per platform, future API connectors,
+          normalized ERP/BI exports). All paths land in the same centralized intelligence layer, so
+          engines + dashboards never see "Amazon vs Walmart" — they see one blended view with
+          marketplace as a filter dimension.
         </p>
       </div>
 
@@ -227,17 +317,9 @@ export function UploadTemplatesPanel() {
 }
 
 function CategoryCard({ category }: { category: OperationalCategory }) {
-  // Detail panel is collapsed by default — the operational dataset
-  // header is the primary content; the per-connector template is
-  // supplementary, expand-to-see.
-  const [openFormat, setOpenFormat] = useState<string | null>(null);
-
   return (
     <Card>
-      {/* ─── Primary: operational dataset identity ────────────────
-          Larger heading, summary, canonical entity, dimensions. This
-          is what the operator should anchor their mental model on —
-          the connector strip below is a supporting affordance. */}
+      {/* ─── Primary: operational dataset identity ──────────────── */}
       <CardHeader className="flex flex-col gap-2 pb-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -256,90 +338,135 @@ function CategoryCard({ category }: { category: OperationalCategory }) {
           ) : null}
         </div>
         <p className="text-sm text-muted-foreground">{category.summary}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wide">Canonical</span>
-            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">
-              {category.canonicalEntity}
-            </code>
-          </span>
-          <span className="inline-flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wide">Dimensions</span>
-            {category.dimensions.map((d) => (
-              <code key={d} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">
-                {d}
-              </code>
-            ))}
-          </span>
-        </div>
       </CardHeader>
 
-      {/* ─── Secondary: compatible ingestion formats ───────────────
-          Visually demoted — separator, small label, slim chip row,
-          collapsed detail. Frames every connector as one of many
-          ingestion paths into the same dataset, not the entity. */}
-      <CardContent className="pt-0">
-        <div className="border-t border-border pt-3">
-          {category.formats.length === 0 ? (
-            <div className="text-xs text-muted-foreground">
-              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide">
-                Compatible ingestion formats
-              </div>
-              <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-4">
-                Ingestion paths land here as connectors ship — manual templates first,
-                then direct API connectors, normalized ERP/BI exports, and webhook syncs.
-                The operational dataset is already designed around its dimensions, so
-                engines and dashboards will pick it up the moment data starts flowing.
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Compatible ingestion formats
-                </div>
-                <div className="text-[10px] text-muted-foreground">
-                  {category.formats.length} available · more connectors planned
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {category.formats.map((f) => {
-                  const isOpen = openFormat === f.kind;
-                  return (
-                    <button
-                      key={f.kind}
-                      type="button"
-                      onClick={() => setOpenFormat(isOpen ? null : f.kind)}
-                      className={
-                        isOpen
-                          ? 'rounded-md border border-navy bg-navy/5 px-2 py-1 text-[11px] font-medium text-navy'
-                          : 'rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground'
-                      }
-                    >
-                      {f.platform}
-                    </button>
-                  );
-                })}
-              </div>
+      <CardContent className="flex flex-col gap-4 pt-0">
+        {/* Canonical entity + dimensions */}
+        <Section label="Canonical entity">
+          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-foreground">
+            {category.canonicalEntity}
+          </code>
+        </Section>
 
-              {openFormat ? (
-                <SourceFormatDetail
-                  format={category.formats.find((f) => f.kind === openFormat)!}
-                />
-              ) : (
-                <div className="text-[11px] text-muted-foreground">
-                  Pick a format above to see its columns, sample rows, and download its CSV template.
-                </div>
-              )}
+        <Section label="Dimensions">
+          <ChipList items={category.dimensions} />
+        </Section>
+
+        <Section label="Required attributes">
+          <ul className="flex list-disc flex-col gap-0.5 pl-4 text-sm text-foreground">
+            {category.requiredAttributes.map((a) => (
+              <li key={a}>{a}</li>
+            ))}
+          </ul>
+        </Section>
+
+        <Section label="Validation rules">
+          <ul className="flex list-disc flex-col gap-0.5 pl-4 text-sm text-foreground">
+            {category.validationRules.map((r) => (
+              <li key={r}>{r}</li>
+            ))}
+          </ul>
+        </Section>
+
+        {/* ─── Secondary: compatible ingestion connectors ────────
+            Single supporting line listing connectors as names, with
+            an expandable "Download templates" subsection underneath.
+            No competing tabs — the dataset is the entity. */}
+        <Section
+          label="Compatible ingestion connectors"
+          hint={
+            category.formats.length === 0
+              ? 'Ingestion paths land here as connectors ship.'
+              : `${category.formats.length} available today · more planned`
+          }
+        >
+          {category.formats.length === 0 ? null : (
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-foreground">
+              {category.formats.map((f, i) => (
+                <span key={f.kind}>
+                  {f.platform}
+                  {i < category.formats.length - 1 ? <span className="text-muted-foreground"> · </span> : null}
+                </span>
+              ))}
             </div>
           )}
-        </div>
+
+          {category.futureIngestion.length > 0 ? (
+            <div className="mt-1.5 text-[11px] text-muted-foreground">
+              <span className="font-medium text-foreground">Planned:</span>{' '}
+              {category.futureIngestion.join(' · ')}
+            </div>
+          ) : null}
+        </Section>
+
+        {/* Downloadable templates — collapsed by default */}
+        {category.formats.length > 0 ? <TemplateDownloads formats={category.formats} /> : null}
       </CardContent>
     </Card>
   );
 }
 
-function SourceFormatDetail({ format }: { format: SourceFormat }) {
+function Section({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </div>
+        {hint ? <div className="text-[10px] text-muted-foreground">{hint}</div> : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ChipList({ items }: { items: ReadonlyArray<string> }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {items.map((d) => (
+        <code key={d} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground">
+          {d}
+        </code>
+      ))}
+    </div>
+  );
+}
+
+function TemplateDownloads({ formats }: { formats: ReadonlyArray<SourceFormat> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-md border border-border bg-muted/10">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/30 hover:text-foreground"
+      >
+        <span className="font-medium">
+          Downloadable templates{' '}
+          <span className="text-muted-foreground">({formats.length})</span>
+        </span>
+        <ChevronRight className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+      {open ? (
+        <ul className="divide-y divide-border border-t border-border">
+          {formats.map((f) => (
+            <TemplateRow key={f.kind} format={f} />
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function TemplateRow({ format }: { format: SourceFormat }) {
   function onDownload() {
     const lines: string[] = [format.headers.join(',')];
     for (const row of format.sampleRows) {
@@ -347,29 +474,21 @@ function SourceFormatDetail({ format }: { format: SourceFormat }) {
     }
     downloadCsv(lines.join('\r\n') + '\r\n', format.filename);
   }
-
-  // Supplementary drawer — visually framed as "details about an
-  // ingestion path", never as a primary entity.
   return (
-    <div className="flex flex-col gap-2.5 rounded-md border border-border bg-muted/10 p-3">
+    <li className="flex flex-col gap-2 px-3 py-2.5 text-xs">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2">
-          <FileText className="mt-0.5 h-3.5 w-3.5 text-muted-foreground" />
-          <div>
-            <div className="text-xs text-muted-foreground">
-              <span className="text-[10px] font-semibold uppercase tracking-wide">Ingestion path</span>
-              <span className="ml-1.5 text-foreground">{format.platform}</span>
-            </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">{format.description}</p>
+        <div>
+          <div className="text-foreground">
+            <span className="font-medium">{format.platform}</span>{' '}
+            <span className="text-muted-foreground">— {format.description}</span>
           </div>
         </div>
         <Button size="sm" variant="outline" onClick={onDownload}>
           <Download className="mr-1 h-3.5 w-3.5" />
-          Download CSV
+          CSV
         </Button>
       </div>
-
-      <details className="text-xs">
+      <details className="text-[11px]">
         <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
           Columns ({format.headers.length})
         </summary>
@@ -384,18 +503,7 @@ function SourceFormatDetail({ format }: { format: SourceFormat }) {
           ))}
         </div>
       </details>
-
-      <details className="text-xs">
-        <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-          Validation notes
-        </summary>
-        <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-foreground">
-          {format.notes.map((n) => (
-            <li key={n}>{n}</li>
-          ))}
-        </ul>
-      </details>
-    </div>
+    </li>
   );
 }
 

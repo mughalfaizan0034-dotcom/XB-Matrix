@@ -20,7 +20,7 @@ import {
  * state via WHERE filters.
  */
 export interface AmazonInventoryRow {
-  readonly action: 'upsert' | 'delete';
+  readonly action: 'add' | 'update' | 'remove';
   readonly uid: string;
   readonly date: string;
   readonly channel: string;

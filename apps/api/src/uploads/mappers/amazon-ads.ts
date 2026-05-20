@@ -15,7 +15,7 @@ import {
  * Validated row shape from the `amazon-ads` validator.
  */
 export interface AmazonAdsRow {
-  readonly action: 'upsert' | 'delete';
+  readonly action: 'add' | 'update' | 'remove';
   readonly uid: string;
   readonly startDate: string;
   readonly endDate: string;

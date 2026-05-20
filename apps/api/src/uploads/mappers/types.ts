@@ -145,8 +145,8 @@ export interface NormalizedSale {
   readonly refundsB2b: number;
   readonly currencyCode: string;             // ISO 4217
 
-  /** 'upsert' replaces by composite natural key; 'delete' removes. */
-  readonly action: 'upsert' | 'delete';
+  /** Lifecycle: 'add' creates new row, 'update' overwrites by natural key, 'remove' soft-deletes. */
+  readonly action: 'add' | 'update' | 'remove';
   readonly source: NormalizedSource;
 }
 
@@ -171,7 +171,7 @@ export interface NormalizedInventoryPosition {
   readonly positionDate: string;                 // YYYY-MM-DD
   readonly linkedShipmentId: string | null;      // FK to shipment_tracking when inbound/transfer
 
-  readonly action: 'upsert' | 'delete';
+  readonly action: 'add' | 'update' | 'remove';
   readonly source: NormalizedSource;
 }
 
@@ -210,7 +210,7 @@ export interface NormalizedAdPerformance {
   readonly attributedSales: number;
   readonly currencyCode: string;
 
-  readonly action: 'upsert' | 'delete';
+  readonly action: 'add' | 'update' | 'remove';
   readonly source: NormalizedSource;
 }
 

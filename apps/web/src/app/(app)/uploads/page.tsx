@@ -347,6 +347,31 @@ export default function UploadsPage() {
         }
       />
 
+      {/* Active-context banner — operators need an unambiguous signal
+          of WHERE their data will land, especially when bouncing
+          between workspaces. Only shown when a workspace is pinned;
+          cross-workspace mode is its own clear state via the subtitle. */}
+      {activeWorkspace ? (
+        <div className="flex items-center gap-3 rounded-md border border-navy/20 bg-navy/[0.04] px-4 py-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-navy text-white">
+            <Layers className="h-3.5 w-3.5" />
+          </span>
+          <div className="flex flex-col leading-tight">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Uploading into
+            </span>
+            <span className="text-sm text-foreground">
+              <span className="font-medium">{activeWorkspace.workspaceName}</span>
+              <span className="mx-1.5 text-muted-foreground">·</span>
+              <span className="text-muted-foreground">{activeWorkspace.organizationName}</span>
+            </span>
+          </div>
+          <span className="ml-auto inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
+            workspace-scoped
+          </span>
+        </div>
+      ) : null}
+
       <Tabs<'files' | 'history' | 'errors' | 'templates' | 'logs'>
         defaultValue={crossWorkspace ? 'history' : 'files'}
         items={[
