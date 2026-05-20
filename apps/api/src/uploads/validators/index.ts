@@ -9,6 +9,9 @@ import { inventoryValidator } from './inventory.js';
 import { amazonSalesValidator } from './amazon-sales.js';
 import { amazonInventoryValidator } from './amazon-inventory.js';
 import { amazonAdsValidator } from './amazon-ads.js';
+// Second-marketplace connector — proves the validator + mapper
+// abstraction is marketplace-agnostic. See CLAUDE.md Part 4.
+import { walmartSalesValidator } from './walmart-sales.js';
 import type { UploadValidator } from './types.js';
 
 /**
@@ -22,6 +25,7 @@ const VALIDATORS: Map<UploadKind, UploadValidator> = new Map([
   [amazonSalesValidator.kind, amazonSalesValidator],
   [amazonInventoryValidator.kind, amazonInventoryValidator],
   [amazonAdsValidator.kind, amazonAdsValidator],
+  [walmartSalesValidator.kind, walmartSalesValidator],
 ]);
 
 export function getValidator(kind: UploadKind): UploadValidator | null {

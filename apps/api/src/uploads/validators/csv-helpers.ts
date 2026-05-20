@@ -1,16 +1,15 @@
 /**
- * Shared parsing helpers for the spec-aligned Amazon validators
- * (amazon_sales, amazon_inventory, amazon_ads). Keeps each validator
- * file focused on its template columns instead of duplicating CSV
- * + cell parsing.
+ * Connector-agnostic CSV parsing helpers used by every per-kind
+ * validator (Amazon, Walmart, Shopify, …). The contents here are
+ * intentionally not tied to any one marketplace — they handle the
+ * generic shape every template shares: an `action` column ('upsert' |
+ * 'delete'), a `uid` column for composite-key idempotency, dates,
+ * currencies, counts, decimals.
  *
- * All three templates share:
- *   - `action` column ('upsert' | 'delete') — drives the canonical
- *     transform; for now we only validate it.
- *   - `uid` column — caller-supplied unique identifier for the
- *     composite key (channel/sku/period or campaign/sku/period).
- *     We validate non-empty + reasonable length.
- *   - Date fields (start_date/end_date or date) that must parse.
+ * Naming note: this file used to be `amazon-helpers.ts` when the
+ * platform only ingested Amazon reports. The contents were always
+ * generic; the name was the only Amazon coupling and was corrected
+ * when the Walmart connector landed.
  *
  * Validators don't insert canonical rows yet — they parse + validate
  * + produce a summary. Canonical inserts land when Spec 3 §10.9+

@@ -451,8 +451,9 @@ export default function UploadsPage() {
 
       <p className="text-xs text-muted-foreground">
         Files are stored privately in your workspace's bucket. Spec-aligned validators
-        (amazon_sales, amazon_inventory, amazon_ads) validate the spec templates;
-        canonical insertion lands once Spec 3 canonical tables ship. See{' '}
+        (amazon_sales, amazon_inventory, amazon_ads, walmart_sales) validate the
+        templates; the mapping layer translates rows to platform-agnostic normalized
+        entities; canonical insertion lands once Spec 3 canonical tables ship. See{' '}
         <Link href="/settings" className="underline-offset-2 hover:underline">
           Settings
         </Link>{' '}

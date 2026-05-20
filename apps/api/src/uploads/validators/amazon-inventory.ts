@@ -15,7 +15,7 @@ import {
   requiredString,
   stripBom,
   type Action,
-} from './amazon-helpers.js';
+} from './csv-helpers.js';
 
 /**
  * Amazon inventory validator — spec template (Part 1 §Uploads).

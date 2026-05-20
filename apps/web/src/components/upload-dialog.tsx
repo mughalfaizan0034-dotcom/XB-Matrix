@@ -16,12 +16,16 @@ import { describeError, useActiveWorkspace } from '@/lib/session';
 const MAX_BYTES = 32 * 1024 * 1024; // matches server-side cap in routes/uploads.ts
 
 const KIND_LABEL: Record<UploadKind, string> = {
-  generic:    'Generic file',
-  sales:      'Sales',
-  inventory:  'Inventory',
-  ad_spend:   'Ad spend',
-  shipments:  'Shipments',
-  returns:    'Returns',
+  generic:          'Generic file',
+  amazon_sales:     'Amazon — sales',
+  amazon_inventory: 'Amazon — inventory',
+  amazon_ads:       'Amazon — ads (PPC)',
+  walmart_sales:    'Walmart — sales',
+  sales:            'Sales (legacy)',
+  inventory:        'Inventory (legacy)',
+  ad_spend:         'Ad spend (legacy)',
+  shipments:        'Shipments',
+  returns:          'Returns',
 };
 
 interface Props {

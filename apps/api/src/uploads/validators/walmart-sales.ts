@@ -22,34 +22,44 @@ import {
 } from './csv-helpers.js';
 
 /**
- * Amazon ads validator — spec template (Part 1 §Uploads).
+ * Walmart sales validator — architectural-validation slice.
  *
- * Required columns:
+ * The point of this validator is NOT to be feature-complete with
+ * Walmart's actual seller reports. It exists to prove the connector
+ * abstraction holds: a non-Amazon ingestion source uses the same
+ * Validator → Mapper → resolveSku → NormalizedSale pipeline as Amazon,
+ * with no Amazon-specific behavior leaking into the downstream layers.
+ *
+ * Required columns (Walmart-native field names where they differ from
+ * Amazon — the validator captures them as-is; the mapper translates
+ * to the marketplace-agnostic NormalizedSale shape):
  *   action          — 'upsert' | 'delete'
- *   uid             — unique row identifier
+ *   uid             — caller-managed unique row id (idempotency)
  *   start_date      — period start
- *   end_date        — period end (inclusive)
- *   campaign_name   — campaign display name
- *   campaign_type   — e.g., sponsored_products, sponsored_brands
- *   sku_name        — SKU display name (string; not necessarily the SKU id)
- *   impressions     — non-negative int
- *   clicks          — non-negative int, ≤ impressions
- *   orders          — non-negative int (attributed orders), default 0
- *   total_cost      — non-negative decimal (ad spend)
- *   sales           — non-negative decimal (attributed sales), default 0
+ *   end_date        — inclusive period end
+ *   marketplace     — walmart_us (only US for now; Walmart MX/CA later)
+ *   item_id         — Walmart item identifier (resolves to platform_sku alias)
+ *   gtin            — optional secondary identifier (UPC/EAN/GTIN)
+ *   page_views      — Walmart's term for sessions (non-neg int)
+ *   orders          — non-neg int
+ *   units           — non-neg int
+ *   gmv             — Walmart's term for sales/revenue (non-neg decimal)
+ *   refunds         — non-neg decimal (default 0)
  *   currency        — 3-letter ISO
- *   platform        — e.g., amazon
- *   target_platform — channel/marketplace targeted (e.g., amazon_us)
  *
  * Sanity:
- *   - clicks ≤ impressions
  *   - start_date ≤ end_date
+ *   - orders ≤ page_views (lightweight smoke check; not all reports
+ *     guarantee this, so this is a warning-shaped error, not a hard
+ *     rule — kept as strict-mode for the validation slice)
  *
- * Canonical insertion into `ppc_performance_period` lands when
- * Spec 3 §10.9+ DDL ships.
+ * Note: Walmart does NOT have an Amazon-style B2B/total split, so the
+ * mapper will land NormalizedSale.*B2b columns as 0. That divergence
+ * is captured at the mapper edge, not in the canonical shape — engines
+ * read sessions_total / orders_total uniformly and aggregate.
  */
-export const amazonAdsValidator: UploadValidator = {
-  kind: 'amazon_ads',
+export const walmartSalesValidator: UploadValidator = {
+  kind: 'walmart_sales',
   async validate(input: ValidatorInput): Promise<ValidatorResult> {
     const text = stripBom(input.buffer.toString('utf8'));
 
@@ -115,42 +125,26 @@ export const amazonAdsValidator: UploadValidator = {
           columnsDetected,
           columnsMissing,
           errors,
-          extra: { mode: 'strict', kind: 'amazon_ads' },
+          extra: { mode: 'strict', kind: 'walmart_sales' },
         },
         errorMessage: `Validation failed: ${rejected} of ${records.length} rows have errors.`,
       };
     }
 
-    const distinctCampaigns = new Set(accepted.map((r) => r.campaignName)).size;
-    const distinctPlatforms = new Set(accepted.map((r) => r.platform)).size;
+    const distinctItems = new Set(accepted.map((r) => r.itemId)).size;
+    const distinctMarketplaces = new Set(accepted.map((r) => r.marketplace)).size;
     const totals = accepted.reduce(
       (a, r) => {
-        a.impressions += r.impressions;
-        a.clicks += r.clicks;
+        a.pageViews += r.pageViews;
         a.orders += r.orders;
-        a.cost += r.totalCost;
-        a.sales += r.sales;
+        a.units += r.units;
+        a.gmv += r.gmv;
+        a.refunds += r.refunds;
         return a;
       },
-      { impressions: 0, clicks: 0, orders: 0, cost: 0, sales: 0 },
+      { pageViews: 0, orders: 0, units: 0, gmv: 0, refunds: 0 },
     );
-    const derivedAcos =
-      totals.sales > 0 ? (totals.cost / totals.sales).toFixed(4) : null;
-    const derivedRoas =
-      totals.cost > 0 ? (totals.sales / totals.cost).toFixed(4) : null;
-    const dateRange =
-      accepted.length > 0
-        ? {
-            from: accepted.reduce(
-              (m, r) => (r.startDate < m ? r.startDate : m),
-              accepted[0]!.startDate,
-            ),
-            to: accepted.reduce(
-              (m, r) => (r.endDate > m ? r.endDate : m),
-              accepted[0]!.endDate,
-            ),
-          }
-        : null;
+    const dateRange = accepted.length > 0 ? rangeOf(accepted) : null;
     const actionCounts = accepted.reduce(
       (a, r) => {
         a[r.action] = (a[r.action] ?? 0) + 1;
@@ -170,19 +164,17 @@ export const amazonAdsValidator: UploadValidator = {
         errors: [],
         extra: {
           mode: 'strict',
-          kind: 'amazon_ads',
-          distinctCampaigns,
-          distinctPlatforms,
-          totalImpressions: totals.impressions,
-          totalClicks: totals.clicks,
-          totalAttributedOrders: totals.orders,
-          totalCost: totals.cost.toFixed(4),
-          totalAttributedSales: totals.sales.toFixed(4),
-          derivedAcos,
-          derivedRoas,
+          kind: 'walmart_sales',
+          distinctItems,
+          distinctMarketplaces,
+          totalPageViews: totals.pageViews,
+          totalOrders: totals.orders,
+          totalUnits: totals.units,
+          totalGmv: totals.gmv.toFixed(4),
+          totalRefunds: totals.refunds.toFixed(4),
           actionCounts,
           dateRange,
-          note: 'Validated; canonical insertion into ppc_performance_period lands when Spec 3 §10.9+ DDL ships.',
+          note: 'Validated; canonical insertion into channel_sales lands when Spec 3 §10.9+ DDL ships.',
         },
       },
     };
@@ -194,15 +186,13 @@ const REQUIRED = [
   'uid',
   'start_date',
   'end_date',
-  'campaign_name',
-  'campaign_type',
-  'sku_name',
-  'impressions',
-  'clicks',
-  'total_cost',
+  'marketplace',
+  'item_id',
+  'page_views',
+  'orders',
+  'units',
+  'gmv',
   'currency',
-  'platform',
-  'target_platform',
 ] as const;
 
 interface ParsedRow {
@@ -210,17 +200,15 @@ interface ParsedRow {
   uid: string;
   startDate: string;
   endDate: string;
-  campaignName: string;
-  campaignType: string;
-  skuName: string;
-  impressions: number;
-  clicks: number;
+  marketplace: string;
+  itemId: string;
+  gtin: string | null;
+  pageViews: number;
   orders: number;
-  totalCost: number;
-  sales: number;
+  units: number;
+  gmv: number;
+  refunds: number;
   currency: string;
-  platform: string;
-  targetPlatform: string;
 }
 
 type RowResult = { ok: true; row: ParsedRow } | { ok: false; errors: ValidationError[] };
@@ -233,24 +221,26 @@ function parseRow(raw: Record<string, string>, rowNumber: number): RowResult {
   const uid = requiredString(ctx, 'uid', raw.uid, 200);
   const startDate = requiredDate(ctx, 'start_date', raw.start_date);
   const endDate = requiredDate(ctx, 'end_date', raw.end_date);
-  const campaignName = requiredString(ctx, 'campaign_name', raw.campaign_name, 300);
-  const campaignType = requiredString(ctx, 'campaign_type', raw.campaign_type, 80);
-  const skuName = requiredString(ctx, 'sku_name', raw.sku_name, 200);
+  const marketplace = requiredString(ctx, 'marketplace', raw.marketplace, 80);
+  const itemId = requiredString(ctx, 'item_id', raw.item_id, 200);
+  const gtin = optionalString(ctx, 'gtin', raw.gtin, 40);
 
-  const impressions = requiredNonNegInt(ctx, 'impressions', raw.impressions);
-  const clicks = requiredNonNegInt(ctx, 'clicks', raw.clicks);
-  const orders = optionalNonNegInt(ctx, 'orders', raw.orders);
-  const totalCost = requiredNonNegDecimal(ctx, 'total_cost', raw.total_cost);
-  const sales = optionalNonNegDecimal(ctx, 'sales', raw.sales);
+  const pageViews = requiredNonNegInt(ctx, 'page_views', raw.page_views);
+  const orders = requiredNonNegInt(ctx, 'orders', raw.orders);
+  const units = requiredNonNegInt(ctx, 'units', raw.units);
+  const gmv = requiredNonNegDecimal(ctx, 'gmv', raw.gmv);
+  const refunds = optionalNonNegDecimal(ctx, 'refunds', raw.refunds);
   const currency = requiredCurrency(ctx, 'currency', raw.currency);
-  const platform = requiredString(ctx, 'platform', raw.platform, 80);
-  const targetPlatform = requiredString(ctx, 'target_platform', raw.target_platform, 80);
 
-  if (impressions >= 0 && clicks >= 0 && clicks > impressions) {
+  // Sanity: orders shouldn't exceed page_views. Walmart reports
+  // occasionally violate this (sessions sampling) — kept strict for
+  // the architectural-validation slice; loosen if real-world data
+  // shows it's too aggressive.
+  if (pageViews >= 0 && orders >= 0 && orders > pageViews) {
     errors.push({
       row: rowNumber,
-      column: 'clicks',
-      message: `clicks (${clicks}) cannot exceed impressions (${impressions}).`,
+      column: 'orders',
+      message: `orders (${orders}) cannot exceed page_views (${pageViews}).`,
     });
   }
   if (startDate && endDate && startDate > endDate) {
@@ -261,10 +251,6 @@ function parseRow(raw: Record<string, string>, rowNumber: number): RowResult {
     });
   }
 
-  // Length-check the optional-but-defined fields by passing through
-  // the optional helper for its length cap behavior.
-  optionalString(ctx, 'campaign_type', campaignType, 80);
-
   if (errors.length > 0 || !action) return { ok: false, errors };
 
   return {
@@ -274,19 +260,27 @@ function parseRow(raw: Record<string, string>, rowNumber: number): RowResult {
       uid,
       startDate,
       endDate,
-      campaignName,
-      campaignType,
-      skuName,
-      impressions,
-      clicks,
+      marketplace,
+      itemId,
+      gtin,
+      pageViews,
       orders,
-      totalCost,
-      sales,
+      units,
+      gmv,
+      refunds,
       currency,
-      platform,
-      targetPlatform,
     },
   };
+}
+
+function rangeOf(rows: ReadonlyArray<ParsedRow>): { from: string; to: string } {
+  return rows.reduce(
+    (acc, r) => ({
+      from: r.startDate < acc.from ? r.startDate : acc.from,
+      to: r.endDate > acc.to ? r.endDate : acc.to,
+    }),
+    { from: rows[0]!.startDate, to: rows[0]!.endDate },
+  );
 }
 
 function failed({
@@ -311,7 +305,7 @@ function failed({
       columnsDetected,
       columnsMissing: columnsMissing ?? [],
       errors,
-      extra: { mode: 'strict', kind: 'amazon_ads' },
+      extra: { mode: 'strict', kind: 'walmart_sales' },
     },
     errorMessage,
   };

@@ -2,6 +2,7 @@ import type { UploadKind } from '../../services/upload-service.js';
 import { amazonSalesMapper, type AmazonSalesRow } from './amazon-sales.js';
 import { amazonInventoryMapper, type AmazonInventoryRow } from './amazon-inventory.js';
 import { amazonAdsMapper, type AmazonAdsRow } from './amazon-ads.js';
+import { walmartSalesMapper, type WalmartSalesRow } from './walmart-sales.js';
 import type {
   NormalizedAdPerformance,
   NormalizedInventoryPosition,
@@ -25,6 +26,7 @@ const MAPPERS: Map<UploadKind, AnyMapper> = new Map([
   [amazonSalesMapper.kind, amazonSalesMapper as unknown as AnyMapper],
   [amazonInventoryMapper.kind, amazonInventoryMapper as unknown as AnyMapper],
   [amazonAdsMapper.kind, amazonAdsMapper as unknown as AnyMapper],
+  [walmartSalesMapper.kind, walmartSalesMapper as unknown as AnyMapper],
 ]);
 
 export function getMapper(kind: UploadKind): AnyMapper | null {
@@ -35,11 +37,13 @@ export {
   amazonSalesMapper,
   amazonInventoryMapper,
   amazonAdsMapper,
+  walmartSalesMapper,
 };
 export type {
   AmazonSalesRow,
   AmazonInventoryRow,
   AmazonAdsRow,
+  WalmartSalesRow,
   NormalizedSale,
   NormalizedInventoryPosition,
   NormalizedAdPerformance,

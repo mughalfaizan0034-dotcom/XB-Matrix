@@ -7,7 +7,18 @@ import { api } from './api-client';
 export type UploadStatus = 'queued' | 'uploading' | 'validating' | 'ready' | 'failed';
 
 export const UPLOAD_KINDS = [
+  // Generic passthrough — no validator, no canonical.
   'generic',
+
+  // Spec-aligned structured kinds. Each one has a validator + mapper
+  // pair under apps/api/src/uploads/{validators,mappers}/.
+  'amazon_sales',
+  'amazon_inventory',
+  'amazon_ads',
+  'walmart_sales',
+
+  // LEGACY kinds — kept so existing uploads still display correctly.
+  // No new uploads should be created against these.
   'sales',
   'inventory',
   'ad_spend',

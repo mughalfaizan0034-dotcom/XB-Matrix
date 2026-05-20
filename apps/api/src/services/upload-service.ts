@@ -24,6 +24,14 @@ export const UPLOAD_KINDS = [
   'amazon_inventory',
   'amazon_ads',
 
+  // Second-marketplace connector — architectural validation that the
+  // Connector → Validator → Mapper → NormalizedEntity pipeline is
+  // marketplace-agnostic. Walmart uses its native field names at the
+  // edge (item_id, page_views, gmv); the mapper translates to the
+  // same NormalizedSale shape Amazon produces. More platforms (Shopify,
+  // TikTok Shop, eBay, …) plug in the same way.
+  'walmart_sales',
+
   // LEGACY kinds shipped before the spec landed. Validators here write
   // to the temporary canonical tables (sales_orders, inventory_snapshots).
   // They stay live so existing test data isn't orphaned; bridged to the

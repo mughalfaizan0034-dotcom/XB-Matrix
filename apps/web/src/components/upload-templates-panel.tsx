@@ -5,10 +5,16 @@ import { Badge, Button, Card, CardContent } from '@xb/ui';
 import { downloadCsv } from '@xb/ui';
 
 /**
- * Downloadable CSV templates for the spec-aligned upload kinds.
- * One file per kind. Columns + sample rows are the source of truth for
+ * Downloadable CSV templates for every spec-aligned upload kind. One
+ * file per kind. Columns + sample rows are the source of truth for
  * what each validator expects — they MUST stay in lockstep with the
- * matching validator in apps/api/src/uploads/validators/amazon-*.ts.
+ * matching validator in apps/api/src/uploads/validators/.
+ *
+ * Connector-agnostic by design: Amazon, Walmart, and future Shopify /
+ * TikTok / eBay templates all sit side-by-side as separate kinds. The
+ * UI never assumes "marketplace = Amazon". Templates use each
+ * platform's native field names; mappers translate to the
+ * marketplace-agnostic Normalized* contracts downstream.
  */
 
 interface Template {
@@ -207,6 +213,68 @@ const TEMPLATES: ReadonlyArray<Template> = [
       'clicks must be ≤ impressions',
       'currency: 3-letter ISO (USD, GBP, EUR…)',
       'target_platform: marketplace targeted (amazon_us, amazon_uk, …)',
+    ],
+  },
+  {
+    kind: 'walmart_sales',
+    title: 'Walmart sales',
+    description:
+      'Walmart Item Performance: period-aggregated by (marketplace × item). Walmart-native fields (item_id, page_views, gmv); mapper translates to the same NormalizedSale shape Amazon produces.',
+    filename: 'walmart_sales_template.csv',
+    headers: [
+      'action',
+      'uid',
+      'start_date',
+      'end_date',
+      'marketplace',
+      'item_id',
+      'gtin',
+      'page_views',
+      'orders',
+      'units',
+      'gmv',
+      'refunds',
+      'currency',
+    ],
+    sampleRows: [
+      [
+        'upsert',
+        '2026-05-01-walmart_us-WMT-1001',
+        '2026-05-01',
+        '2026-05-07',
+        'walmart_us',
+        'WMT-1001',
+        '0012345678905',
+        940,
+        38,
+        46,
+        '612.40',
+        '8.00',
+        'USD',
+      ],
+      [
+        'upsert',
+        '2026-05-01-walmart_us-WMT-1002',
+        '2026-05-01',
+        '2026-05-07',
+        'walmart_us',
+        'WMT-1002',
+        '0012345678912',
+        612,
+        21,
+        21,
+        '478.20',
+        '0.00',
+        'USD',
+      ],
+    ],
+    notes: [
+      'action: upsert | delete',
+      'uid: stable, caller-supplied (e.g. period-marketplace-item)',
+      'item_id: Walmart item identifier (resolves to platform_sku alias)',
+      'gtin: optional. When item_id has no alias yet, the mapper falls back to GTIN — so a product mapped via Amazon UPC resolves on Walmart too with no extra mapping',
+      'orders must be ≤ page_views',
+      'currency: 3-letter ISO',
     ],
   },
 ];
