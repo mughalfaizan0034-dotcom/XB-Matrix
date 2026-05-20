@@ -14,11 +14,15 @@ import {
   DropdownMenu,
   exportRowsToCsv,
   PageHeader,
+  TabPanel,
+  Tabs,
   useDataTableState,
   useToast,
   type ColumnDef,
   type DropdownMenuItem,
 } from '@xb/ui';
+import { UploadTemplatesPanel } from '@/components/upload-templates-panel';
+import { UploadValidationErrorsPanel } from '@/components/upload-validation-errors-panel';
 import { useActiveWorkspace, useSession, describeError } from '@/lib/session';
 import {
   useRetryUpload,
@@ -238,6 +242,11 @@ export default function UploadsPage() {
       : null,
   ].filter(Boolean) as Array<{ key: string; label: string; onRemove: () => void }>;
 
+  // Tabs follow the spec (Part 1 §Uploads): Files / History / Validation
+  // Errors / Templates / Processing Logs. Files = new-upload affordance +
+  // recent uploads (compact). History = full filterable/sortable DataTable.
+  // Validation Errors = drill into failed uploads. Templates = downloadable
+  // CSV templates. Processing Logs = (placeholder) per-upload event log.
   return (
     <div className="flex flex-col gap-5 p-6 lg:p-8">
       <PageHeader
@@ -258,6 +267,71 @@ export default function UploadsPage() {
         }
       />
 
+      <Tabs<'files' | 'history' | 'errors' | 'templates' | 'logs'>
+        defaultValue="files"
+        items={[
+          { key: 'files',     label: 'Upload Files' },
+          { key: 'history',   label: 'Upload History' },
+          { key: 'errors',    label: 'Validation Errors' },
+          { key: 'templates', label: 'Templates' },
+          { key: 'logs',      label: 'Processing Logs' },
+        ]}
+      >
+        {/* ---- Upload Files: new upload + most recent --------------- */}
+        <TabPanel tabKey="files" className="pt-4">
+          <div className="flex flex-col gap-3">
+            <Card>
+              <CardContent className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="font-medium text-foreground">New upload</div>
+                  <p className="text-xs text-muted-foreground">
+                    Drop a CSV / XLSX / JSON. Max 32 MB. Pick the matching kind so the right
+                    validator runs.
+                  </p>
+                </div>
+                <Button size="sm" onClick={() => setShowUpload(true)}>
+                  <UploadIcon className="mr-1 h-3.5 w-3.5" /> Upload a file
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Recent uploads (compact list) — last 5, sortable by created_at desc.
+                Full filterable view lives in the History tab. */}
+            <Card>
+              <CardContent className="pt-5">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Recent uploads
+                </div>
+                {rows.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    No uploads yet for this workspace.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {rows.slice(0, 5).map((u) => (
+                      <li key={u.id} className="flex items-center justify-between gap-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => setOpenUploadId(u.id)}
+                          className="min-w-0 flex-1 text-left hover:text-navy"
+                        >
+                          <div className="truncate text-sm font-medium text-foreground">{u.originalFilename}</div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {u.uploadKind} · {formatDateTime(u.createdAt)}
+                          </div>
+                        </button>
+                        <Badge tone={STATUS_TONE[u.uploadStatus]}>{STATUS_LABEL[u.uploadStatus]}</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabPanel>
+
+        {/* ---- Upload History: full DataTable ----------------------- */}
+        <TabPanel tabKey="history" className="pt-4">
       <div className="flex flex-col gap-3">
         <DataTableToolbar<UploadSummary>
           columns={COLUMNS}
@@ -342,6 +416,32 @@ export default function UploadsPage() {
           ) : null}
         </div>
       </div>
+        </TabPanel>
+
+        {/* ---- Validation Errors --------------------------------- */}
+        <TabPanel tabKey="errors" className="pt-4">
+          <UploadValidationErrorsPanel
+            uploads={rows}
+            onOpenDetail={(id) => setOpenUploadId(id)}
+          />
+        </TabPanel>
+
+        {/* ---- Templates ----------------------------------------- */}
+        <TabPanel tabKey="templates" className="pt-4">
+          <UploadTemplatesPanel />
+        </TabPanel>
+
+        {/* ---- Processing Logs (placeholder) -------------------- */}
+        <TabPanel tabKey="logs" className="pt-4">
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              Per-upload processing logs (validation runs, canonicalization jobs, retry attempts)
+              land here once async workers ship. Until then, lifecycle events are visible in each
+              upload's detail drawer.
+            </CardContent>
+          </Card>
+        </TabPanel>
+      </Tabs>
 
       <UploadDialog open={showUpload} onClose={() => setShowUpload(false)} />
       <UploadDetailDrawer
@@ -350,9 +450,9 @@ export default function UploadsPage() {
       />
 
       <p className="text-xs text-muted-foreground">
-        Files are stored privately in your workspace's bucket. Per-module validators
-        (sales, inventory, ad spend…) land with each business module — until then,
-        uploads are accepted and retained but not parsed. See{' '}
+        Files are stored privately in your workspace's bucket. Spec-aligned validators
+        (amazon_sales, amazon_inventory, amazon_ads) validate the spec templates;
+        canonical insertion lands once Spec 3 canonical tables ship. See{' '}
         <Link href="/settings" className="underline-offset-2 hover:underline">
           Settings
         </Link>{' '}

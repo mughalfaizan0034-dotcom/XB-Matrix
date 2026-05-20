@@ -12,7 +12,22 @@ import { getValidator } from '../uploads/validators/index.js';
 export type UploadStatus = 'queued' | 'uploading' | 'validating' | 'ready' | 'failed';
 
 export const UPLOAD_KINDS = [
+  // Generic passthrough (no parsing, no canonical) — for PDFs, unsupported
+  // exports, arbitrary files.
   'generic',
+
+  // Spec-aligned structured kinds (Part 1 §Uploads, Part 3 direction).
+  // Validators parse + validate against the documented template column
+  // lists. Canonical insertion lands when Spec 3 §10.9+ DDL ships
+  // (sales_performance_period, inventory_position, ppc_performance_period).
+  'amazon_sales',
+  'amazon_inventory',
+  'amazon_ads',
+
+  // LEGACY kinds shipped before the spec landed. Validators here write
+  // to the temporary canonical tables (sales_orders, inventory_snapshots).
+  // They stay live so existing test data isn't orphaned; bridged to the
+  // new shape when canonical tables ship, then dropped.
   'sales',
   'inventory',
   'ad_spend',
