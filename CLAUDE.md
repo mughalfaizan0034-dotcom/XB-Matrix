@@ -134,14 +134,24 @@ architecture (reused contracts with zero downstream change).
 
 ## Next priorities (in order)
 
-1. Upload management — spec-aligned validators for the 3 datasets.
-2. Permissions matrix UI — workspace × user × access_level with
-   page-level overrides + auto `CUSTOM` state.
-3. Workspace-scoped, engine-driven dashboards.
-4. Calculation engines (awaiting canonical + summary DDL).
-5. Reports generation engine.
-6. Forecasting / intelligence layers.
-7. AI copilots.
+AI-ready intelligence program — deterministic engines first, AI strictly
+on top of engine output. Full detail + intelligence-API catalogue:
+`docs/engines.md`.
+
+1. Sales intelligence engine
+2. Inventory intelligence engine
+3. Advertising intelligence engine
+4. Dashboard KPI / trend system
+5. Operational alerts layer
+6. AI-ready intelligence APIs — one service layer feeding
+   dashboards · reports · alerts · AI
+7. AI assistant shell — floating, workspace-scoped, streaming
+8. AI insight summaries — deterministic insight feed
+9. AI recommendation engine
+10. Forecasting + automation
+
+AI consumes deterministic engine outputs / KPIs — never raw uploads —
+and inherits the active workspace session as its scope.
 
 Pending reconciliation: legacy `sales_orders` / `inventory_snapshots`
 canonical tables → replace with `channel_sales` / `channel_inventory`

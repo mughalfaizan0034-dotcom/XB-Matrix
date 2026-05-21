@@ -124,9 +124,97 @@ Reports module → download / archive. Reports auto-archive after 30 days
 (PDF removed, metadata kept); analytical data stays permanently in
 canonical tables.
 
-## AI augmentation
+**Reports module UI (when built):** the report list must surface an
+`archived` status. A report is `archived` once it passes 30 days
+(derive from `generated_at`, or read a stored status if the worker
+sets one) — the row stays listed but is marked archived and its
+download action is disabled/regenerate-only, since the PDF is purged.
+Statuses: `ready` (downloadable) · `archived` (>30d, metadata only) ·
+`generating` / `failed` as the generation engine needs them.
 
-AI explains engine outputs; AI is never the source of truth. Contract:
-engine → numbers, AI → narrative over numbers. Provider-agnostic
-(`packages/ai`); free providers (Groq, OpenRouter, Ollama) first, paid
-ones drop in later. Core platform must not depend on paid models.
+## Intelligence layer & AI
+
+XB Matrix is an AI-ready operational intelligence platform — not a
+chatbot bolted onto uploads. AI sits **on top of** the intelligence
+layer, never on raw uploads or spreadsheets.
+
+```
+Uploads → Validators → Mappers → SKU Resolution → Canonical Tables
+  → Intelligence Engines → KPIs / Trends / Insights
+  → AI Interpretation Layer → Chat / Recommendations / Automation
+```
+
+`Uploads → AI` directly is wrong. AI consumes only deterministic engine
+output: validated metrics, normalized entities, aggregated intelligence,
+recommendation layers. That keeps calculations explainable, outputs
+trustworthy, and insights consistent.
+
+### One intelligence layer
+
+The engines expose **reusable workspace-scoped intelligence services** —
+the single layer that powers dashboards, reports, alerts, *and* AI. Not
+page-specific calculations.
+
+Representative services (all take a workspace context, return
+deterministic engine output):
+
+```
+getWorkspaceKPIs()          getHighTacosSkus()
+getSalesTrends()            getLowDosSkus()
+getInventoryRisks()         getRefundAnomalies()
+getAdvertisingPerformance() getMarketplaceBreakdowns()
+getLowPerformingProducts()  getTopMovers()
+getDecliningSkus()
+```
+
+Dashboard, Reports, Alerts, and the AI assistant all call these — never
+their own one-off math.
+
+### AI behaviour
+
+The assistant reasons over trends, KPIs, inventory states, TACOS/ROAS,
+DOS, sales velocity, refund behaviour, marketplace breakdowns, and
+operational anomalies — **not** generic LLM guessing. It behaves like an
+operations analyst / inventory planner / commerce strategist, not a
+support chatbot. Engine → numbers; AI → narrative + recommendations over
+those numbers. AI is never the source of truth.
+
+Provider-agnostic (`packages/ai`); free providers (Groq, OpenRouter,
+Ollama) first, paid ones drop in later. Core platform must not depend on
+paid models.
+
+### AI is workspace-scoped (security)
+
+The assistant inherits the **active workspace session** as its
+operational context — org scope, role permissions, workspace isolation.
+No cross-workspace reasoning, no cross-org leakage, no global memory
+bleed. Same rule as every other write/read context (see
+`pipeline.md` and the workspace-write-context contract).
+
+### Engines stay marketplace-agnostic
+
+AI consumes workspace-level blended intelligence. Marketplace/platform
+is a filter / dimension / grouping key — never a separate AI system. One
+assistant answers blended, marketplace-specific, SKU-specific, and
+warehouse-specific questions from the same engine infrastructure.
+
+## Implementation order
+
+Deterministic operational math must be correct and trustworthy before
+AI layers deepen. Build in this order:
+
+1. Sales intelligence engine
+2. Inventory intelligence engine
+3. Advertising intelligence engine
+4. Dashboard KPI / trend system
+5. Operational alerts layer
+6. AI-ready intelligence APIs (consolidate 1–4 into the service catalogue)
+7. AI assistant shell (floating, workspace-aware, streaming, scoped)
+8. AI insight summaries (deterministic insight feed first)
+9. AI recommendation engine (inventory / ads / sales / pricing)
+10. Forecasting + automation
+
+Phases 1–5 are deterministic engines + UI. Phase 8's insight feed is
+deterministic rule output ("Sales declined 18% WoW", "stockout risk in
+12 days") before any autonomous AI. Each slice is manually verified for
+KPI/TACOS/DOS/trend correctness and workspace isolation before the next.
