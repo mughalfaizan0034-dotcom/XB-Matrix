@@ -134,24 +134,40 @@ architecture (reused contracts with zero downstream change).
 
 ## Next priorities (in order)
 
-AI-ready intelligence program — deterministic engines first, AI strictly
-on top of engine output. Full detail + intelligence-API catalogue:
-`docs/engines.md`.
+### Permission program — enterprise workspace × module × access level
 
-1. Sales intelligence engine
-2. Inventory intelligence engine
-3. Advertising intelligence engine
-4. Dashboard KPI / trend system
-5. Operational alerts layer
-6. AI-ready intelligence APIs — one service layer feeding
-   dashboards · reports · alerts · AI
-7. AI assistant shell — floating, workspace-scoped, streaming
-8. AI insight summaries — deterministic insight feed
-9. AI recommendation engine
-10. Forecasting + automation
+Foundational authorization layer before deeper AI / automation. Same
+permission layer flows through pages, APIs, uploads, dashboard data,
+exports, AI, future automations. Detail: `docs/permissions.md`.
 
-AI consumes deterministic engine outputs / KPIs — never raw uploads —
-and inherits the active workspace session as its scope.
+P1. Permission schema stabilization (access levels `none / view / edit /
+    admin`, migration 0021)
+P2. Workspace-assignment + module-grant service
+P3. Resolver providers wired to `workspace_permissions` +
+    `page_permissions`
+P4. Radio-matrix permissions UI (workspace × module × level)
+P5. Sidebar / route module-visibility enforcement
+P6. Upload / action enforcement (uploads, SKU aliases, future writes)
+P7. AI permission inheritance
+P8. Permission audit logging + preset role templates
+
+### AI-ready intelligence program
+
+Deterministic engines first, AI strictly on top of engine output. AI
+inherits both the active workspace session AND the user's permission
+scope. Detail + intelligence-API catalogue: `docs/engines.md`.
+
+A1. Sales intelligence engine
+A2. Inventory intelligence engine
+A3. Advertising intelligence engine
+A4. Dashboard KPI / trend system
+A5. Operational alerts layer
+A6. AI-ready intelligence APIs — one service layer feeding
+    dashboards · reports · alerts · AI
+A7. AI assistant shell — floating, workspace-scoped, streaming
+A8. AI insight summaries — deterministic insight feed
+A9. AI recommendation engine
+A10. Forecasting + automation
 
 Pending reconciliation: legacy `sales_orders` / `inventory_snapshots`
 canonical tables → replace with `channel_sales` / `channel_inventory`

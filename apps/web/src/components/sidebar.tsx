@@ -15,6 +15,8 @@ import {
   Upload,
 } from 'lucide-react';
 import { cn } from '@xb/ui/lib/cn';
+import { useSession } from '@/lib/session';
+import { useAccessibleWorkspaces } from '@/lib/api-workspaces-switch';
 
 interface NavItem {
   readonly label: string;
@@ -37,13 +39,28 @@ const NAV: ReadonlyArray<NavItem> = [
 
 /**
  * Nav rows always navigate — every workspace-scoped page handles its
- * own "pick a workspace" empty state, so the previous behavior of
- * locking the link + toasting on click was redundant friction. Users
- * land on the module, see the page-local empty state with a clear
- * pointer to the topbar switcher, and pick from there.
+ * own "pick a workspace" empty state.
+ *
+ * Visibility: organization users with NO accessible workspaces collapse
+ * the nav to Settings only. There's nothing useful for them on Dashboard
+ * / Sales / Uploads / etc. without a workspace, and Settings still
+ * hosts the self-service profile (display name + password change). The
+ * full nav returns the moment an admin grants them workspace access.
+ *
+ * Internal users (super_admin / internal_manager / internal_staff) keep
+ * the full nav regardless — they always have platform context to work
+ * with via /select-workspace.
  */
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: user } = useSession();
+  const { data: accessible } = useAccessibleWorkspaces();
+
+  const isOrgUserWithNoWorkspaces =
+    user?.userKind === 'organization' && (accessible?.length ?? 0) === 0;
+  const visibleNav = isOrgUserWithNoWorkspaces
+    ? NAV.filter((item) => item.href === '/settings')
+    : NAV;
 
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-white lg:flex">
@@ -54,7 +71,7 @@ export function Sidebar() {
         <span className="font-heading text-base font-semibold text-foreground">Matrix</span>
       </div>
       <nav className="flex flex-1 flex-col gap-0.5 p-3">
-        {NAV.map((item) => {
+        {visibleNav.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.href || pathname.startsWith(item.href + '/');
           return (
@@ -77,7 +94,7 @@ export function Sidebar() {
       <div className="border-t border-border p-3 text-xs text-muted-foreground">
         {/* Stays below V1.0.0 until the final launch. Bump on every push —
             patch most of the time, minor for bigger slices. */}
-        V0.18.2
+        V0.18.3
       </div>
     </aside>
   );

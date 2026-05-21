@@ -57,6 +57,30 @@ export function useAdminResetPassword() {
   });
 }
 
+/** Self-service: update the current user's display name. */
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (displayName: string) =>
+      api.patch<{ user: UserSummary }>('/v1/auth/me', { displayName }).then((r) => r.user),
+    onSuccess: () => {
+      // /me drives the topbar avatar + session display name — refresh it.
+      qc.invalidateQueries({ queryKey: ['session', 'me'] });
+    },
+  });
+}
+
+/** Self-service: change own password (requires current password). */
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: ({ currentPassword, newPassword }: { currentPassword: string; newPassword: string }) =>
+      api.post<{ changed: boolean }>('/v1/auth/change-password', {
+        currentPassword,
+        newPassword,
+      }),
+  });
+}
+
 /** Remove a user — soft delete. Idempotent, no row-version required. */
 export function useRemoveUser() {
   const qc = useQueryClient();

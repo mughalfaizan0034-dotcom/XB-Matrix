@@ -10,6 +10,7 @@ import { useOrganizations, type Organization } from '@/lib/api-orgs';
 import { OrganizationCard } from '@/components/organization-card';
 import { NewOrganizationDialog } from '@/components/new-organization-dialog';
 import { InternalUsersPanel } from '@/components/internal-users-panel';
+import { ProfileSection } from '@/components/profile-section';
 import { usePersistedStringSet } from '@/lib/use-persisted-set';
 import { usePersistedString } from '@/lib/use-persisted-string';
 import { useScrolledPast } from '@/lib/use-scrolled';
@@ -340,9 +341,8 @@ function EmptyState({
       </div>
     );
   }
-  return (
-    <div className="rounded-lg border border-dashed border-border bg-card px-6 py-12 text-center text-sm text-muted-foreground">
-      No organization assigned to your account.
-    </div>
-  );
+  // No organization assigned — render the self-service profile section
+  // so the user can at least manage their own display name and password
+  // while waiting for an admin to grant access.
+  return <ProfileSection />;
 }

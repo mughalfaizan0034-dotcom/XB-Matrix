@@ -9,6 +9,7 @@ import {
   signIn,
   signOut,
 } from '../services/auth-service.js';
+import { changeOwnPassword, updateOwnProfile } from '../services/users-service.js';
 import { loadActiveWorkspaceForSession } from '../services/workspace-service.js';
 import { rateLimit } from '../lib/rate-limit.js';
 import { ok } from '../lib/http-helpers.js';
@@ -94,6 +95,25 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       ? await loadActiveWorkspaceForSession(app, req.actor, req.actor.sessionId)
       : null;
     return ok({ user, activeWorkspace }, req.id);
+  });
+
+  // Self-service: edit own display name.
+  app.patch('/me', async (req) => {
+    const actor = req.requireActor();
+    const body = z.object({ displayName: z.string().min(1).max(200) }).parse(req.body);
+    const user = await updateOwnProfile(app, actor, body);
+    return ok({ user }, req.id);
+  });
+
+  // Self-service: change own password (requires current password).
+  app.post('/change-password', async (req) => {
+    const actor = req.requireActor();
+    const body = z.object({
+      currentPassword: z.string().min(1).max(200),
+      newPassword: z.string().min(12).max(200),
+    }).parse(req.body);
+    await changeOwnPassword(app, actor, body.currentPassword, body.newPassword);
+    return ok({ changed: true }, req.id);
   });
 
   /**

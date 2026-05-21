@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import type { ActorContext, OrganizationId, UserId } from '@xb/types';
 import { ForbiddenError } from '@xb/auth';
-import { hashPassword } from '../lib/password.js';
+import { hashPassword, verifyPassword } from '../lib/password.js';
 import {
   ConcurrencyError,
   ConflictError,
@@ -345,6 +345,76 @@ export async function createUser(
 // ---------------------------------------------------------------------------
 // Admin password reset (no email lifecycle)
 // ---------------------------------------------------------------------------
+
+/**
+ * Self-service: update the current actor's user profile (display name
+ * only — username and email are not user-editable). Runs inside
+ * withConnection so the audit trigger captures the actor context.
+ */
+export async function updateOwnProfile(
+  app: FastifyInstance,
+  actor: ActorContext,
+  input: { displayName: string },
+): Promise<UserSummary> {
+  const name = input.displayName.trim();
+  if (name.length === 0 || name.length > 200) {
+    throw new SemanticError('Display name must be 1–200 characters.', 'invalid_display_name');
+  }
+  return app.withConnection(actor, async (client) => {
+    const { rows } = await client.query<UserRow>(
+      `UPDATE xb_core.users
+          SET display_name = $2,
+              updated_by_actor_id = $3
+        WHERE actor_id = $1 AND deleted_at IS NULL
+        RETURNING id, actor_id, username, email, display_name, user_kind,
+                  organization_id, internal_user_role, organization_user_role,
+                  user_status, email_verified_at, last_login_at, created_at,
+                  row_version`,
+      [actor.actorId, name, actor.actorId],
+    );
+    if (rows.length === 0) throw new NotFoundError('user', actor.actorId);
+    return rowToSummary(rows[0]!);
+  });
+}
+
+/**
+ * Self-service: change the current actor's password. Requires the
+ * current password as proof — distinct from adminResetPassword which
+ * is the admin-resets-someone-else flow. Does NOT revoke sibling
+ * sessions; a deliberate password change shouldn't kick the user out
+ * on other devices.
+ */
+export async function changeOwnPassword(
+  app: FastifyInstance,
+  actor: ActorContext,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  if (newPassword.length < 12 || newPassword.length > 200) {
+    throw new SemanticError('New password must be 12–200 characters.', 'weak_password');
+  }
+  // Read the current hash directly — users-by-actor lookup, not RLS-
+  // sensitive since it scopes to a single row keyed by actor_id.
+  const { rows } = await app.pg.query<{ password_hash: string }>(
+    `SELECT password_hash FROM xb_core.users
+      WHERE actor_id = $1 AND deleted_at IS NULL`,
+    [actor.actorId],
+  );
+  if (rows.length === 0) throw new NotFoundError('user', actor.actorId);
+  const ok = await verifyPassword(currentPassword, rows[0]!.password_hash);
+  if (!ok) {
+    throw new SemanticError('Current password is incorrect.', 'wrong_current_password');
+  }
+  const hash = await hashPassword(newPassword);
+  await app.pg.query(
+    `UPDATE xb_core.users
+        SET password_hash = $2,
+            password_changed_at = now(),
+            updated_by_actor_id = $3
+      WHERE actor_id = $1`,
+    [actor.actorId, hash, actor.actorId],
+  );
+}
 
 export async function adminResetPassword(
   app: FastifyInstance,
