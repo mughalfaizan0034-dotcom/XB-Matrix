@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Building2, Layers, ArrowRight, Upload as UploadIcon } from 'lucide-react';
 import {
   Badge,
@@ -11,57 +12,55 @@ import {
   CardHeader,
   CardTitle,
   Metric,
-  useToast,
 } from '@xb/ui';
 import {
-  describeError,
   useActiveWorkspace,
-  useSession,
   type ActiveWorkspaceSummary,
 } from '@/lib/session';
-import {
-  useAccessibleWorkspaces,
-  useSetActiveWorkspace,
-  type AccessibleWorkspace,
-} from '@/lib/api-workspaces-switch';
+import { workspaceTypeLabel } from '@/lib/api-workspaces';
 import { useSalesOrders } from '@/lib/api-sales';
 import { useInventory } from '@/lib/api-inventory';
 
 const DAYS_30_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * The dashboard is workspace-scoped — it cannot render without an
+ * operational context. When no workspace is pinned (fresh login,
+ * session restore, or "All workspaces" mode) we route to the full
+ * /select-workspace picker rather than showing dashboard chrome.
+ * No dashboard data renders before a workspace context exists.
+ */
 export default function DashboardPage() {
-  const { data: user } = useSession();
+  const router = useRouter();
   const { data: activeWorkspace, isLoading: activeLoading } = useActiveWorkspace();
-  const { data: accessible } = useAccessibleWorkspaces();
+
+  useEffect(() => {
+    if (!activeLoading && !activeWorkspace) {
+      router.replace('/select-workspace?next=/dashboard');
+    }
+  }, [activeLoading, activeWorkspace, router]);
+
+  if (activeLoading || !activeWorkspace) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-6 w-6 animate-pulse rounded-full bg-muted" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 p-6 lg:p-8">
       <div className="flex flex-col gap-2">
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Dashboard</h1>
-        {activeWorkspace ? (
-          <p className="text-sm text-muted-foreground">
-            Operational overview for{' '}
-            <span className="font-medium text-foreground">{activeWorkspace.workspaceName}</span>
-            <span className="mx-1.5 text-muted-foreground">·</span>
-            <span>{activeWorkspace.organizationName}</span>
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {user?.isInternalManager
-              ? 'Pick a workspace from the topbar to scope the view.'
-              : 'Pick a workspace to begin.'}
-          </p>
-        )}
+        <p className="text-sm text-muted-foreground">
+          Operational overview for{' '}
+          <span className="font-medium text-foreground">{activeWorkspace.workspaceName}</span>
+          <span className="mx-1.5 text-muted-foreground">·</span>
+          <span>{activeWorkspace.organizationName}</span>
+        </p>
       </div>
 
-      {activeLoading ? null : activeWorkspace ? (
-        <ActiveDashboard workspace={activeWorkspace} />
-      ) : (
-        <NoWorkspaceState
-          accessible={accessible ?? []}
-          isManager={user?.isInternalManager ?? false}
-        />
-      )}
+      <ActiveDashboard workspace={activeWorkspace} />
     </div>
   );
 }
@@ -269,95 +268,11 @@ function ActiveDashboard({ workspace }: { workspace: ActiveWorkspaceSummary }) {
   );
 }
 
-function NoWorkspaceState({
-  accessible,
-  isManager,
-}: {
-  accessible: ReadonlyArray<AccessibleWorkspace>;
-  isManager: boolean;
-}) {
-  const toast = useToast();
-  const setActive = useSetActiveWorkspace();
-
-  async function pick(ws: AccessibleWorkspace) {
-    try {
-      await setActive.mutateAsync(ws.id);
-      toast.push('success', `Switched to ${ws.workspaceName}.`);
-    } catch (err) {
-      toast.push('error', describeError(err));
-    }
-  }
-
-  if (accessible.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-10 text-center">
-          <p className="text-sm text-muted-foreground">
-            {isManager
-              ? 'No active workspaces exist yet. Create one from Settings to get started.'
-              : 'You do not have access to any workspaces yet. Ask your organization admin to invite you to one.'}
-          </p>
-          <div className="mt-4">
-            <Link href="/settings">
-              <Button size="sm" variant="outline">
-                Open Settings
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Up to 6 quick-pick cards so users can land on a workspace in one click
-  // without having to hunt down the topbar switcher.
-  const quickPicks = accessible.slice(0, 6);
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Pick a workspace</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {quickPicks.map((ws) => (
-            <button
-              key={ws.id}
-              type="button"
-              onClick={() => pick(ws)}
-              disabled={setActive.isPending}
-              className="flex flex-col items-start gap-1 rounded-lg border border-border bg-background px-4 py-3 text-left transition-colors hover:border-navy/40 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span className="flex items-center gap-2">
-                <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-medium text-foreground">{ws.workspaceName}</span>
-              </span>
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Building2 className="h-3 w-3" />
-                <span>{ws.organizationName}</span>
-                <span aria-hidden="true">·</span>
-                <span>{prettyType(ws.workspaceType)}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-        {accessible.length > quickPicks.length ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            +{accessible.length - quickPicks.length} more —{' '}
-            <Link href="/select-workspace" className="underline-offset-2 hover:underline">
-              view all
-            </Link>
-            .
-          </p>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-// Workspace type is a free-text optional label.
-function prettyType(t: AccessibleWorkspace['workspaceType']): string {
-  return t?.trim() || 'Workspace';
+// Workspace type → display label. Normalizes the retired "omni_channel"
+// to "General"; falls back to "Workspace" when no type is set.
+function prettyType(t: string | null): string {
+  const label = workspaceTypeLabel(t);
+  return label === '—' ? 'Workspace' : label;
 }
 
 function formatTotal(amount: string): string {

@@ -17,17 +17,25 @@ import { describeError, useSession } from '@/lib/session';
 
 /**
  * Direct add-user dialog — the PRIMARY user-creation path while email
- * lifecycle is paused (see memory/feedback_auth_direction). Admins
- * pick username + display name + password + role; user is `active`
- * immediately and can sign in.
+ * lifecycle is paused (see memory/feedback_auth_direction).
  *
- * Replaces InviteUserDialog. Invitation flow returns when resend.com
- * is wired up.
+ * Two scopes, two permission domains:
+ *   - 'organization' → customer/tenant users (organization_admin /
+ *     organization_user) inside one org. Used from the org settings card.
+ *   - 'internal'     → XB Matrix platform staff (internal_manager /
+ *     internal_staff), no org. Used from the Internal Users section.
+ *
+ * super_admin is never offered — it is provisioned only via DB migration.
  */
+type AddUserScope = 'organization' | 'internal';
+
 interface Props {
   readonly open: boolean;
   readonly onClose: () => void;
-  readonly organization: Organization;
+  /** Defaults to 'organization'. */
+  readonly scope?: AddUserScope;
+  /** Required for the 'organization' scope; null/omitted for 'internal'. */
+  readonly organization?: Organization | null;
 }
 
 const ROLE_LABEL: Record<CreateUserRole, string> = {
@@ -38,14 +46,17 @@ const ROLE_LABEL: Record<CreateUserRole, string> = {
   organization_user:  'Org · User',
 };
 
-export function AddUserDialog({ open, onClose, organization }: Props) {
+export function AddUserDialog({ open, onClose, scope = 'organization', organization = null }: Props) {
   const { data: session } = useSession();
   const toast = useToast();
   const create = useCreateUser();
+  const isInternal = scope === 'internal';
+  const defaultRole: CreateUserRole = isInternal ? 'internal_staff' : 'organization_user';
+
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState(suggestPassword());
-  const [role, setRole] = useState<CreateUserRole>('organization_user');
+  const [role, setRole] = useState<CreateUserRole>(defaultRole);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [created, setCreated] = useState<UserSummary | null>(null);
 
@@ -54,9 +65,7 @@ export function AddUserDialog({ open, onClose, organization }: Props) {
   //   internal_manager  → can create internal_staff + org_*
   //   organization_admin→ can create org_* in own org only
   //
-  // super_admin role is LOCKED — provisioned only via DB migration,
-  // never creatable from the API. There's exactly one. No option for
-  // it in the dropdown.
+  // super_admin role is LOCKED — provisioned only via DB migration.
   const isSuperAdmin = session?.effectiveRole === 'super_admin';
   const isInternalManager = session?.effectiveRole === 'internal_manager';
   const canCreateManagers = isSuperAdmin;
@@ -67,11 +76,12 @@ export function AddUserDialog({ open, onClose, organization }: Props) {
       setUsername('');
       setDisplayName('');
       setPassword(suggestPassword());
-      setRole('organization_user');
+      setRole(defaultRole);
       setSubmitError(null);
       setCreated(null);
     }
-  }, [open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, scope]);
 
   function close() {
     if (create.isPending) return;
@@ -82,13 +92,13 @@ export function AddUserDialog({ open, onClose, organization }: Props) {
     e.preventDefault();
     setSubmitError(null);
     try {
-      const isInternal = role === 'internal_manager' || role === 'internal_staff';
       const user = await create.mutateAsync({
         username: username.trim().toLowerCase(),
         displayName: displayName.trim(),
         password,
         role,
-        organizationId: isInternal ? null : organization.id,
+        // Internal staff have no organization; org users land in the org.
+        organizationId: isInternal ? null : organization?.id ?? null,
       });
       setCreated(user);
       toast.push('success', `Created ${user.username}.`);
@@ -101,18 +111,26 @@ export function AddUserDialog({ open, onClose, organization }: Props) {
     !create.isPending &&
     /^[a-z0-9._-]{3,120}$/.test(username.trim().toLowerCase()) &&
     displayName.trim().length > 0 &&
-    password.length >= 12;
+    password.length >= 12 &&
+    (isInternal || !!organization);
+
+  const title = created
+    ? 'User created'
+    : isInternal
+      ? 'Add internal user'
+      : 'Add user';
+  const description = created
+    ? 'Share the credentials with the user. They can sign in immediately at /sign-in.'
+    : isInternal
+      ? 'Create an XB Matrix platform staff account. Internal users operate cross-organization and have no tenant.'
+      : `Create a user that signs in with a username and password. Lands in ${organization?.displayName ?? 'this organization'}.`;
 
   return (
     <Dialog
       open={open}
       onClose={close}
-      title={created ? 'User created' : 'Add user'}
-      description={
-        created
-          ? 'Share the credentials with the user. They can sign in immediately at /sign-in.'
-          : `Create a user that signs in with a username and password. Lands in ${organization.displayName}.`
-      }
+      title={title}
+      description={description}
       footer={
         created ? (
           <Button onClick={close}>Done</Button>
@@ -224,14 +242,23 @@ export function AddUserDialog({ open, onClose, organization }: Props) {
           <FormField label="Role" required>
             {(p) => (
               <Select {...p} value={role} onChange={(e) => setRole(e.target.value as CreateUserRole)}>
-                {/* Tiered options — match server-side createUser auth (users-service.ts):
-                      super_admin       → any role
-                      internal_manager  → internal_staff + organization_*
-                      organization_admin→ organization_* in own org */}
-                <option value="organization_user">Org · User</option>
-                <option value="organization_admin">Org · Admin</option>
-                {canCreateInternal ? <option value="internal_staff">Internal · Staff</option> : null}
-                {canCreateManagers ? <option value="internal_manager">Internal · Manager</option> : null}
+                {isInternal ? (
+                  <>
+                    {/* Internal scope — platform staff only. */}
+                    {canCreateInternal ? (
+                      <option value="internal_staff">Internal · Staff</option>
+                    ) : null}
+                    {canCreateManagers ? (
+                      <option value="internal_manager">Internal · Manager</option>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    {/* Organization scope — customer/tenant users only. */}
+                    <option value="organization_user">Org · User</option>
+                    <option value="organization_admin">Org · Admin</option>
+                  </>
+                )}
                 {/* Super admin is intentionally NOT offered — provisioned only via DB migration */}
               </Select>
             )}

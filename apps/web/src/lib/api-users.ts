@@ -86,6 +86,20 @@ export function useUsers(opts: { organizationId?: string | null } = {}) {
   });
 }
 
+/**
+ * Internal XB Matrix staff — super_admin / internal_manager /
+ * internal_staff (organization_id IS NULL). The platform-administration
+ * layer, kept separate from customer/tenant users. The API returns
+ * internal users when /v1/users is called with no organizationId.
+ */
+export function useInternalUsers() {
+  return useQuery({
+    queryKey: usersKey(null),
+    queryFn: () => api.get<Paginated<UserSummary>>('/v1/users').then((r) => r.items),
+    staleTime: 15_000,
+  });
+}
+
 type UserTransition = 'deactivate' | 'reactivate';
 
 export function useUserTransition(transition: UserTransition) {

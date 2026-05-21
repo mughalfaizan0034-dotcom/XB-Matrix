@@ -217,7 +217,7 @@ export function OrganizationCard({
             onChange={setTab}
             items={[
               { key: 'workspaces',   label: 'Workspaces' },
-              { key: 'users',        label: 'Users' },
+              { key: 'users',        label: 'Organization Users' },
               { key: 'permissions',  label: 'Permissions',  badge: <SoonBadge /> },
               { key: 'audit',        label: 'Audit' },
               { key: 'billing',      label: 'Billing',      badge: <SoonBadge /> },

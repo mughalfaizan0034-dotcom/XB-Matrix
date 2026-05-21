@@ -340,7 +340,12 @@ export function UsersListNested({ organization }: { organization: Organization }
         ) : null}
       </div>
 
-      <AddUserDialog open={showAdd} onClose={() => setShowAdd(false)} organization={organization} />
+      <AddUserDialog
+        open={showAdd}
+        onClose={() => setShowAdd(false)}
+        scope="organization"
+        organization={organization}
+      />
 
       <ResetPasswordDialog target={resetTarget} onClose={() => setResetTarget(null)} />
 
@@ -358,7 +363,7 @@ export function UsersListNested({ organization }: { organization: Organization }
   );
 }
 
-function ResetPasswordDialog({
+export function ResetPasswordDialog({
   target,
   onClose,
 }: {
