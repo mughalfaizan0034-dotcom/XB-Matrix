@@ -62,6 +62,13 @@ export function UploadDialog({ open, onClose }: Props) {
       setFile(null);
       return;
     }
+    // CSV-only: this is a structured ingestion pipeline, not document
+    // storage. Reject XLSX / PDF / images / archives up front.
+    if (!f.name.toLowerCase().endsWith('.csv')) {
+      setError('Only .csv files are accepted. Export spreadsheets or reports to CSV first.');
+      setFile(null);
+      return;
+    }
     if (f.size > MAX_BYTES) {
       setError(`File is too large (${humanSize(f.size)}). Max is ${humanSize(MAX_BYTES)}.`);
       setFile(null);
@@ -103,7 +110,7 @@ export function UploadDialog({ open, onClose }: Props) {
       description={
         noActiveWorkspace
           ? 'Uploads are scoped to a workspace. Select one from the topbar switcher, then try again.'
-          : 'Drop a CSV / XLSX / JSON file. Max 32 MB. The file is stored privately to your workspace and can be re-downloaded later.'
+          : 'Drop a CSV file. Max 32 MB. The file is stored privately to your workspace and can be re-downloaded later.'
       }
       footer={
         <>
@@ -157,6 +164,7 @@ export function UploadDialog({ open, onClose }: Props) {
             <input
               ref={inputRef}
               type="file"
+              accept=".csv,text/csv"
               className="sr-only"
               onChange={(e) => pick(e.target.files?.[0] ?? null)}
             />
@@ -189,7 +197,7 @@ export function UploadDialog({ open, onClose }: Props) {
                     browse
                   </button>
                 </p>
-                <p className="text-xs text-muted-foreground">CSV, XLSX, or JSON · up to 32 MB</p>
+                <p className="text-xs text-muted-foreground">CSV only · up to 32 MB</p>
               </>
             )}
           </div>

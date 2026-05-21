@@ -9,13 +9,10 @@ import {
   MoreHorizontal,
   Plus,
   RefreshCcw,
-  Upload as UploadIcon,
 } from 'lucide-react';
 import {
   Badge,
   Button,
-  Card,
-  CardContent,
   DataTable,
   DataTablePagination,
   DataTableToolbar,
@@ -30,7 +27,6 @@ import {
   type DropdownMenuItem,
 } from '@xb/ui';
 import { UploadTemplatesPanel } from '@/components/upload-templates-panel';
-import { UploadValidationErrorsPanel } from '@/components/upload-validation-errors-panel';
 import { useActiveWorkspace, useSession, describeError } from '@/lib/session';
 import { useWorkspaces } from '@/lib/api-workspaces';
 import {
@@ -39,65 +35,77 @@ import {
   type UploadStatus,
   type UploadSummary,
 } from '@/lib/api-uploads';
-import { UPLOAD_KIND_META } from '@/lib/upload-kind-labels';
+import { UPLOAD_KIND_META, type UploadCategory } from '@/lib/upload-kind-labels';
 import { UploadDialog } from '@/components/upload-dialog';
 import { UploadDetailDrawer } from '@/components/upload-detail-drawer';
 
-const STATUS_TONE: Record<UploadStatus, 'success' | 'warning' | 'neutral' | 'danger'> = {
-  queued:     'neutral',
-  uploading:  'warning',
-  validating: 'warning',
-  ready:      'success',
-  failed:     'danger',
-};
-
-const STATUS_LABEL: Record<UploadStatus, string> = {
-  queued:     'queued',
-  uploading:  'uploading',
-  validating: 'validating',
-  ready:      'ready',
-  failed:     'failed',
-};
-
-const UPLOAD_PAGE_STORAGE = 'uploads-table';
-
 /**
- * Uploads module.
+ * Uploads — ingestion operations console.
  *
- * Workspace context behavior:
- *   - Active workspace pinned → page is fully operational. New uploads
- *     go to that workspace; history / errors / logs scoped to it.
- *   - "All workspaces" (no active workspace) → page renders in
- *     read-only cross-workspace mode. History / Validation Errors /
- *     Templates / Processing Logs all work. Only the New Upload
- *     mutation is gated, because creating a file requires choosing
- *     exactly one workspace to write into.
- *
- * Rationale: operations managers regularly need cross-workspace
- * visibility (monitoring, validation oversight, audit) without first
- * pinning a single workspace. Forcing a workspace selection to even
- * see the module is operational friction that doesn't match how the
- * rest of the platform is heading (CLAUDE.md Part 1 — "operational
- * control center" direction).
+ * Not a file manager: each row is one ingestion event tracked through
+ * its lifecycle (queued → validating → processing → success/failed).
+ * Validation errors and processing detail live inline (the detail
+ * drawer), not in separate tabs. Long term this same monitor will also
+ * surface API syncs, scheduled imports, connector runs and webhook
+ * ingestion — architected as "ingestion operations", not "uploads".
  */
+const STATUS_TONE: Record<string, 'success' | 'warning' | 'neutral' | 'danger'> = {
+  queued:          'neutral',
+  uploading:       'warning',
+  validating:      'warning',
+  processing:      'warning',
+  unresolved:      'warning',
+  partial_success: 'warning',
+  ready:           'success',
+  success:         'success',
+  failed:          'danger',
+};
+
+const STATUS_FILTERS: ReadonlyArray<UploadStatus> = [
+  'queued',
+  'uploading',
+  'validating',
+  'ready',
+  'failed',
+];
+
+const REPORT_TYPE_LABEL: Record<UploadCategory, string> = {
+  sales:       'Sales',
+  inventory:   'Inventory',
+  advertising: 'Advertising',
+  warehouse:   'Warehouse',
+  settlement:  'Settlement',
+  forecast:    'Forecasting',
+  other:       'Generic',
+};
+
+const REPORT_TYPE_ORDER: ReadonlyArray<UploadCategory> = [
+  'sales',
+  'inventory',
+  'advertising',
+  'warehouse',
+  'settlement',
+  'forecast',
+  'other',
+];
+
 export default function UploadsPage() {
   const { data: user } = useSession();
   const { data: activeWorkspace } = useActiveWorkspace();
   const crossWorkspace = !activeWorkspace;
 
   const [tableState, tableActions] = useDataTableState({
-    storageKey: UPLOAD_PAGE_STORAGE,
+    storageKey: 'uploads-table',
     urlKey: 'uploads',
     defaultPageSize: 20,
     defaultSort: { column: 'createdAt', direction: 'desc' },
   });
 
   const statusFilter = (tableState.filters.status as UploadStatus | undefined) ?? undefined;
+  const reportFilter = (tableState.filters.reportType as UploadCategory | undefined) ?? undefined;
   const workspaceFilter = (tableState.filters.workspaceId as string | undefined) ?? undefined;
 
-  // Workspace catalog for the cross-workspace view's filter + name
-  // resolution. Skips the request when a single workspace is pinned —
-  // we already have its name on `activeWorkspace`.
+  // Workspace catalog — names for the cross-workspace column + filter.
   const workspacesQ = useWorkspaces({});
   const workspaceById = useMemo(() => {
     const m = new Map<string, string>();
@@ -107,9 +115,6 @@ export default function UploadsPage() {
   }, [workspacesQ.data, activeWorkspace]);
 
   const uploadsQ = useUploads({
-    // In cross-workspace mode pass undefined — backend lists across the
-    // actor's accessible scope (org for org users, platform-wide for
-    // internal managers). Workspace filter chip narrows it further.
     workspaceId: activeWorkspace?.id ?? workspaceFilter,
     q: tableState.search.trim() || undefined,
     status: statusFilter,
@@ -136,12 +141,12 @@ export default function UploadsPage() {
 
   function buildRowMenu(u: UploadSummary): DropdownMenuItem[] {
     const items: DropdownMenuItem[] = [
-      { key: 'open', label: 'Open details', onSelect: () => setOpenUploadId(u.id) },
+      { key: 'open', label: 'Inspect ingestion', onSelect: () => setOpenUploadId(u.id) },
     ];
     if (u.uploadStatus === 'failed') {
       items.push({
         key: 'retry',
-        label: 'Retry',
+        label: 'Retry ingestion',
         icon: RefreshCcw,
         divider: true,
         onSelect: () => onRetry(u),
@@ -150,140 +155,175 @@ export default function UploadsPage() {
     return items;
   }
 
-  const COLUMNS: ReadonlyArray<ColumnDef<UploadSummary>> = useMemo(
-    () => {
-      const cols: Array<ColumnDef<UploadSummary>> = [
-        {
-          key: 'filename',
-          header: 'File',
-          sortKey: 'filename',
-          hideable: false,
-          accessor: (u) => (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenUploadId(u.id);
-              }}
-              className="text-left font-medium text-foreground hover:text-navy"
-            >
-              <span className="block truncate">{u.originalFilename}</span>
-              <span className="block text-[11px] text-muted-foreground">{u.contentType}</span>
-            </button>
-          ),
+  const COLUMNS: ReadonlyArray<ColumnDef<UploadSummary>> = useMemo(() => {
+    const cols: Array<ColumnDef<UploadSummary>> = [
+      {
+        key: 'createdAt',
+        header: 'Upload date',
+        sortKey: 'createdAt',
+        accessor: (u) => (
+          <span data-numeric="true" className="text-xs text-muted-foreground">
+            {formatDateTime(u.createdAt)}
+          </span>
+        ),
+      },
+      {
+        key: 'reportType',
+        header: 'Report type',
+        sortKey: 'kind',
+        accessor: (u) => {
+          const meta = UPLOAD_KIND_META[u.uploadKind];
+          return (
+            <div className="flex flex-col leading-tight">
+              <span className="text-sm text-foreground">{REPORT_TYPE_LABEL[meta.category]}</span>
+              {meta.adapter || meta.legacy ? (
+                <span className="text-[10px] text-muted-foreground">{meta.platformLabel}</span>
+              ) : null}
+            </div>
+          );
         },
-      ];
-      // Workspace column only renders in cross-workspace mode — when a
-      // workspace is pinned, every row belongs to the same one and the
-      // column would be pure noise.
-      if (crossWorkspace) {
-        cols.push({
-          key: 'workspace',
-          header: 'Workspace',
-          accessor: (u) => {
-            const name = workspaceById.get(u.workspaceId);
-            return name ? (
-              <span className="text-sm text-foreground">{name}</span>
+      },
+    ];
+    if (crossWorkspace) {
+      cols.push({
+        key: 'workspace',
+        header: 'Workspace',
+        accessor: (u) => {
+          const name = workspaceById.get(u.workspaceId);
+          return name ? (
+            <span className="text-sm text-foreground">{name}</span>
+          ) : (
+            <span className="font-mono text-[11px] text-muted-foreground">
+              {u.workspaceId.slice(0, 8)}…
+            </span>
+          );
+        },
+      });
+    }
+    cols.push(
+      {
+        key: 'filename',
+        header: 'File name',
+        sortKey: 'filename',
+        hideable: false,
+        accessor: (u) => (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpenUploadId(u.id);
+            }}
+            className="text-left font-medium text-foreground hover:text-navy"
+          >
+            <span className="block truncate">{u.originalFilename}</span>
+          </button>
+        ),
+      },
+      {
+        key: 'rows',
+        header: 'Rows',
+        numeric: true,
+        accessor: (u) => {
+          const vs = vsummary(u);
+          return (
+            <span data-numeric="true" className="text-xs text-foreground">
+              {typeof vs?.rowsParsed === 'number' ? vs.rowsParsed.toLocaleString() : '—'}
+            </span>
+          );
+        },
+      },
+      {
+        key: 'status',
+        header: 'Status',
+        sortKey: 'status',
+        accessor: (u) => (
+          <Badge tone={STATUS_TONE[u.uploadStatus] ?? 'neutral'}>
+            {u.uploadStatus.replace('_', ' ')}
+          </Badge>
+        ),
+      },
+      {
+        key: 'summary',
+        header: 'Summary',
+        accessor: (u) => <span className="text-xs text-muted-foreground">{summaryText(u)}</span>,
+      },
+      {
+        key: 'errors',
+        header: 'Errors',
+        accessor: (u) => {
+          const errs = errorCount(u);
+          if (errs === null) {
+            return u.uploadStatus === 'failed' ? (
+              <Badge tone="danger">parse error</Badge>
             ) : (
-              <span className="font-mono text-[11px] text-muted-foreground">{u.workspaceId.slice(0, 8)}…</span>
+              <span className="text-xs text-muted-foreground">—</span>
             );
-          },
-        });
-      }
-      cols.push(
-        {
-          key: 'kind',
-          header: 'Category · source',
-          sortKey: 'kind',
-          accessor: (u) => {
-            const meta = UPLOAD_KIND_META[u.uploadKind];
-            return (
-              <div className="flex flex-col leading-tight">
-                <span className="text-sm text-foreground">{meta.categoryLabel}</span>
-                <span className="text-[10px] text-muted-foreground">
-                  {meta.platformLabel}
-                  {meta.legacy ? ' · legacy' : ''}
-                </span>
-              </div>
-            );
-          },
+          }
+          return errs > 0 ? (
+            <Badge tone="danger">{errs.toLocaleString()}</Badge>
+          ) : (
+            <span className="text-xs text-muted-foreground">0</span>
+          );
         },
-        {
-          key: 'size',
-          header: 'Size',
-          sortKey: 'size',
-          numeric: true,
-          accessor: (u) => <span data-numeric="true">{humanSize(u.fileSizeBytes)}</span>,
-        },
-        {
-          key: 'status',
-          header: 'Status',
-          sortKey: 'status',
-          accessor: (u) => <Badge tone={STATUS_TONE[u.uploadStatus]}>{STATUS_LABEL[u.uploadStatus]}</Badge>,
-        },
-        {
-          key: 'retries',
-          header: 'Retries',
-          numeric: true,
-          accessor: (u) => (
-            <span data-numeric="true" className="text-xs text-muted-foreground">
-              {u.retryCount}
-            </span>
-          ),
-        },
-        {
-          key: 'createdAt',
-          header: 'Uploaded',
-          sortKey: 'createdAt',
-          accessor: (u) => (
-            <span data-numeric="true" className="text-xs text-muted-foreground">
-              {formatDateTime(u.createdAt)}
-            </span>
-          ),
-        },
-        {
-          key: 'actions',
-          header: '',
-          width: '48px',
-          hideable: false,
-          accessor: (u) => (
-            <DropdownMenu
-              align="end"
-              trigger={
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground">
-                  <MoreHorizontal className="h-4 w-4" />
-                </span>
-              }
-              items={buildRowMenu(u)}
-            />
-          ),
-        },
-      );
-      return cols;
-    },
+      },
+      {
+        key: 'retries',
+        header: 'Retries',
+        numeric: true,
+        accessor: (u) => (
+          <span data-numeric="true" className="text-xs text-muted-foreground">
+            {u.retryCount}
+          </span>
+        ),
+      },
+      {
+        key: 'actions',
+        header: '',
+        width: '48px',
+        hideable: false,
+        accessor: (u) => (
+          <DropdownMenu
+            align="end"
+            trigger={
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground">
+                <MoreHorizontal className="h-4 w-4" />
+              </span>
+            }
+            items={buildRowMenu(u)}
+          />
+        ),
+      },
+    );
+    return cols;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [crossWorkspace, workspaceById],
-  );
+  }, [crossWorkspace, workspaceById]);
 
-  const rows = uploadsQ.data?.items ?? [];
+  // Report-type filtering is client-side over the current page — the
+  // API has no kind-category filter yet (low row counts per workspace).
+  const allRows = uploadsQ.data?.items ?? [];
+  const rows = useMemo(
+    () =>
+      reportFilter
+        ? allRows.filter((u) => UPLOAD_KIND_META[u.uploadKind].category === reportFilter)
+        : allRows,
+    [allRows, reportFilter],
+  );
 
   function onExport() {
     exportRowsToCsv(
       rows,
       [
-        { key: 'filename',     header: 'Filename',     value: (u) => u.originalFilename },
-        { key: 'workspace',    header: 'Workspace',    value: (u) => workspaceById.get(u.workspaceId) ?? u.workspaceId },
-        { key: 'category',     header: 'Category',     value: (u) => UPLOAD_KIND_META[u.uploadKind].categoryLabel },
-        { key: 'source',       header: 'Source format', value: (u) => UPLOAD_KIND_META[u.uploadKind].platformLabel },
-        { key: 'kind',         header: 'Kind (id)',    value: (u) => u.uploadKind },
-        { key: 'contentType',  header: 'Content type', value: (u) => u.contentType },
-        { key: 'size',         header: 'Size (bytes)', value: (u) => u.fileSizeBytes },
-        { key: 'status',       header: 'Status',       value: (u) => u.uploadStatus },
-        { key: 'retries',      header: 'Retries',      value: (u) => u.retryCount },
-        { key: 'sha256',       header: 'SHA-256',      value: (u) => u.sha256 },
-        { key: 'createdAt',    header: 'Created',      value: (u) => u.createdAt },
+        { key: 'createdAt',  header: 'Upload date',  value: (u) => u.createdAt },
+        { key: 'reportType', header: 'Report type',  value: (u) => REPORT_TYPE_LABEL[UPLOAD_KIND_META[u.uploadKind].category] },
+        { key: 'workspace',  header: 'Workspace',    value: (u) => workspaceById.get(u.workspaceId) ?? u.workspaceId },
+        { key: 'filename',   header: 'File name',    value: (u) => u.originalFilename },
+        { key: 'rows',       header: 'Rows',         value: (u) => vsummary(u)?.rowsParsed ?? '' },
+        { key: 'status',     header: 'Status',       value: (u) => u.uploadStatus },
+        { key: 'summary',    header: 'Summary',      value: (u) => summaryText(u) },
+        { key: 'errors',     header: 'Errors',       value: (u) => errorCount(u) ?? '' },
+        { key: 'retries',    header: 'Retries',      value: (u) => u.retryCount },
       ],
-      `uploads-${activeWorkspace?.workspaceName ?? 'all-workspaces'}-${new Date().toISOString().slice(0, 10)}.csv`,
+      `ingestion-${activeWorkspace?.workspaceName ?? 'all-workspaces'}-${new Date().toISOString().slice(0, 10)}.csv`,
     );
   }
 
@@ -292,10 +332,13 @@ export default function UploadsPage() {
       ? { key: 'q', label: `Search: ${tableState.search}`, onRemove: () => tableActions.setSearch('') }
       : null,
     statusFilter
+      ? { key: 'status', label: `Status: ${statusFilter}`, onRemove: () => tableActions.clearFilter('status') }
+      : null,
+    reportFilter
       ? {
-          key: 'status',
-          label: `Status: ${statusFilter}`,
-          onRemove: () => tableActions.clearFilter('status'),
+          key: 'reportType',
+          label: `Type: ${REPORT_TYPE_LABEL[reportFilter]}`,
+          onRemove: () => tableActions.clearFilter('reportType'),
         }
       : null,
     crossWorkspace && workspaceFilter
@@ -307,9 +350,6 @@ export default function UploadsPage() {
       : null,
   ].filter(Boolean) as Array<{ key: string; label: string; onRemove: () => void }>;
 
-  // Header subtitle: pinned workspace gets the org/workspace breadcrumb;
-  // cross-workspace mode shows a clear "all workspaces" indicator with
-  // the actor's effective scope (org name or platform-wide for managers).
   const subtitle = activeWorkspace ? (
     <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
       <Building2 className="h-3.5 w-3.5" />
@@ -321,7 +361,7 @@ export default function UploadsPage() {
   ) : (
     <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
       <Globe2 className="h-3.5 w-3.5" />
-      <span>All workspaces · cross-org view</span>
+      <span>All workspaces · read-only ingestion monitor</span>
     </span>
   );
 
@@ -335,7 +375,7 @@ export default function UploadsPage() {
             <Link
               href="/select-workspace?next=/uploads"
               className="inline-flex items-center gap-1.5 rounded-md bg-navy px-3 py-1.5 text-xs font-medium text-white hover:bg-navy/90"
-              title="Uploads write into one workspace — pick one to continue."
+              title="Ingestion writes into one workspace — pick one to continue."
             >
               <Plus className="h-3.5 w-3.5" /> Pick a workspace to upload
             </Link>
@@ -347,10 +387,8 @@ export default function UploadsPage() {
         }
       />
 
-      {/* Active-context banner — operators need an unambiguous signal
-          of WHERE their data will land, especially when bouncing
-          between workspaces. Only shown when a workspace is pinned;
-          cross-workspace mode is its own clear state via the subtitle. */}
+      {/* Active write-context banner — operators need an unambiguous
+          signal of where ingested data lands. */}
       {activeWorkspace ? (
         <div className="flex items-center gap-3 rounded-md border border-navy/20 bg-navy/[0.04] px-4 py-2.5">
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-navy text-white">
@@ -358,7 +396,7 @@ export default function UploadsPage() {
           </span>
           <div className="flex flex-col leading-tight">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Uploading into
+              Ingesting into
             </span>
             <span className="text-sm text-foreground">
               <span className="font-medium">{activeWorkspace.workspaceName}</span>
@@ -372,89 +410,14 @@ export default function UploadsPage() {
         </div>
       ) : null}
 
-      <Tabs<'files' | 'history' | 'errors' | 'templates' | 'logs'>
-        defaultValue="files"
+      <Tabs<'history' | 'templates'>
+        defaultValue="history"
         items={[
-          { key: 'files',     label: 'Upload Files' },
           { key: 'history',   label: 'Upload History' },
-          { key: 'errors',    label: 'Validation Errors' },
           { key: 'templates', label: 'Templates' },
-          { key: 'logs',      label: 'Processing Logs' },
         ]}
       >
-        {/* ---- Upload Files ----------------------------------------- */}
-        <TabPanel tabKey="files" className="pt-4">
-          <div className="flex flex-col gap-3">
-            <Card>
-              <CardContent className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="font-medium text-foreground">New upload</div>
-                  <p className="text-xs text-muted-foreground">
-                    {crossWorkspace
-                      ? 'Uploads write into one workspace. Pick a workspace below to start a new upload — history and templates stay available here without one.'
-                      : 'Drop a CSV / XLSX / JSON. Max 32 MB. Pick the matching kind so the right validator runs.'}
-                  </p>
-                </div>
-                {crossWorkspace ? (
-                  <Link
-                    href="/select-workspace?next=/uploads"
-                    className="inline-flex items-center gap-1.5 rounded-md bg-navy px-3 py-1.5 text-xs font-medium text-white hover:bg-navy/90"
-                  >
-                    <UploadIcon className="h-3.5 w-3.5" /> Pick a workspace
-                  </Link>
-                ) : (
-                  <Button size="sm" onClick={() => setShowUpload(true)}>
-                    <UploadIcon className="mr-1 h-3.5 w-3.5" /> Upload a file
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Recent uploads — five most recent in the current scope.
-                In cross-workspace mode this shows the five most recent
-                across every accessible workspace. */}
-            <Card>
-              <CardContent className="pt-5">
-                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {crossWorkspace ? 'Recent uploads (across workspaces)' : 'Recent uploads'}
-                </div>
-                {rows.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-muted-foreground">
-                    {crossWorkspace
-                      ? 'No uploads across your accessible workspaces yet.'
-                      : 'No uploads yet for this workspace.'}
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-border">
-                    {rows.slice(0, 5).map((u) => (
-                      <li key={u.id} className="flex items-center justify-between gap-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => setOpenUploadId(u.id)}
-                          className="min-w-0 flex-1 text-left hover:text-navy"
-                        >
-                          <div className="truncate text-sm font-medium text-foreground">{u.originalFilename}</div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {crossWorkspace ? (
-                              <>
-                                {workspaceById.get(u.workspaceId) ?? u.workspaceId.slice(0, 8)}
-                                {' · '}
-                              </>
-                            ) : null}
-                            {UPLOAD_KIND_META[u.uploadKind].compactLabel} · {formatDateTime(u.createdAt)}
-                          </div>
-                        </button>
-                        <Badge tone={STATUS_TONE[u.uploadStatus]}>{STATUS_LABEL[u.uploadStatus]}</Badge>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </TabPanel>
-
-        {/* ---- Upload History --------------------------------------- */}
+        {/* ---- Upload History — the ingestion monitor ---------------- */}
         <TabPanel tabKey="history" className="pt-4">
           <div className="flex flex-col gap-3">
             <DataTableToolbar<UploadSummary>
@@ -463,7 +426,7 @@ export default function UploadsPage() {
               onColumnVisibilityChange={tableActions.setColumnVisibility}
               search={tableState.search}
               onSearchChange={tableActions.setSearch}
-              searchPlaceholder="Search by filename"
+              searchPlaceholder="Search by file name"
               density={tableState.density}
               onDensityChange={tableActions.setDensity}
               onExport={rows.length > 0 ? onExport : undefined}
@@ -471,7 +434,36 @@ export default function UploadsPage() {
               onClearAllFilters={chips.length > 0 ? tableActions.clearAllFilters : undefined}
               trailing={
                 <div className="flex items-center gap-1.5">
-                  {/* Workspace filter only available in cross-workspace mode. */}
+                  {/* Report type */}
+                  <DropdownMenu
+                    align="end"
+                    width="w-52"
+                    header={
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Filter by report type
+                      </div>
+                    }
+                    trigger={
+                      <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
+                        {reportFilter ? `Type: ${REPORT_TYPE_LABEL[reportFilter]}` : 'Report type'}
+                      </span>
+                    }
+                    items={[
+                      {
+                        key: '__all__',
+                        label: 'All report types',
+                        trailing: reportFilter ? null : <span aria-hidden="true">✓</span>,
+                        onSelect: () => tableActions.clearFilter('reportType'),
+                      },
+                      ...REPORT_TYPE_ORDER.map((c) => ({
+                        key: c,
+                        label: REPORT_TYPE_LABEL[c],
+                        trailing: reportFilter === c ? <span aria-hidden="true">✓</span> : null,
+                        onSelect: () => tableActions.setFilter('reportType', c),
+                      })),
+                    ]}
+                  />
+                  {/* Workspace (cross-workspace mode only) */}
                   {crossWorkspace ? (
                     <DropdownMenu
                       align="end"
@@ -495,15 +487,16 @@ export default function UploadsPage() {
                           trailing: workspaceFilter ? null : <span aria-hidden="true">✓</span>,
                           onSelect: () => tableActions.clearFilter('workspaceId'),
                         },
-                        ...((workspacesQ.data ?? []).map((w) => ({
+                        ...(workspacesQ.data ?? []).map((w) => ({
                           key: w.id,
                           label: w.workspaceName,
                           trailing: workspaceFilter === w.id ? <span aria-hidden="true">✓</span> : null,
                           onSelect: () => tableActions.setFilter('workspaceId', w.id),
-                        }))),
+                        })),
                       ]}
                     />
                   ) : null}
+                  {/* Status */}
                   <DropdownMenu
                     align="end"
                     width="w-48"
@@ -524,9 +517,9 @@ export default function UploadsPage() {
                         trailing: statusFilter ? null : <span aria-hidden="true">✓</span>,
                         onSelect: () => tableActions.clearFilter('status'),
                       },
-                      ...(['queued', 'uploading', 'validating', 'ready', 'failed'] as const).map((s) => ({
+                      ...STATUS_FILTERS.map((s) => ({
                         key: s,
-                        label: STATUS_LABEL[s],
+                        label: s.replace('_', ' '),
                         trailing: statusFilter === s ? <span aria-hidden="true">✓</span> : null,
                         onSelect: () => tableActions.setFilter('status', s),
                       })),
@@ -550,17 +543,17 @@ export default function UploadsPage() {
                 className="rounded-none border-0"
                 onRowClick={(u) => setOpenUploadId(u.id)}
                 emptyState={
-                  <div className="flex flex-col items-center gap-3 py-6">
+                  <div className="flex flex-col items-center gap-3 py-8">
                     <span className="text-sm">
                       {chips.length > 0
-                        ? 'No uploads match the current filters.'
+                        ? 'No ingestion events match the current filters.'
                         : crossWorkspace
-                          ? 'No uploads across your accessible workspaces yet.'
-                          : 'No uploads yet for this workspace.'}
+                          ? 'No ingestion events across your accessible workspaces yet.'
+                          : 'No ingestion events in this workspace yet.'}
                     </span>
                     {chips.length === 0 && !crossWorkspace ? (
                       <Button size="sm" variant="outline" onClick={() => setShowUpload(true)}>
-                        <UploadIcon className="mr-1 h-3.5 w-3.5" /> Upload the first file
+                        <Plus className="mr-1 h-3.5 w-3.5" /> New upload
                       </Button>
                     ) : null}
                   </div>
@@ -576,66 +569,66 @@ export default function UploadsPage() {
                 />
               ) : null}
             </div>
+
+            <p className="text-xs text-muted-foreground">
+              Each row is one ingestion event: CSV → validation → mapping → unresolved-SKU
+              handling → normalization → canonical layer. Click a row to inspect validation
+              errors and processing detail. Status updates refresh automatically.
+              {crossWorkspace && user?.isInternalManager
+                ? ' Cross-org view — every workspace you can access.'
+                : ''}
+            </p>
           </div>
         </TabPanel>
 
-        {/* ---- Validation Errors ------------------------------------ */}
-        <TabPanel tabKey="errors" className="pt-4">
-          <UploadValidationErrorsPanel
-            uploads={rows}
-            onOpenDetail={(id) => setOpenUploadId(id)}
-          />
-        </TabPanel>
-
-        {/* ---- Templates (workspace-independent) -------------------- */}
+        {/* ---- Templates -------------------------------------------- */}
         <TabPanel tabKey="templates" className="pt-4">
           <UploadTemplatesPanel />
-        </TabPanel>
-
-        {/* ---- Processing Logs (placeholder) ------------------------ */}
-        <TabPanel tabKey="logs" className="pt-4">
-          <Card>
-            <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              Per-upload processing logs (validation runs, canonicalization jobs, retry attempts)
-              land here once async workers ship. Until then, lifecycle events are visible in each
-              upload's detail drawer.
-            </CardContent>
-          </Card>
         </TabPanel>
       </Tabs>
 
       <UploadDialog open={showUpload} onClose={() => setShowUpload(false)} />
-      <UploadDetailDrawer
-        uploadId={openUploadId}
-        onClose={() => setOpenUploadId(null)}
-      />
-
-      <p className="text-xs text-muted-foreground">
-        Files are stored privately in your workspace's bucket. Spec-aligned validators
-        (amazon_sales, amazon_inventory, amazon_ads, walmart_sales) validate the
-        templates; the mapping layer translates rows to platform-agnostic normalized
-        entities; canonical insertion lands once Spec 3 canonical tables ship.
-        {crossWorkspace && user?.isInternalManager ? (
-          <>
-            {' '}You're viewing every workspace you have access to — internal-manager
-            scope.
-          </>
-        ) : null}{' '}
-        See{' '}
-        <Link href="/settings" className="underline-offset-2 hover:underline">
-          Settings
-        </Link>{' '}
-        to manage workspaces.
-      </p>
+      <UploadDetailDrawer uploadId={openUploadId} onClose={() => setOpenUploadId(null)} />
     </div>
   );
 }
 
-function humanSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
+// --- ingestion summary derivation ------------------------------------
+
+interface VSummary {
+  readonly rowsParsed?: number;
+  readonly rowsAccepted?: number;
+  readonly rowsRejected?: number;
+  readonly errors?: ReadonlyArray<unknown>;
+  readonly columnsMissing?: ReadonlyArray<string>;
+}
+
+function vsummary(u: UploadSummary): VSummary | null {
+  return (u.validationSummary as VSummary | null) ?? null;
+}
+
+/** Operational one-liner for the Summary column. */
+function summaryText(u: UploadSummary): string {
+  if (u.errorMessage) return u.errorMessage;
+  const vs = vsummary(u);
+  if (vs && typeof vs.rowsParsed === 'number') {
+    const accepted = vs.rowsAccepted ?? 0;
+    const rejected = vs.rowsRejected ?? 0;
+    if (rejected > 0) {
+      return `${accepted.toLocaleString()} accepted · ${rejected.toLocaleString()} rejected`;
+    }
+    return `${vs.rowsParsed.toLocaleString()} rows · all accepted`;
+  }
+  if (u.uploadStatus === 'queued' || u.uploadStatus === 'uploading') return 'Awaiting validation';
+  if (u.uploadStatus === 'validating') return 'Validating…';
+  return '—';
+}
+
+/** Error count for the Errors column; null when unknown / not validated. */
+function errorCount(u: UploadSummary): number | null {
+  const vs = vsummary(u);
+  if (vs && typeof vs.rowsRejected === 'number') return vs.rowsRejected;
+  return null;
 }
 
 function formatDateTime(iso: string): string {

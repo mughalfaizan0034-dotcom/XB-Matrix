@@ -86,6 +86,9 @@ function buildUploadsUrl(q: UploadsQuery | undefined): string {
   return qs ? `/v1/uploads?${qs}` : '/v1/uploads';
 }
 
+/** Statuses where the ingestion lifecycle is still in motion. */
+const IN_FLIGHT: ReadonlyArray<UploadStatus> = ['queued', 'uploading', 'validating'];
+
 export function useUploads(query?: UploadsQuery) {
   return useQuery({
     queryKey: [...UPLOADS_KEY, 'list', query ?? null],
@@ -97,6 +100,13 @@ export function useUploads(query?: UploadsQuery) {
       })),
     staleTime: 10_000,
     enabled: !query || !!query.workspaceId, // don't fire until we know the workspace scope
+    // Auto-advance the ingestion monitor: while any upload is still
+    // queued/uploading/validating, poll so status transitions surface
+    // without a manual refresh. Stops polling once everything settles.
+    refetchInterval: (q) => {
+      const items = q.state.data?.items ?? [];
+      return items.some((u) => IN_FLIGHT.includes(u.uploadStatus)) ? 4000 : false;
+    },
   });
 }
 

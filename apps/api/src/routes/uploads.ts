@@ -135,6 +135,16 @@ export const uploadRoutes: FastifyPluginAsync = async (app) => {
 
     if (!filePart) throw new SemanticError('No file provided.', 'no_file');
 
+    // CSV-only ingestion — this is a structured pipeline, not document
+    // storage. Extension is the reliable gate; browser MIME for CSV is
+    // inconsistent. Rejects XLSX / PDF / images / archives.
+    if (!filePart.filename.toLowerCase().endsWith('.csv')) {
+      throw new SemanticError(
+        'Only .csv files are accepted. Export spreadsheets or reports to CSV first.',
+        'non_csv_upload',
+      );
+    }
+
     const kind: UploadKind = (UPLOAD_KINDS as ReadonlyArray<string>).includes(kindRaw ?? '')
       ? (kindRaw as UploadKind)
       : 'generic';
