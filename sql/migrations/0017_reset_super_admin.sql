@@ -11,7 +11,8 @@
 --
 -- Password format matches lib/password.ts: scrypt$1$<salt>$<key>
 -- (scrypt with 64-byte key, 16-byte salt, NFKC-normalized password).
--- Generated locally for password "vLFkvTfrD?KSEbEZ".
+-- The hash below is rotated by migration 0020 — never trust this
+-- one to be live. NEVER commit plaintext passwords to git.
 
 DO $$
 DECLARE
