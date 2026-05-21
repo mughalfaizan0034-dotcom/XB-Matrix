@@ -32,15 +32,21 @@ const DAYS_30_MS = 30 * 24 * 60 * 60 * 1000;
  */
 export default function DashboardPage() {
   const router = useRouter();
-  const { data: activeWorkspace, isLoading: activeLoading } = useActiveWorkspace();
+  const { data: activeWorkspace } = useActiveWorkspace();
 
+  // `activeWorkspace` is `undefined` while /me is loading or if it
+  // errored, and `null` only once /me has resolved with no workspace
+  // pinned. Redirect ONLY on an explicit `null` — bouncing on
+  // `undefined` would eject the user from the dashboard on a transient
+  // session-fetch hiccup (e.g. an API cold start).
   useEffect(() => {
-    if (!activeLoading && !activeWorkspace) {
+    if (activeWorkspace === null) {
       router.replace('/select-workspace?next=/dashboard');
     }
-  }, [activeLoading, activeWorkspace, router]);
+  }, [activeWorkspace, router]);
 
-  if (activeLoading || !activeWorkspace) {
+  if (!activeWorkspace) {
+    // undefined → still settling; null → redirect in flight. Hold either way.
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-6 w-6 animate-pulse rounded-full bg-muted" />

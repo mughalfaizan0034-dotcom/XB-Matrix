@@ -4,7 +4,6 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  ArrowLeft,
   Building2,
   Check,
   ChevronDown,
@@ -130,23 +129,14 @@ function PickerInner() {
 
   return (
     <div className="flex flex-col gap-6 p-6 lg:p-8">
-      <div className="flex items-center gap-3">
-        <Link
-          href={next}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Back"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <PageHeader
-          title="Select a workspace"
-          description={
-            user?.isInternalManager
-              ? 'Switch between any workspace in any organization. You can change this at any time from the topbar switcher.'
-              : 'Switch between your available workspaces. You can change this at any time from the topbar switcher.'
-          }
-        />
-      </div>
+      <PageHeader
+        title="Select a workspace"
+        description={
+          user?.isInternalManager
+            ? 'Switch between any workspace in any organization. You can change this at any time from the topbar switcher.'
+            : 'Switch between your available workspaces. You can change this at any time from the topbar switcher.'
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative max-w-md flex-1 min-w-[220px]">
