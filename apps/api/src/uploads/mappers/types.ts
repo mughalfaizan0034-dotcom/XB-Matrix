@@ -128,6 +128,12 @@ export interface NormalizedSale {
   readonly skuNormalized: string;
   readonly marketplaceCode: string;          // amazon_us, walmart, shopify, ...
   readonly regionCode: string;               // US, CA, UK, ...
+  /**
+   * Raw channel value from the upload row (e.g. 'fba', 'wholesale',
+   * 'b2b'). Stored separately from fulfillmentType because some
+   * channel labels are not fulfillment methods.
+   */
+  readonly channel?: string | null;
   readonly fulfillmentType: string | null;   // fba, fbm, dtc, 3pl — null when unknown
   readonly periodStart: string;              // YYYY-MM-DD
   readonly periodEnd: string;                // YYYY-MM-DD

@@ -91,10 +91,11 @@ export const salesPerformanceMapper: UploadMapper<SalesPerformanceRow, Normalize
         skuNormalized: rr.resolved,
         marketplaceCode,
         regionCode,
-        // Sales row grain doesn't carry fulfillment; inventory rows do.
-        // The `channel` column on the source row (fba/fbm/dtc/…) maps
-        // to NormalizedSale's fulfillmentType when it's a recognized
-        // fulfillment label; otherwise null.
+        // Carry the raw channel label and the normalized fulfillment
+        // type independently. Recognized labels (fba/fbm/dtc/3pl/retail)
+        // populate fulfillmentType; everything else (wholesale, b2b,
+        // …) stays only on channel.
+        channel: r.channel?.trim() || null,
         fulfillmentType: normalizeFulfillment(r.channel),
         periodStart: r.startDate,
         periodEnd: r.endDate,

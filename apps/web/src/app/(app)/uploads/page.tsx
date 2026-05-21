@@ -79,14 +79,19 @@ const REPORT_TYPE_LABEL: Record<UploadCategory, string> = {
   other:       'Generic',
 };
 
+// Filterable report types. Settlement / Forecasting / Generic are
+// intentionally NOT offered as filters:
+//   - Generic isn't a report category — it's an absence of one.
+//   - Settlement isn't an ingestion surface we collect from customers.
+//   - Forecasting flows the other way (we share forecasts with the
+//     user, not the reverse).
+// REPORT_TYPE_LABEL still covers every category so legacy/generic rows
+// render correctly in the table cell.
 const REPORT_TYPE_ORDER: ReadonlyArray<UploadCategory> = [
   'sales',
   'inventory',
   'advertising',
   'warehouse',
-  'settlement',
-  'forecast',
-  'other',
 ];
 
 export default function UploadsPage() {

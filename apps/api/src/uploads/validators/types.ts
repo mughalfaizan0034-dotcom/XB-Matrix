@@ -47,6 +47,12 @@ export interface ValidatorResult {
   readonly ok: boolean;
   readonly summary: ValidationSummaryShape;
   readonly errorMessage?: string;
+  /**
+   * Parsed + validated rows, typed loosely so the registry can return a
+   * uniform shape. Per-kind callers (the upload pipeline / mappers)
+   * cast to the validator's own TRow. Present only when `ok` is true.
+   */
+  readonly rows?: ReadonlyArray<unknown>;
 }
 
 export interface ValidationSummaryShape {

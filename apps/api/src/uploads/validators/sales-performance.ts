@@ -176,9 +176,12 @@ export const salesPerformanceValidator: UploadValidator = {
           totalRefunds: totals.refunds.toFixed(4),
           actionCounts,
           dateRange,
-          note: 'Validated; canonical insertion into channel_sales lands when Spec 3 §10.9+ DDL ships.',
         },
       },
+      // Hand the parsed rows back so the upload pipeline can run the
+      // sales mapper + write to xb_canonical.channel_sales in the same
+      // tx, without re-parsing.
+      rows: accepted,
     };
   },
 };

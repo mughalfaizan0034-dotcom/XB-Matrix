@@ -9,6 +9,11 @@ import type {
 import { ConflictError, NotFoundError, SemanticError } from '../lib/errors.js';
 import { requireActiveWorkspace } from './workspace-service.js';
 import { getValidator } from '../uploads/validators/index.js';
+import { getMapper } from '../uploads/mappers/index.js';
+import { writeUnresolvedQueue } from '../uploads/mappers/helpers.js';
+import type { NormalizedSale } from '../uploads/mappers/types.js';
+import type { SalesPerformanceRow } from '../uploads/mappers/sales-performance.js';
+import { writeChannelSales } from '../uploads/canonical/channel-sales-writer.js';
 
 export type UploadStatus = 'queued' | 'uploading' | 'validating' | 'ready' | 'failed';
 
@@ -258,6 +263,67 @@ export async function createUpload(
           buffer: input.body,
           originalFilename: input.originalFilename,
         });
+
+        // ----- Canonical layer wiring ----------------------------------
+        // Validator → mapper → channel_sales writer (+ unresolved queue),
+        // all in the upload's transaction so a failed canonical write
+        // rolls the upload status back to 'validating' rather than
+        // ending in a partial 'ready'.
+        //
+        // Sales is wired now; inventory_position / advertising_performance
+        // land when channel_inventory / channel_ads canonical tables
+        // ship. Legacy adapters (amazon_sales / walmart_sales) wire here
+        // too once their validators surface parsed rows.
+        const ingestionExtra: Record<string, unknown> = {};
+        if (result.ok && result.rows && input.uploadKind === 'sales_performance') {
+          const mapper = getMapper(input.uploadKind);
+          if (mapper) {
+            const mapResult = await mapper.map({
+              app,
+              actor,
+              client,
+              organizationId: orgId,
+              workspaceId: input.workspaceId,
+              uploadId: id,
+              uploadKind: input.uploadKind,
+              rows: result.rows as ReadonlyArray<SalesPerformanceRow>,
+            });
+            const written = await writeChannelSales(
+              app,
+              client,
+              actor,
+              orgId,
+              input.workspaceId,
+              id,
+              mapResult.mapped as ReadonlyArray<NormalizedSale>,
+            );
+            const queued = await writeUnresolvedQueue(
+              app,
+              client,
+              actor,
+              orgId,
+              input.workspaceId,
+              id,
+              input.uploadKind,
+              mapResult.unresolved,
+            );
+            ingestionExtra.canonical = {
+              target: 'xb_canonical.channel_sales',
+              mapped: mapResult.stats.mappedCount,
+              unresolved: mapResult.stats.unresolvedCount,
+              upserted: written.upserted,
+              removed: written.removed,
+              unresolvedQueued: queued.inserted,
+              unresolvedTruncated: queued.truncated,
+            };
+          }
+        }
+
+        const summaryToWrite = {
+          ...result.summary,
+          extra: { ...(result.summary.extra ?? {}), ...ingestionExtra },
+        };
+
         await client.query(
           `UPDATE xb_core.uploads
               SET upload_status = $2,
@@ -269,7 +335,7 @@ export async function createUpload(
           [
             id,
             result.ok ? 'ready' : 'failed',
-            JSON.stringify(result.summary),
+            JSON.stringify(summaryToWrite),
             result.errorMessage ?? null,
             actor.actorId,
           ],
