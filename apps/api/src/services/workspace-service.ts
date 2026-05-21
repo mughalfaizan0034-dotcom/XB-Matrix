@@ -253,27 +253,34 @@ export async function selectActiveWorkspace(
  */
 export async function loadActiveWorkspaceForSession(
   app: FastifyInstance,
+  actor: ActorContext,
   sessionId: string,
 ): Promise<AccessibleWorkspace | null> {
-  const { rows } = await app.pg.query<{
-    id: string;
-    workspace_name: string;
-    workspace_type: Workspace['workspaceType'];
-    workspace_status: Workspace['workspaceStatus'];
-    organization_id: string;
-    organization_name: string;
-  }>(
-    `SELECT w.id, w.workspace_name, w.workspace_type, w.workspace_status,
-            w.organization_id, o.display_name AS organization_name
-       FROM xb_core.sessions s
-       JOIN xb_core.workspaces w     ON w.id = s.active_workspace_id
-       JOIN xb_core.organizations o  ON o.id = w.organization_id
-      WHERE s.id = $1
-        AND s.revoked_at IS NULL
-        AND w.deleted_at IS NULL
-        AND o.deleted_at IS NULL
-      LIMIT 1`,
-    [sessionId],
+  // xb_core.workspaces is RLS-scoped. This join MUST run inside
+  // withConnection so the actor's org context is set — a raw pool query
+  // has no context and sees zero rows, making the active workspace
+  // silently vanish on every page load / refresh.
+  const { rows } = await app.withConnection(actor, (client) =>
+    client.query<{
+      id: string;
+      workspace_name: string;
+      workspace_type: Workspace['workspaceType'];
+      workspace_status: Workspace['workspaceStatus'];
+      organization_id: string;
+      organization_name: string;
+    }>(
+      `SELECT w.id, w.workspace_name, w.workspace_type, w.workspace_status,
+              w.organization_id, o.display_name AS organization_name
+         FROM xb_core.sessions s
+         JOIN xb_core.workspaces w     ON w.id = s.active_workspace_id
+         JOIN xb_core.organizations o  ON o.id = w.organization_id
+        WHERE s.id = $1
+          AND s.revoked_at IS NULL
+          AND w.deleted_at IS NULL
+          AND o.deleted_at IS NULL
+        LIMIT 1`,
+      [sessionId],
+    ),
   );
   const r = rows[0];
   if (!r) return null;
@@ -330,16 +337,19 @@ export async function requireActiveWorkspace(
     );
   }
 
-  const { rows: wsRows } = await app.pg.query<{ id: string; organization_id: string }>(
-    `SELECT w.id, w.organization_id
-       FROM xb_core.workspaces w
-       JOIN xb_core.organizations o ON o.id = w.organization_id
-      WHERE w.id = $1
-        AND w.deleted_at IS NULL
-        AND w.workspace_status = 'active'
-        AND o.deleted_at IS NULL
-        AND o.organization_status = 'active'`,
-    [session.active_workspace_id],
+  // RLS-scoped — must run with the actor's connection context.
+  const { rows: wsRows } = await app.withConnection(actor, (client) =>
+    client.query<{ id: string; organization_id: string }>(
+      `SELECT w.id, w.organization_id
+         FROM xb_core.workspaces w
+         JOIN xb_core.organizations o ON o.id = w.organization_id
+        WHERE w.id = $1
+          AND w.deleted_at IS NULL
+          AND w.workspace_status = 'active'
+          AND o.deleted_at IS NULL
+          AND o.organization_status = 'active'`,
+      [session.active_workspace_id],
+    ),
   );
   const ws = wsRows[0];
   if (!ws) {

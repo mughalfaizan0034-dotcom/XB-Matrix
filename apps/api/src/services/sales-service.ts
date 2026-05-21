@@ -125,10 +125,15 @@ export async function listSalesOrders(
 ): Promise<SalesListResult> {
   // Verify workspace exists + belongs to actor's org (or actor is manager).
   // Doubles as a permission gate before we touch canonical data.
-  const ws = await app.pg
-    .query<{ organization_id: string }>(
-      `SELECT organization_id FROM xb_core.workspaces WHERE id = $1 AND deleted_at IS NULL`,
-      [opts.workspaceId],
+  // xb_core.workspaces is RLS-scoped — the lookup must run inside
+  // withConnection so the actor's org context is set. A raw pool query
+  // has no context and sees zero rows.
+  const ws = await app
+    .withConnection(actor, (client) =>
+      client.query<{ organization_id: string }>(
+        `SELECT organization_id FROM xb_core.workspaces WHERE id = $1 AND deleted_at IS NULL`,
+        [opts.workspaceId],
+      ),
     )
     .then((r) => r.rows[0]);
   if (!ws) throw new NotFoundError('workspace', opts.workspaceId);
@@ -227,10 +232,13 @@ export async function listSalesFacets(
   marketplaces: ReadonlyArray<string>;
   channels: ReadonlyArray<string>;
 }> {
-  const ws = await app.pg
-    .query<{ organization_id: string }>(
-      `SELECT organization_id FROM xb_core.workspaces WHERE id = $1 AND deleted_at IS NULL`,
-      [workspaceId],
+  // RLS-scoped — must run inside withConnection (see listSalesOrders).
+  const ws = await app
+    .withConnection(actor, (client) =>
+      client.query<{ organization_id: string }>(
+        `SELECT organization_id FROM xb_core.workspaces WHERE id = $1 AND deleted_at IS NULL`,
+        [workspaceId],
+      ),
     )
     .then((r) => r.rows[0]);
   if (!ws) throw new NotFoundError('workspace', workspaceId);

@@ -91,7 +91,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     if (!req.actor) return ok({ user: null, activeWorkspace: null }, req.id);
     const user = await loadCurrentUser(app, req.actor);
     const activeWorkspace = req.actor.sessionId
-      ? await loadActiveWorkspaceForSession(app, req.actor.sessionId)
+      ? await loadActiveWorkspaceForSession(app, req.actor, req.actor.sessionId)
       : null;
     return ok({ user, activeWorkspace }, req.id);
   });

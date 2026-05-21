@@ -129,10 +129,15 @@ async function assertWorkspaceAccess(
   actor: ActorContext,
   workspaceId: WorkspaceId,
 ): Promise<string> {
-  const ws = await app.pg
-    .query<{ organization_id: string }>(
-      `SELECT organization_id FROM xb_core.workspaces WHERE id = $1 AND deleted_at IS NULL`,
-      [workspaceId],
+  // xb_core.workspaces is RLS-scoped — the lookup must run inside
+  // withConnection so the actor's org context is set. A raw pool query
+  // has no context and sees zero rows.
+  const ws = await app
+    .withConnection(actor, (client) =>
+      client.query<{ organization_id: string }>(
+        `SELECT organization_id FROM xb_core.workspaces WHERE id = $1 AND deleted_at IS NULL`,
+        [workspaceId],
+      ),
     )
     .then((r) => r.rows[0]);
   if (!ws) throw new NotFoundError('workspace', workspaceId);

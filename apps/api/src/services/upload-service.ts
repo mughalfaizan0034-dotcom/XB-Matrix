@@ -161,12 +161,17 @@ export async function createUpload(
   // actor. Internal managers / super admins have no organization of
   // their own but legitimately upload into any workspace they've
   // switched into. Org users are scoped to their own org's workspaces.
-  const ws = await app.pg
-    .query<{ organization_id: string; workspace_status: string }>(
-      `SELECT organization_id, workspace_status
-         FROM xb_core.workspaces
-        WHERE id = $1 AND deleted_at IS NULL`,
-      [input.workspaceId],
+  // xb_core.workspaces is RLS-scoped — the lookup must run inside
+  // withConnection so the actor's org context is set. A raw pool query
+  // has no context and sees zero rows.
+  const ws = await app
+    .withConnection(actor, (client) =>
+      client.query<{ organization_id: string; workspace_status: string }>(
+        `SELECT organization_id, workspace_status
+           FROM xb_core.workspaces
+          WHERE id = $1 AND deleted_at IS NULL`,
+        [input.workspaceId],
+      ),
     )
     .then((r) => r.rows[0]);
   if (!ws) throw new NotFoundError('workspace', input.workspaceId);
