@@ -11,6 +11,7 @@ import {
   type UploadKind,
   type UploadStatus,
 } from '../services/upload-service.js';
+import { requireActiveWorkspace } from '../services/workspace-service.js';
 import { NotFoundError, SemanticError } from '../lib/errors.js';
 import { ok } from '../lib/http-helpers.js';
 
@@ -79,9 +80,14 @@ export const uploadRoutes: FastifyPluginAsync = async (app) => {
 
   /**
    * POST multipart/form-data:
-   *   file       (required) — the file
-   *   workspaceId (required) — ULID of the target workspace
-   *   kind       (optional) — upload kind, defaults to `generic`
+   *   file (required) — the file
+   *   kind (optional) — upload kind, defaults to `generic`
+   *
+   * The target workspace is NOT taken from the request — it is the
+   * session's active workspace, resolved server-side via
+   * requireActiveWorkspace. A client in "All workspaces" mode (no
+   * active workspace) cannot create uploads; this is the read-only
+   * guarantee for global mode and the no-leakage guarantee for writes.
    *
    * The multipart parser streams the file into a buffer here. For files
    * approaching MAX_UPLOAD_BYTES this is fine — Cloud Run gives us
@@ -95,7 +101,10 @@ export const uploadRoutes: FastifyPluginAsync = async (app) => {
       throw new SemanticError('Expected multipart/form-data.', 'not_multipart');
     }
 
-    let workspaceId: string | undefined;
+    // Resolve the write context before consuming the file body, so an
+    // upload with no pinned workspace fails fast without buffering.
+    const { workspaceId } = await requireActiveWorkspace(app, actor, actor.sessionId);
+
     let kindRaw: string | undefined;
     let filePart: {
       buffer: Buffer;
@@ -105,8 +114,10 @@ export const uploadRoutes: FastifyPluginAsync = async (app) => {
 
     for await (const part of req.parts()) {
       if (part.type === 'field') {
-        if (part.fieldname === 'workspaceId') workspaceId = String(part.value);
-        else if (part.fieldname === 'kind') kindRaw = String(part.value);
+        // workspaceId from the client is intentionally ignored — the
+        // write target is the session's active workspace, never a
+        // client-supplied value.
+        if (part.fieldname === 'kind') kindRaw = String(part.value);
       } else if (part.type === 'file') {
         if (filePart) {
           // Drain remaining parts before throwing so the connection closes cleanly.
@@ -123,18 +134,13 @@ export const uploadRoutes: FastifyPluginAsync = async (app) => {
     }
 
     if (!filePart) throw new SemanticError('No file provided.', 'no_file');
-    if (!workspaceId) throw new SemanticError('workspaceId is required.', 'no_workspace');
 
-    const parsedWs = ULID.safeParse(workspaceId);
-    if (!parsedWs.success) {
-      throw new SemanticError('workspaceId must be a 26-character ULID.', 'invalid_workspace_id');
-    }
     const kind: UploadKind = (UPLOAD_KINDS as ReadonlyArray<string>).includes(kindRaw ?? '')
       ? (kindRaw as UploadKind)
       : 'generic';
 
     const upload = await createUpload(app, actor, {
-      workspaceId: parsedWs.data as WorkspaceId,
+      workspaceId,
       uploadKind: kind,
       originalFilename: filePart.filename,
       contentType: filePart.mimetype,

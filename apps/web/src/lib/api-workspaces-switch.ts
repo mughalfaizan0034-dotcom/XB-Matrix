@@ -57,6 +57,15 @@ export function useSetActiveWorkspace() {
       qc.setQueryData<MeShape | undefined>(SESSION_QUERY_KEY, (prev) =>
         prev ? { ...prev, activeWorkspace: active } : { user: null, activeWorkspace: active },
       );
+      // A workspace switch changes the entire operational context.
+      // Drop every cached query except the session itself so NO data
+      // from the previous workspace can survive into the new one
+      // (uploads, unresolved queue, dashboard/inventory/sales/ads
+      // scoped data). Mounted queries refetch cleanly under the new
+      // context; unmounted ones refetch on next visit.
+      qc.removeQueries({
+        predicate: (query) => query.queryKey[0] !== 'session',
+      });
     },
   });
 }

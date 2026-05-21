@@ -6,7 +6,8 @@ import type {
   OrganizationId,
   WorkspaceId,
 } from '@xb/types';
-import { NotFoundError, SemanticError } from '../lib/errors.js';
+import { ConflictError, NotFoundError, SemanticError } from '../lib/errors.js';
+import { requireActiveWorkspace } from './workspace-service.js';
 import { getValidator } from '../uploads/validators/index.js';
 
 export type UploadStatus = 'queued' | 'uploading' | 'validating' | 'ready' | 'failed';
@@ -411,6 +412,16 @@ export async function retryUpload(
       module: 'uploads',
       action: 'edit',
     });
+    // Retry re-queues ingestion — a write. It must run inside the
+    // upload's own workspace as the pinned session context, so a stale
+    // or cross-workspace client can't trigger processing elsewhere.
+    const active = await requireActiveWorkspace(app, actor, actor.sessionId);
+    if (active.workspaceId !== row.workspace_id) {
+      throw new ConflictError(
+        "Switch to this upload's workspace before retrying it.",
+        'workspace_mismatch',
+      );
+    }
     if (row.upload_status !== 'failed') {
       throw new SemanticError(
         `Only failed uploads can be retried (current status: ${row.upload_status}).`,

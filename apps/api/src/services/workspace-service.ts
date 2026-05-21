@@ -287,6 +287,77 @@ export async function loadActiveWorkspaceForSession(
   };
 }
 
+/**
+ * Resolve the operational write context for the current request.
+ *
+ * The active workspace is a SECURED SESSION CONTEXT — it lives on the
+ * session row, not on the request body. Every workspace-scoped WRITE
+ * (uploads, ingestion, future inventory/transfer/forecast mutations)
+ * must derive its target workspace from here, never from a
+ * client-supplied id. This makes "All workspaces" mode inherently
+ * read-only and removes any path for a tampered/stale client to write
+ * into the wrong workspace.
+ *
+ * Throws (409) when there is no active workspace, and validates that
+ * the workspace is still real, active, and inside the actor's scope.
+ */
+export async function requireActiveWorkspace(
+  app: FastifyInstance,
+  actor: ActorContext,
+  sessionId: string | null,
+): Promise<{ workspaceId: WorkspaceId; organizationId: OrganizationId }> {
+  if (!sessionId) {
+    throw new ConflictError(
+      'This action requires an interactive session.',
+      'session_required',
+    );
+  }
+
+  const { rows: sessionRows } = await app.pg.query<{ active_workspace_id: string | null }>(
+    `SELECT active_workspace_id
+       FROM xb_core.sessions
+      WHERE id = $1 AND revoked_at IS NULL AND expires_at > now()`,
+    [sessionId],
+  );
+  const session = sessionRows[0];
+  if (!session) {
+    throw new ConflictError('Your session is no longer valid. Sign in again.', 'session_invalid');
+  }
+  if (!session.active_workspace_id) {
+    throw new ConflictError(
+      'Pick a workspace before performing this action. "All workspaces" mode is read-only.',
+      'no_active_workspace',
+    );
+  }
+
+  const { rows: wsRows } = await app.pg.query<{ id: string; organization_id: string }>(
+    `SELECT w.id, w.organization_id
+       FROM xb_core.workspaces w
+       JOIN xb_core.organizations o ON o.id = w.organization_id
+      WHERE w.id = $1
+        AND w.deleted_at IS NULL
+        AND w.workspace_status = 'active'
+        AND o.deleted_at IS NULL
+        AND o.organization_status = 'active'`,
+    [session.active_workspace_id],
+  );
+  const ws = wsRows[0];
+  if (!ws) {
+    throw new ConflictError(
+      'Your active workspace is no longer available. Pick another workspace.',
+      'active_workspace_unavailable',
+    );
+  }
+  if (!actor.isInternalManager && ws.organization_id !== (actor.organizationId as string | null)) {
+    throw new ForbiddenError('workspace is not in your organization', 'workspace_scope');
+  }
+
+  return {
+    workspaceId: ws.id as WorkspaceId,
+    organizationId: ws.organization_id as OrganizationId,
+  };
+}
+
 export async function getWorkspace(
   app: FastifyInstance,
   actor: ActorContext,

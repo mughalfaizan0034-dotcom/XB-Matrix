@@ -74,11 +74,9 @@ export function UploadDialog({ open, onClose }: Props) {
   async function onSubmit() {
     if (!file || !activeWorkspace) return;
     try {
-      const upload = await create.mutateAsync({
-        workspaceId: activeWorkspace.id,
-        kind,
-        file,
-      });
+      // No workspaceId — the server writes into the session's active
+      // workspace. activeWorkspace is checked only to gate the UI.
+      const upload = await create.mutateAsync({ kind, file });
       toast.push('success', `Uploaded ${upload.originalFilename}.`);
       onClose();
     } catch (err) {

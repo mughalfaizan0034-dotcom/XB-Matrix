@@ -111,17 +111,20 @@ export function useUpload(id: string | null) {
 }
 
 export interface CreateUploadInput {
-  readonly workspaceId: string;
   readonly kind?: UploadKind;
   readonly file: File;
 }
 
+/**
+ * Create an upload. The target workspace is NOT sent by the client —
+ * the server writes into the session's active workspace. This is the
+ * no-leakage guarantee: the browser cannot choose where data lands.
+ */
 export function useCreateUpload() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ workspaceId, kind, file }: CreateUploadInput) => {
+    mutationFn: ({ kind, file }: CreateUploadInput) => {
       const form = new FormData();
-      form.append('workspaceId', workspaceId);
       if (kind) form.append('kind', kind);
       form.append('file', file, file.name);
       return api.post<{ upload: UploadSummary }>('/v1/uploads', form).then((r) => r.upload);

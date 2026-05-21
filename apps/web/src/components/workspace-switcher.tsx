@@ -19,6 +19,7 @@ import {
   useSetActiveWorkspace,
   type AccessibleWorkspace,
 } from '@/lib/api-workspaces-switch';
+import { workspaceTypeLabel } from '@/lib/api-workspaces';
 
 /**
  * Topbar workspace switcher with a multi-level flyout:
@@ -410,7 +411,9 @@ function groupByOrganization(
   return [...map.values()];
 }
 
-// Workspace type is a free-text optional label.
+// Workspace type → display label. Normalizes the retired "omni_channel"
+// to "General"; falls back to "Workspace" when no type is set.
 function prettyType(t: AccessibleWorkspace['workspaceType']): string {
-  return t?.trim() || 'Workspace';
+  const label = workspaceTypeLabel(t);
+  return label === '—' ? 'Workspace' : label;
 }

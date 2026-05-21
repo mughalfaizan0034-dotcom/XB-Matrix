@@ -3,7 +3,6 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useSession } from '@/lib/session';
-import { useAutoSelectWorkspace } from '@/lib/use-auto-select-workspace';
 
 /**
  * Client-side guard for authenticated routes. Redirects to /sign-in if the
@@ -23,9 +22,10 @@ export function Protected({ children }: { children: React.ReactNode }) {
     }
   }, [isLoading, user, router, pathname]);
 
-  // Once signed in, pick the active workspace automatically when the
-  // actor only has one — saves a click every fresh session.
-  useAutoSelectWorkspace();
+  // No auto-select: the active workspace is a secured operational
+  // context and must be chosen explicitly. Sign-in routes to
+  // /select-workspace; until a workspace is pinned the app stays in
+  // read-only "All workspaces" mode.
 
   if (isLoading) {
     return (
