@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { Button, Dialog, FormField, Input, Select, useToast } from '@xb/ui';
-import { type Workspace, usePatchWorkspace } from '@/lib/api-workspaces';
+import {
+  type Workspace,
+  usePatchWorkspace,
+  WORKSPACE_TYPE_OPTIONS,
+  normalizeWorkspaceType,
+} from '@/lib/api-workspaces';
 import { describeError } from '@/lib/session';
 import { ApiError } from '@/lib/api-client';
 import { TimezoneSelect } from '@/components/timezone-select';
@@ -43,7 +48,7 @@ export function EditWorkspaceDialog({
   useEffect(() => {
     if (open && workspace) {
       setName(workspace.workspaceName);
-      setType(workspace.workspaceType ?? '');
+      setType(normalizeWorkspaceType(workspace.workspaceType));
       setCurrency(workspace.defaultCurrencyCode);
       setTimezone(workspace.timezone);
       // dos_target_days comes from PG as "30.00"; the new tighter UX wants
@@ -124,16 +129,16 @@ export function EditWorkspaceDialog({
           )}
         </FormField>
 
-        <FormField label="Workspace type" hint="Optional free-text label.">
+        <FormField label="Workspace type" hint="Optional — how this workspace is used.">
           {(p) => (
-            <Input
-              {...p}
-              value={workspaceType}
-              onChange={(e) => setType(e.target.value)}
-              placeholder="Optional"
-              maxLength={80}
-              autoComplete="off"
-            />
+            <Select {...p} value={workspaceType} onChange={(e) => setType(e.target.value)}>
+              <option value="">Not set</option>
+              {WORKSPACE_TYPE_OPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </Select>
           )}
         </FormField>
 

@@ -168,7 +168,7 @@ Manage operational workspaces.
 Table columns: Workspace Name, Type, Users Count, Status, Created Date,
 Actions.
 
-Workspace types: `marketplace`, `dtc`, `warehouse`, `omni_channel`.
+Workspace types: `marketplace`, `dtc`, `warehouse`, `general`.
 
 #### Create workspace fields
 
@@ -1229,7 +1229,7 @@ CREATE TABLE xb_core.workspaces (
   -- PACK_TIMESTAMPS, PACK_SOFT_DELETE, PACK_ACTORS, PACK_ROW_VERSION
 
   CONSTRAINT fk_workspaces_org FOREIGN KEY (organization_id) REFERENCES xb_core.organizations(id),
-  CONSTRAINT ck_workspaces_type CHECK (workspace_type IN ('marketplace','dtc','warehouse','omni_channel')),
+  CONSTRAINT ck_workspaces_type CHECK (workspace_type IN ('marketplace','dtc','warehouse','general')),
   CONSTRAINT ck_workspaces_status CHECK (workspace_status IN ('active','archived')),
   CONSTRAINT ck_workspaces_dos_positive CHECK (dos_target_days >= 0)
 );

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button, Dialog, FormField, Input, Select, useToast } from '@xb/ui';
 import { DEFAULT_TIMEZONE } from '@xb/types/timezones';
 import type { Organization } from '@/lib/api-orgs';
-import { useCreateWorkspace } from '@/lib/api-workspaces';
+import { useCreateWorkspace, WORKSPACE_TYPE_OPTIONS } from '@/lib/api-workspaces';
 import { describeError } from '@/lib/session';
 import { ApiError } from '@/lib/api-client';
 import { TimezoneSelect } from '@/components/timezone-select';
@@ -146,16 +146,16 @@ export function NewWorkspaceDialog({
           )}
         </FormField>
 
-        <FormField label="Workspace type" hint="Optional free-text label, e.g. Amazon, DTC, Warehouse.">
+        <FormField label="Workspace type" hint="Optional — how this workspace is used.">
           {(p) => (
-            <Input
-              {...p}
-              value={workspaceType}
-              onChange={(e) => setType(e.target.value)}
-              placeholder="Optional"
-              maxLength={80}
-              autoComplete="off"
-            />
+            <Select {...p} value={workspaceType} onChange={(e) => setType(e.target.value)}>
+              <option value="">Not set</option>
+              {WORKSPACE_TYPE_OPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </Select>
           )}
         </FormField>
 

@@ -30,6 +30,7 @@ import {
   useWorkspaces,
   useWorkspaceTransition,
   useSoftDeleteWorkspace,
+  workspaceTypeLabel,
   type Workspace,
 } from '@/lib/api-workspaces';
 import { describeError, useActiveWorkspace } from '@/lib/session';
@@ -152,7 +153,7 @@ export function WorkspaceListNested({ organization }: { organization: Organizati
         </span>
       ),
     },
-    { key: 'type',     header: 'Type',     sortKey: 'workspaceType', accessor: (w) => prettyType(w.workspaceType) },
+    { key: 'type',     header: 'Type',     sortKey: 'workspaceType', accessor: (w) => workspaceTypeLabel(w.workspaceType) },
     { key: 'currency', header: 'Currency', sortKey: 'defaultCurrencyCode', accessor: (w) => w.defaultCurrencyCode },
     { key: 'tz',       header: 'Timezone', sortKey: 'timezone', accessor: (w) => w.timezone },
     {
@@ -362,11 +363,6 @@ export function WorkspaceListNested({ organization }: { organization: Organizati
       />
     </div>
   );
-}
-
-// Workspace type is a free-text optional label.
-function prettyType(t: Workspace['workspaceType']): string {
-  return t?.trim() || '—';
 }
 
 function formatDate(iso: string): string {

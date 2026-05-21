@@ -30,7 +30,7 @@ function SignInShell({ children }: { children?: React.ReactNode }) {
 
         <div className="mt-6 border-t border-border pt-4 text-center">
           <a
-            href="https://www.xceleratebrands.com/"
+            href="https://xceleratebrands.com/testimonials-reviews"
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-muted-foreground transition-colors hover:text-foreground"

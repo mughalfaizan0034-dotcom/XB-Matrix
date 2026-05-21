@@ -101,7 +101,8 @@ in `UPLOAD_KINDS` so display still works).
   super-admin-only checks use `effectiveRole === 'super_admin'`.
 - **User management**: action is **"Remove user"** (soft delete, idempotent,
   no row_version, revokes sessions). The super-admin row cannot be removed.
-- **Workspace type**: free-text optional label (`string | null`). No enum.
+- **Workspace type**: optional, controlled select — Marketplace / DTC /
+  Warehouse / General. UI-constrained; DB column stays nullable.
 - **Sign-in page**: footer "Powered by Xcelerate Brands" linking
   `https://www.xceleratebrands.com/`.
 
