@@ -464,6 +464,60 @@ export async function getUpload(
 }
 
 /**
+ * Hard-delete an upload row + its stored object. Same write-context
+ * gate as retry — the operator must be in the upload's own workspace.
+ * Derived canonical rows reference the upload via FK RESTRICT; if any
+ * exist the delete fails with a clear error so the operator can reset
+ * those first.
+ */
+export async function deleteUpload(
+  app: FastifyInstance,
+  actor: ActorContext,
+  id: string,
+): Promise<void> {
+  await app.withConnection(actor, async (client) => {
+    const { rows: existing } = await client.query<UploadRow>(`${SELECT_UPLOAD} AND id = $1`, [id]);
+    const row = existing[0];
+    if (!row) throw new NotFoundError('upload', id);
+    await app.assertPermission(actor, {
+      organizationId: row.organization_id as OrganizationId,
+      workspaceId: row.workspace_id as WorkspaceId,
+      module: 'uploads',
+      action: 'delete',
+    });
+    const active = await requireActiveWorkspace(app, actor, actor.sessionId);
+    if (active.workspaceId !== row.workspace_id) {
+      throw new ConflictError(
+        "Switch to this upload's workspace before deleting it.",
+        'workspace_mismatch',
+      );
+    }
+    try {
+      await client.query(`DELETE FROM xb_core.uploads WHERE id = $1`, [id]);
+    } catch (err) {
+      if ((err as { code?: string }).code === '23503') {
+        throw new ConflictError(
+          'This upload has derived canonical rows. Reset those first, then retry.',
+          'has_canonical_dependencies',
+        );
+      }
+      throw err;
+    }
+    // Storage cleanup is best-effort — the row is already gone, so a
+    // bucket failure becomes an orphan object for a future cleanup job
+    // rather than blocking the delete.
+    await app.storage
+      .delete({ bucket: row.storage_bucket, objectKey: row.storage_object_key })
+      .catch((cleanupErr) =>
+        app.log.warn(
+          { cleanupErr, uploadId: id, objectKey: row.storage_object_key },
+          'failed to delete upload storage object',
+        ),
+      );
+  });
+}
+
+/**
  * Retry: bump retry_count, clear error + validation, transition back to
  * queued. Real retry semantics (re-enqueue worker job) land when the
  * Cloud Tasks validation pipeline lands; for now this is a state reset.

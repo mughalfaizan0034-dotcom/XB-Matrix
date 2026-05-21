@@ -152,6 +152,15 @@ export function useRetryUpload() {
   });
 }
 
+export function useDeleteUpload() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post<{ removed: boolean }>(`/v1/uploads/${id}/delete`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: UPLOADS_KEY }),
+  });
+}
+
 export async function fetchUploadDownloadUrl(id: string): Promise<string> {
   const r = await api.get<{ url: string; expiresAt: string }>(`/v1/uploads/${id}/download-url`);
   return r.url;

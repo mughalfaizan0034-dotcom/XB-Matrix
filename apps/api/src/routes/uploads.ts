@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { WorkspaceId } from '@xb/types';
 import {
   createUpload,
+  deleteUpload,
   getUpload,
   listUploads,
   retryUpload,
@@ -165,6 +166,13 @@ export const uploadRoutes: FastifyPluginAsync = async (app) => {
     const { id } = IdParam.parse(req.params);
     const upload = await retryUpload(app, actor, id);
     return ok({ upload }, req.id);
+  });
+
+  app.post('/:id/delete', async (req) => {
+    const actor = req.requireActor();
+    const { id } = IdParam.parse(req.params);
+    await deleteUpload(app, actor, id);
+    return ok({ removed: true }, req.id);
   });
 };
 

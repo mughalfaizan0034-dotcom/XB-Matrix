@@ -43,7 +43,11 @@ export function UploadDialog({ open, onClose }: Props) {
   const create = useCreateUpload();
   const toast = useToast();
   const [file, setFile] = useState<File | null>(null);
-  const [kind, setKind] = useState<UploadKind>('generic');
+  // Default to the first option in KIND_OPTIONS so the visible select
+  // value matches state from the moment the dialog opens. (Defaulting
+  // to 'generic' showed "Sales Report" visually but submitted 'generic'
+  // when the user did not click into the dropdown.)
+  const [kind, setKind] = useState<UploadKind>('sales_performance');
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -51,7 +55,7 @@ export function UploadDialog({ open, onClose }: Props) {
   useEffect(() => {
     if (open) {
       setFile(null);
-      setKind('generic');
+      setKind('sales_performance');
       setError(null);
       setDragging(false);
     }

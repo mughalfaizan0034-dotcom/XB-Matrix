@@ -9,10 +9,12 @@ import {
   MoreHorizontal,
   Plus,
   RefreshCcw,
+  Trash2,
 } from 'lucide-react';
 import {
   Badge,
   Button,
+  ConfirmDialog,
   DataTable,
   DataTablePagination,
   DataTableToolbar,
@@ -30,6 +32,7 @@ import { UploadTemplatesPanel } from '@/components/upload-templates-panel';
 import { useActiveWorkspace, useSession, describeError } from '@/lib/session';
 import { useWorkspaces } from '@/lib/api-workspaces';
 import {
+  useDeleteUpload,
   useRetryUpload,
   useUploads,
   type UploadStatus,
@@ -132,13 +135,29 @@ export default function UploadsPage() {
 
   const [showUpload, setShowUpload] = useState(false);
   const [openUploadId, setOpenUploadId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UploadSummary | null>(null);
   const retry = useRetryUpload();
+  const remove = useDeleteUpload();
   const toast = useToast();
 
   async function onRetry(u: UploadSummary) {
     try {
       await retry.mutateAsync(u.id);
       toast.push('success', 'Retry queued.');
+    } catch (err) {
+      toast.push('error', describeError(err));
+    }
+  }
+
+  async function onDeleteConfirm() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
+    try {
+      await remove.mutateAsync(target.id);
+      toast.push('success', `Deleted ${target.originalFilename}.`);
+      // Close the detail drawer if it was open for the deleted row.
+      if (openUploadId === target.id) setOpenUploadId(null);
+      setDeleteTarget(null);
     } catch (err) {
       toast.push('error', describeError(err));
     }
@@ -157,6 +176,14 @@ export default function UploadsPage() {
         onSelect: () => onRetry(u),
       });
     }
+    items.push({
+      key: 'delete',
+      label: 'Delete upload',
+      icon: Trash2,
+      variant: 'danger',
+      divider: items.length > 1,
+      onSelect: () => setDeleteTarget(u),
+    });
     return items;
   }
 
@@ -594,6 +621,17 @@ export default function UploadsPage() {
 
       <UploadDialog open={showUpload} onClose={() => setShowUpload(false)} />
       <UploadDetailDrawer uploadId={openUploadId} onClose={() => setOpenUploadId(null)} />
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onClose={() => (remove.isPending ? undefined : setDeleteTarget(null))}
+        onConfirm={onDeleteConfirm}
+        busy={remove.isPending}
+        variant="danger"
+        title={deleteTarget ? `Delete ${deleteTarget.originalFilename}?` : ''}
+        description="Removes this ingestion event row and its stored file. If the upload produced canonical rows, they must be reset first. This cannot be undone."
+        confirmLabel="Delete upload"
+      />
     </div>
   );
 }

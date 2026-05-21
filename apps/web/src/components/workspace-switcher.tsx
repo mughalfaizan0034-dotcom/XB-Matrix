@@ -7,7 +7,6 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  Globe,
   Layers,
   List,
 } from 'lucide-react';
@@ -204,24 +203,11 @@ export function WorkspaceSwitcher() {
               {/* Scroll region — every org row lives here so the list
                   caps at ~8 visible items with a scrollbar past that. */}
               <div className="min-h-0 flex-1 overflow-y-auto p-1">
-                {active ? (
-                  <>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => pickWorkspace(null, '')}
-                      onMouseEnter={() => {
-                        cancelCloseFlyout();
-                        setActiveOrgId(null);
-                      }}
-                      className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-sm text-foreground hover:bg-muted"
-                    >
-                      <Globe className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                      <span className="flex-1 truncate">All workspaces</span>
-                    </button>
-                    <div className="my-1 h-px bg-border" aria-hidden="true" />
-                  </>
-                ) : null}
+                {/* "All workspaces" clear is intentionally NOT in the
+                    flyout — the footer "View all workspaces" link
+                    handles workspace navigation; we don't surface a
+                    way to drop into the read-only cross-workspace mode
+                    from the switcher itself. */}
 
                 {/* Empty + loading states. A fresh manager often lands
                     here before any orgs/workspaces exist — give them a
