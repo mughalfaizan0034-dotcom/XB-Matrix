@@ -483,6 +483,7 @@ export interface AdvertisingSummary {
     readonly tacos: string | null; // spend / total_revenue
     readonly roas: string | null;  // attributed_sales / spend
   };
+  readonly provenance: EngineProvenance;
 }
 
 export async function getAdvertisingSummary(
@@ -492,31 +493,57 @@ export async function getAdvertisingSummary(
 ): Promise<AdvertisingSummary> {
   await requireWorkspaceAccess(app, actor, scope.workspaceId, 'view');
   const windowDays = clampWindow(scope.windowDays);
-  // The advertising canonical table isn't yet migrated (see CLAUDE.md
-  // §"Next priorities" — engines A3). When it lands the same shape
-  // returns populated values; the UI doesn't change.
-  return {
-    workspaceId: scope.workspaceId,
-    windowDays,
-    readiness: {
-      ready: false,
-      reason:
-        'Advertising data is not yet ingested. Add the Ads Performance CSV upload type to populate ACOS, TACOS, ROAS, and campaign health.',
-      action: { label: 'Open Uploads', href: '/uploads' },
-    },
-    kpis: {
-      spend: null,
-      attributedSales: null,
-      orders: null,
-      impressions: null,
-      clicks: null,
-      ctr: null,
-      cpc: null,
-      acos: null,
-      tacos: null,
-      roas: null,
-    },
-  };
+  // xb_canonical.channel_ads landed in migration 0023 but the validator
+  // → mapper → writer wire-up is the next atomic slice. Until then the
+  // engine reports a readiness probe over the empty table so provenance
+  // is honest (zero rows, no source uploads) and the UI flips populated
+  // the moment writes start landing.
+  const provenance = emptyCollector();
+  return app.withConnection(actor, async (client) => {
+    const { rows } = await client.query<{
+      row_count: string;
+      upload_ids: string[] | null;
+    }>(
+      `SELECT count(*)::text AS row_count,
+              array_remove(array_agg(DISTINCT upload_id), NULL) AS upload_ids
+         FROM xb_canonical.channel_ads
+        WHERE workspace_id = $1`,
+      [scope.workspaceId],
+    );
+    recordCanonicalRead(provenance, rows[0]?.upload_ids ?? null, rows[0]?.row_count ?? 0);
+
+    const rowCount = Number(rows[0]?.row_count ?? 0);
+    const readiness: EngineReadiness = rowCount > 0
+      ? {
+          ready: false,
+          reason:
+            'Advertising rows are present but the engine aggregation pipeline isn’t wired yet. Engine wiring lands as a separate atomic slice.',
+        }
+      : {
+          ready: false,
+          reason:
+            'No advertising data ingested yet. Upload an Ads Performance CSV to populate ACOS, TACOS, ROAS, and campaign health.',
+          action: { label: 'Open Uploads', href: '/uploads' },
+        };
+    return {
+      workspaceId: scope.workspaceId,
+      windowDays,
+      readiness,
+      kpis: {
+        spend: null,
+        attributedSales: null,
+        orders: null,
+        impressions: null,
+        clicks: null,
+        ctr: null,
+        cpc: null,
+        acos: null,
+        tacos: null,
+        roas: null,
+      },
+      provenance: finalizeProvenance(provenance),
+    };
+  });
 }
 
 // ----- Unit economics ------------------------------------------------
@@ -538,6 +565,7 @@ export interface UnitEconomicsSummary {
     /** 0..1 — share of SKUs with both unit cost and a recent selling price. */
     readonly readinessShare: string;
   };
+  readonly provenance: EngineProvenance;
 }
 
 export async function getUnitEconomicsSummary(
@@ -547,31 +575,46 @@ export async function getUnitEconomicsSummary(
 ): Promise<UnitEconomicsSummary> {
   await requireWorkspaceAccess(app, actor, scope.workspaceId, 'view');
   const windowDays = clampWindow(scope.windowDays);
+  const provenance = emptyCollector();
 
   return app.withConnection(actor, async (client) => {
+    // Two reads in this query (inventory + sales) — both contribute to
+    // provenance. We materialize the upload_ids + row_counts in CTEs
+    // alongside the SKU-coverage analysis so it's all one round trip.
     const { rows } = await client.query<{
       total_skus: string;
       with_unit_cost: string;
       with_price: string;
       both: string;
+      inv_rows: string;
+      sales_rows: string;
+      inv_upload_ids: string[] | null;
+      sales_upload_ids: string[] | null;
     }>(
       `WITH win AS (
          SELECT (CURRENT_DATE - ($2::int - 1)) AS f, CURRENT_DATE AS t
        ),
-       inv_skus AS (
-         SELECT DISTINCT sku, bool_or(unit_cost IS NOT NULL) AS has_cost
+       inv_rows AS (
+         SELECT sku, unit_cost, upload_id
            FROM xb_canonical.inventory_snapshots
           WHERE workspace_id = $1 AND deleted_at IS NULL
+       ),
+       inv_skus AS (
+         SELECT DISTINCT sku, bool_or(unit_cost IS NOT NULL) AS has_cost
+           FROM inv_rows
           GROUP BY sku
        ),
-       sales_skus AS (
-         SELECT DISTINCT s.sku
+       sales_rows AS (
+         SELECT s.sku, s.upload_id
            FROM xb_canonical.sales_orders s, win
           WHERE s.workspace_id = $1
             AND s.deleted_at IS NULL
             AND s.order_date >= win.f
             AND s.order_date <= win.t
             AND s.unit_price > 0
+       ),
+       sales_skus AS (
+         SELECT DISTINCT sku FROM sales_rows
        ),
        all_skus AS (
          SELECT sku FROM inv_skus
@@ -584,11 +627,18 @@ export async function getUnitEconomicsSummary(
               count(*) FILTER (
                 WHERE EXISTS (SELECT 1 FROM inv_skus i WHERE i.sku = a.sku AND i.has_cost)
                   AND EXISTS (SELECT 1 FROM sales_skus s WHERE s.sku = a.sku)
-              )::text AS both
+              )::text AS both,
+              (SELECT count(*)::text FROM inv_rows)   AS inv_rows,
+              (SELECT count(*)::text FROM sales_rows) AS sales_rows,
+              (SELECT array_remove(array_agg(DISTINCT upload_id), NULL) FROM inv_rows)   AS inv_upload_ids,
+              (SELECT array_remove(array_agg(DISTINCT upload_id), NULL) FROM sales_rows) AS sales_upload_ids
          FROM all_skus a`,
       [scope.workspaceId, windowDays],
     );
     const r = rows[0]!;
+    recordCanonicalRead(provenance, r.inv_upload_ids, r.inv_rows);
+    recordCanonicalRead(provenance, r.sales_upload_ids, r.sales_rows);
+
     const total = Number(r.total_skus);
     const withCost = Number(r.with_unit_cost);
     const withPrice = Number(r.with_price);
@@ -613,6 +663,7 @@ export async function getUnitEconomicsSummary(
         skusWithSellingPrice: withPrice,
         readinessShare: share.toFixed(4),
       },
+      provenance: finalizeProvenance(provenance),
     };
   });
 }
@@ -627,6 +678,7 @@ export interface ShipmentsReadiness {
     readonly skusDeadStock: number;
     readonly dosTargetDays: string;
   };
+  readonly provenance: EngineProvenance;
 }
 
 export async function getShipmentsReadiness(
@@ -640,6 +692,10 @@ export async function getShipmentsReadiness(
   // template ships. Surfacing the inputs today gives operators an
   // honest preview without inventing recommendations.
   const bundle = await getDashboardKpis(app, actor, scope);
+  // Shipments delegates entirely to the dashboard's combined view, so
+  // the provenance the dashboard already computed IS the provenance
+  // shipments would compute. Forwarding it directly preserves source
+  // upload attribution without re-reading canonical.
   return {
     workspaceId: scope.workspaceId,
     readiness: {
@@ -653,6 +709,7 @@ export async function getShipmentsReadiness(
       skusDeadStock: bundle.combined.deadStockSkus,
       dosTargetDays: bundle.dosTargetDays,
     },
+    provenance: bundle.provenance,
   };
 }
 
@@ -676,6 +733,7 @@ export interface ReportRegistry {
     readonly inventoryRows: number;
     readonly adsRows: number;
   };
+  readonly provenance: EngineProvenance;
 }
 
 export async function getReportRegistry(
@@ -684,26 +742,48 @@ export async function getReportRegistry(
   scope: WorkspaceScope,
 ): Promise<ReportRegistry> {
   await requireWorkspaceAccess(app, actor, scope.workspaceId, 'view');
+  const provenance = emptyCollector();
 
   const counts = await app.withConnection(actor, async (client) => {
+    // Canonical row counts that drive the report availability flags.
+    // channel_ads is now in-scope (migration 0023 shipped); empty until
+    // the validator/mapper writer wire-up lands as its own atomic slice.
     const { rows } = await client.query<{
       sales: string;
       inventory: string;
+      ads: string;
+      sales_uploads: string[] | null;
+      inventory_uploads: string[] | null;
+      ads_uploads: string[] | null;
     }>(
       `SELECT
          (SELECT count(*)::text FROM xb_canonical.sales_orders
             WHERE workspace_id = $1 AND deleted_at IS NULL) AS sales,
          (SELECT count(*)::text FROM xb_canonical.inventory_snapshots
-            WHERE workspace_id = $1 AND deleted_at IS NULL) AS inventory`,
+            WHERE workspace_id = $1 AND deleted_at IS NULL) AS inventory,
+         (SELECT count(*)::text FROM xb_canonical.channel_ads
+            WHERE workspace_id = $1) AS ads,
+         (SELECT array_remove(array_agg(DISTINCT upload_id), NULL)
+            FROM xb_canonical.sales_orders
+            WHERE workspace_id = $1 AND deleted_at IS NULL) AS sales_uploads,
+         (SELECT array_remove(array_agg(DISTINCT upload_id), NULL)
+            FROM xb_canonical.inventory_snapshots
+            WHERE workspace_id = $1 AND deleted_at IS NULL) AS inventory_uploads,
+         (SELECT array_remove(array_agg(DISTINCT upload_id), NULL)
+            FROM xb_canonical.channel_ads
+            WHERE workspace_id = $1) AS ads_uploads`,
       [scope.workspaceId],
     );
     return rows[0]!;
   });
 
+  recordCanonicalRead(provenance, counts.sales_uploads, counts.sales);
+  recordCanonicalRead(provenance, counts.inventory_uploads, counts.inventory);
+  recordCanonicalRead(provenance, counts.ads_uploads, counts.ads);
+
   const salesRows = Number(counts.sales);
   const inventoryRows = Number(counts.inventory);
-  // Ads canonical table not yet migrated — count stays 0 until it ships.
-  const adsRows = 0;
+  const adsRows = Number(counts.ads);
 
   return {
     workspaceId: scope.workspaceId,
@@ -746,6 +826,7 @@ export async function getReportRegistry(
       inventoryRows,
       adsRows,
     },
+    provenance: finalizeProvenance(provenance),
   };
 }
 
