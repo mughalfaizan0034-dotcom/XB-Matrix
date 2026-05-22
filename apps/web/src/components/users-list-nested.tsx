@@ -23,6 +23,7 @@ import {
   MoreHorizontal,
   Play,
   Plus,
+  ShieldCheck,
   Trash2,
   UserPlus,
 } from 'lucide-react';
@@ -35,6 +36,7 @@ import {
 } from '@/lib/api-users';
 import { describeError, useSession } from '@/lib/session';
 import { AddUserDialog } from '@/components/add-user-dialog';
+import { UserPermissionsDrawer } from '@/components/user-permissions-drawer';
 import type { Organization } from '@/lib/api-orgs';
 
 const STATUS_TONE: Record<UserSummary['status'], 'success' | 'warning' | 'neutral'> = {
@@ -56,6 +58,7 @@ export function UsersListNested({ organization }: { organization: Organization }
 
   const [showAdd, setShowAdd] = useState(false);
   const [resetTarget, setResetTarget] = useState<UserSummary | null>(null);
+  const [permsTarget, setPermsTarget] = useState<UserSummary | null>(null);
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
 
   const [tableState, tableActions] = useDataTableState({
@@ -71,6 +74,17 @@ export function UsersListNested({ organization }: { organization: Organization }
 
   function buildMenu(u: UserSummary): DropdownMenuItem[] {
     const items: DropdownMenuItem[] = [];
+    // Workspace permissions matrix — only meaningful for org users
+    // (internal users bypass workspace permissions). Admins manage,
+    // org_users cannot edit anyone's permissions.
+    if (canAdd && u.userKind === 'organization') {
+      items.push({
+        key: 'permissions',
+        label: 'Manage permissions…',
+        icon: ShieldCheck,
+        onSelect: () => setPermsTarget(u),
+      });
+    }
     if (u.status === 'active' || u.status === 'pending_invite') {
       items.push({
         key: 'reset-password',
@@ -348,6 +362,11 @@ export function UsersListNested({ organization }: { organization: Organization }
       />
 
       <ResetPasswordDialog target={resetTarget} onClose={() => setResetTarget(null)} />
+
+      <UserPermissionsDrawer
+        userId={permsTarget?.id ?? null}
+        onClose={() => setPermsTarget(null)}
+      />
 
       <ConfirmDialog
         open={confirm !== null}

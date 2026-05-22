@@ -33,7 +33,7 @@ import { AuditTrail } from '@/components/audit-trail';
 import { WorkspaceListNested } from '@/components/workspace-list-nested';
 import { UsersListNested } from '@/components/users-list-nested';
 
-type TabKey = 'workspaces' | 'users' | 'permissions' | 'audit' | 'billing' | 'integrations';
+type TabKey = 'workspaces' | 'users' | 'audit' | 'billing' | 'integrations';
 
 const STATUS_TONE: Record<Organization['organizationStatus'], 'success' | 'warning' | 'neutral'> = {
   active: 'success',
@@ -218,7 +218,6 @@ export function OrganizationCard({
             items={[
               { key: 'workspaces',   label: 'Workspaces' },
               { key: 'users',        label: 'Organization Users' },
-              { key: 'permissions',  label: 'Permissions',  badge: <SoonBadge /> },
               { key: 'audit',        label: 'Audit' },
               { key: 'billing',      label: 'Billing',      badge: <SoonBadge /> },
               { key: 'integrations', label: 'Integrations', badge: <SoonBadge /> },
@@ -229,12 +228,6 @@ export function OrganizationCard({
             </TabPanel>
             <TabPanel tabKey="users" className="pt-4">
               <UsersListNested organization={o} />
-            </TabPanel>
-            <TabPanel tabKey="permissions" className="pt-4">
-              <Placeholder>
-                Permission assignment matrix (user × workspace × access_level + page
-                overrides) lands alongside DB-backed resolver providers in part 2.
-              </Placeholder>
             </TabPanel>
             <TabPanel tabKey="audit" className="pt-4">
               <Button size="sm" variant="outline" onClick={() => setAudit(true)}>

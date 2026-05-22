@@ -1,294 +1,203 @@
 import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import { ForbiddenError } from '@xb/auth';
-import type { ActorContext, OrganizationId, UserId, WorkspaceId } from '@xb/types';
+import type { ActorContext, UserId } from '@xb/types';
 import { NotFoundError, SemanticError } from '../lib/errors.js';
 
 /**
- * Workspace-assignment + module-grant service (permissions program P2).
+ * Permissions program — workspace-level grants only (refined model).
  *
- * Backs the radio-matrix permissions UI (P4): one bulk PUT writes a
- * user's workspace_permissions + page_permissions atomically inside
- * the actor's transaction (audit trigger fires per row).
+ * Vocabulary: none / view / edit. 'edit' is the effective operational
+ * admin inside a workspace; there is no separate workspace-admin tier.
+ * Platform administration (super_admin / internal_manager) stays a
+ * system role, not a workspace permission level.
  *
- * Authorization: only super_admin / internal_manager / organization_admin
- * (within own org) may edit permissions. organization_user is rejected
- * — they cannot grant or revoke anyone, including themselves.
+ * Storage rule: a missing row IS 'none'. Setting a workspace to 'none'
+ * soft-deletes any existing row (audit-preserving) rather than
+ * materializing a 'none' row — keeps the table small and reads
+ * unambiguous (visibility filters check EXISTS only).
  *
- * The resolver (P3) will read these tables; this service is the
- * write/read shape the UI binds to. See docs/permissions.md.
+ * Authorization to manage: super_admin / internal_manager (any org),
+ * or organization_admin (within own org). Cross-org grants rejected.
  */
 
-export const ACCESS_LEVELS = ['none', 'view', 'edit', 'admin'] as const;
-export type AccessLevel = (typeof ACCESS_LEVELS)[number];
+export const WORKSPACE_ACCESS_LEVELS = ['none', 'view', 'edit'] as const;
+export type WorkspaceAccessLevel = (typeof WORKSPACE_ACCESS_LEVELS)[number];
 
-/** Canonical module keys mirrored from the sidebar. */
-export const MODULES: ReadonlyArray<{ key: string; label: string }> = [
-  { key: 'dashboard',      label: 'Dashboard' },
-  { key: 'sales',          label: 'Sales' },
-  { key: 'advertising',    label: 'Advertising' },
-  { key: 'inventory',      label: 'Inventory' },
-  { key: 'shipments',      label: 'Shipments' },
-  { key: 'uploads',        label: 'Uploads' },
-  { key: 'reports',        label: 'Reports' },
-  { key: 'unit_economics', label: 'Unit Economics' },
-  { key: 'sku_aliases',    label: 'SKU Aliases' },
-  { key: 'forecasting',    label: 'Forecasting' },
-  { key: 'settings',       label: 'Settings' },
-];
+export interface UserWorkspaceAssignment {
+  readonly workspaceId: string;
+  readonly workspaceName: string;
+  readonly accessLevel: WorkspaceAccessLevel;
+}
 
-const MODULE_KEYS = new Set(MODULES.map((m) => m.key));
-
-export interface WorkspacePermissionAssignment {
+export interface UserPermissionsResponse {
   readonly userId: string;
   readonly username: string;
   readonly displayName: string;
-  readonly workspaceLevel: AccessLevel;
-  /** Per-module overrides; only keys with a row are present. */
-  readonly modules: Record<string, AccessLevel>;
-}
-
-export interface ListWorkspacePermissionsResult {
-  readonly workspaceId: string;
   readonly organizationId: string;
-  readonly modules: ReadonlyArray<{ key: string; label: string }>;
-  readonly assignments: ReadonlyArray<WorkspacePermissionAssignment>;
+  readonly organizationName: string;
+  readonly workspaces: ReadonlyArray<UserWorkspaceAssignment>;
 }
 
-// ----- Authorization helper ------------------------------------------
-
-/**
- * Confirm the actor is allowed to manage permissions for the target
- * workspace. Returns the workspace's organization_id for downstream
- * use. Throws ForbiddenError otherwise.
- */
-async function requirePermissionsAdmin(
-  app: FastifyInstance,
-  actor: ActorContext,
-  workspaceId: WorkspaceId,
-): Promise<{ organizationId: OrganizationId }> {
-  return app.withConnection(actor, async (client) => {
-    const { rows } = await client.query<{ organization_id: string }>(
-      `SELECT organization_id FROM xb_core.workspaces
-        WHERE id = $1 AND deleted_at IS NULL`,
-      [workspaceId],
+async function requirePermissionsAdmin(actor: ActorContext, targetOrgId: string): Promise<void> {
+  const allowed =
+    actor.isInternalManager ||
+    (actor.effectiveRole === 'organization_admin' &&
+      actor.organizationId !== null &&
+      (actor.organizationId as string) === targetOrgId);
+  if (!allowed) {
+    throw new ForbiddenError(
+      'Cannot manage permissions for this organization.',
+      'not_permissions_admin',
     );
-    if (!rows[0]) throw new NotFoundError('workspace', workspaceId);
-    const orgId = rows[0].organization_id;
-    const allowed =
-      actor.isInternalManager ||
-      (actor.effectiveRole === 'organization_admin' &&
-        actor.organizationId !== null &&
-        (actor.organizationId as string) === orgId);
-    if (!allowed) {
-      throw new ForbiddenError(
-        'Cannot manage permissions for this workspace.',
-        'not_permissions_admin',
-      );
-    }
-    return { organizationId: orgId as OrganizationId };
-  });
+  }
 }
 
-// ----- Reads ----------------------------------------------------------
-
 /**
- * List existing per-user assignments for a workspace. Returns one entry
- * per user that has a workspace_permissions row; users with no row are
- * absent (the UI separately fetches the full org-users list and merges
- * absent users as "unassigned").
+ * Return the full workspace×permission matrix for one user: every
+ * active workspace in their organization, joined with their current
+ * grant (or 'none' when no row exists).
  */
-export async function listWorkspacePermissions(
+export async function getUserPermissions(
   app: FastifyInstance,
   actor: ActorContext,
-  workspaceId: WorkspaceId,
-): Promise<ListWorkspacePermissionsResult> {
-  const { organizationId } = await requirePermissionsAdmin(app, actor, workspaceId);
-
+  userId: UserId,
+): Promise<UserPermissionsResponse> {
   return app.withConnection(actor, async (client) => {
-    const { rows } = await client.query<{
-      user_id: string;
+    const { rows: userRows } = await client.query<{
+      id: string;
       username: string;
       display_name: string;
-      workspace_level: AccessLevel;
-      page_overrides: Array<{ page_key: string; access_level: AccessLevel }> | null;
+      organization_id: string | null;
+      organization_name: string | null;
     }>(
-      `SELECT wp.user_id,
-              u.username,
-              u.display_name,
-              wp.access_level AS workspace_level,
-              COALESCE(
-                (SELECT jsonb_agg(jsonb_build_object('page_key', pp.page_key,
-                                                     'access_level', pp.access_level)
-                                  ORDER BY pp.page_key)
-                   FROM xb_core.page_permissions pp
-                  WHERE pp.user_id = wp.user_id
-                    AND pp.workspace_id = wp.workspace_id
-                    AND pp.deleted_at IS NULL),
-                '[]'::jsonb
-              ) AS page_overrides
-         FROM xb_core.workspace_permissions wp
-         JOIN xb_core.users u ON u.id = wp.user_id
-        WHERE wp.workspace_id = $1
+      `SELECT u.id, u.username, u.display_name, u.organization_id,
+              o.display_name AS organization_name
+         FROM xb_core.users u
+         LEFT JOIN xb_core.organizations o ON o.id = u.organization_id
+        WHERE u.id = $1 AND u.deleted_at IS NULL`,
+      [userId],
+    );
+    if (!userRows[0]) throw new NotFoundError('user', userId);
+    const u = userRows[0];
+    if (!u.organization_id) {
+      throw new SemanticError(
+        'This user has no organization; workspace permissions do not apply.',
+        'no_org_user',
+      );
+    }
+    await requirePermissionsAdmin(actor, u.organization_id);
+
+    const { rows: wsRows } = await client.query<{
+      id: string;
+      workspace_name: string;
+      access_level: WorkspaceAccessLevel | null;
+    }>(
+      `SELECT w.id, w.workspace_name, wp.access_level
+         FROM xb_core.workspaces w
+         LEFT JOIN xb_core.workspace_permissions wp
+           ON wp.workspace_id = w.id
+          AND wp.user_id = $1
           AND wp.deleted_at IS NULL
-          AND u.deleted_at IS NULL
-        ORDER BY u.display_name ASC`,
-      [workspaceId],
+        WHERE w.organization_id = $2
+          AND w.deleted_at IS NULL
+          AND w.workspace_status = 'active'
+        ORDER BY w.workspace_name ASC`,
+      [userId, u.organization_id],
     );
 
-    const assignments: WorkspacePermissionAssignment[] = rows.map((r) => {
-      const modules: Record<string, AccessLevel> = {};
-      for (const o of r.page_overrides ?? []) modules[o.page_key] = o.access_level;
-      return {
-        userId: r.user_id,
-        username: r.username,
-        displayName: r.display_name,
-        workspaceLevel: r.workspace_level,
-        modules,
-      };
-    });
-
-    return { workspaceId, organizationId, modules: MODULES, assignments };
+    return {
+      userId: u.id,
+      username: u.username,
+      displayName: u.display_name,
+      organizationId: u.organization_id,
+      organizationName: u.organization_name ?? '',
+      workspaces: wsRows.map((r) => ({
+        workspaceId: r.id,
+        workspaceName: r.workspace_name,
+        accessLevel: r.access_level ?? 'none',
+      })),
+    };
   });
 }
 
-// ----- Writes ---------------------------------------------------------
-
-export interface SetUserWorkspacePermissionsInput {
-  readonly workspaceLevel: AccessLevel;
-  readonly modules: Record<string, AccessLevel>;
-}
-
 /**
- * Bulk upsert one user's workspace + module permissions for a workspace.
- * Replaces every existing page_permission row for the (user × workspace)
- * pair so the input is the new full truth — matrix-UI PUT semantics.
- *
- * Same-org guard: target user must belong to the workspace's org. No
- * cross-org grants.
+ * Bulk-set one user's workspace permissions. `assignments` is the new
+ * truth: 'none' soft-deletes the existing row (no materialized 'none'
+ * rows), any other level upserts. Workspaces omitted from the map are
+ * left untouched.
  */
 export async function setUserWorkspacePermissions(
   app: FastifyInstance,
   actor: ActorContext,
   args: {
-    workspaceId: WorkspaceId;
     userId: UserId;
-    input: SetUserWorkspacePermissionsInput;
+    assignments: Record<string, WorkspaceAccessLevel>;
   },
 ): Promise<void> {
-  // Validate vocabulary.
-  if (!ACCESS_LEVELS.includes(args.input.workspaceLevel)) {
-    throw new SemanticError(
-      `Unknown access level "${args.input.workspaceLevel}".`,
-      'invalid_access_level',
-    );
-  }
-  for (const [key, level] of Object.entries(args.input.modules)) {
-    if (!MODULE_KEYS.has(key)) {
-      throw new SemanticError(`Unknown module "${key}".`, 'unknown_module');
-    }
-    if (!ACCESS_LEVELS.includes(level)) {
-      throw new SemanticError(
-        `Unknown access level "${level}" for module "${key}".`,
-        'invalid_access_level',
-      );
+  for (const [, level] of Object.entries(args.assignments)) {
+    if (!WORKSPACE_ACCESS_LEVELS.includes(level)) {
+      throw new SemanticError(`Invalid access level "${level}".`, 'invalid_access_level');
     }
   }
 
-  const { organizationId } = await requirePermissionsAdmin(app, actor, args.workspaceId);
-
-  await app.withConnection(actor, async (client) => {
-    // Verify target user is in the workspace's org.
+  return app.withConnection(actor, async (client) => {
     const { rows: userRows } = await client.query<{ organization_id: string | null }>(
       `SELECT organization_id FROM xb_core.users
         WHERE id = $1 AND deleted_at IS NULL`,
       [args.userId],
     );
     if (!userRows[0]) throw new NotFoundError('user', args.userId);
-    if (userRows[0].organization_id !== organizationId) {
-      throw new ForbiddenError(
-        'Cannot assign a user from a different organization to this workspace.',
-        'org_mismatch',
+    const orgId = userRows[0].organization_id;
+    if (!orgId) {
+      throw new SemanticError(
+        'This user has no organization; workspace permissions cannot be set.',
+        'no_org_user',
       );
     }
+    await requirePermissionsAdmin(actor, orgId);
 
-    // Upsert workspace_permissions. The unique index is partial
-    // (WHERE deleted_at IS NULL) — ON CONFLICT must match that predicate.
-    await client.query(
-      `INSERT INTO xb_core.workspace_permissions
-         (id, organization_id, workspace_id, user_id, access_level,
-          created_by_actor_id, updated_by_actor_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $6)
-       ON CONFLICT (user_id, workspace_id) WHERE deleted_at IS NULL
-       DO UPDATE SET access_level = EXCLUDED.access_level,
-                     updated_by_actor_id = EXCLUDED.updated_by_actor_id,
-                     updated_at = now()`,
-      [ulid(), organizationId, args.workspaceId, args.userId, args.input.workspaceLevel, actor.actorId],
+    const workspaceIds = Object.keys(args.assignments);
+    if (workspaceIds.length === 0) return;
+
+    // Reject any workspace id that isn't in the target user's org.
+    const { rows: validRows } = await client.query<{ id: string }>(
+      `SELECT id FROM xb_core.workspaces
+        WHERE organization_id = $1 AND deleted_at IS NULL
+          AND id = ANY($2::char(26)[])`,
+      [orgId, workspaceIds],
     );
-
-    // Replace page_permissions for this (user × workspace). Soft-delete
-    // existing rows so audit trail survives, then insert the new set.
-    await client.query(
-      `UPDATE xb_core.page_permissions
-          SET deleted_at = now(), deleted_by_actor_id = $3
-        WHERE user_id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
-      [args.userId, args.workspaceId, actor.actorId],
-    );
-
-    const moduleEntries = Object.entries(args.input.modules);
-    if (moduleEntries.length > 0) {
-      const values: string[] = [];
-      const params: unknown[] = [];
-      let p = 0;
-      for (const [pageKey, level] of moduleEntries) {
-        values.push(
-          `($${++p}, $${++p}, $${++p}, $${++p}, $${++p}, $${++p}, $${++p}, $${++p})`,
-        );
-        params.push(
-          ulid(),
-          organizationId,
-          args.workspaceId,
-          args.userId,
-          pageKey,
-          level,
-          actor.actorId,
-          actor.actorId,
+    const validIds = new Set(validRows.map((r) => r.id));
+    for (const id of workspaceIds) {
+      if (!validIds.has(id)) {
+        throw new ForbiddenError(
+          `Workspace ${id} is not in this user's organization.`,
+          'workspace_scope',
         );
       }
-      await client.query(
-        `INSERT INTO xb_core.page_permissions
-           (id, organization_id, workspace_id, user_id, page_key, access_level,
-            created_by_actor_id, updated_by_actor_id)
-         VALUES ${values.join(', ')}`,
-        params,
-      );
     }
-  });
-}
 
-/**
- * Remove a user from a workspace — soft-delete the workspace_permissions
- * row and every page_permissions row for the (user × workspace) pair.
- * Idempotent.
- */
-export async function removeUserFromWorkspace(
-  app: FastifyInstance,
-  actor: ActorContext,
-  args: { workspaceId: WorkspaceId; userId: UserId },
-): Promise<void> {
-  await requirePermissionsAdmin(app, actor, args.workspaceId);
-  await app.withConnection(actor, async (client) => {
-    await client.query(
-      `UPDATE xb_core.workspace_permissions
-          SET deleted_at = now(), deleted_by_actor_id = $3
-        WHERE user_id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
-      [args.userId, args.workspaceId, actor.actorId],
-    );
-    await client.query(
-      `UPDATE xb_core.page_permissions
-          SET deleted_at = now(), deleted_by_actor_id = $3
-        WHERE user_id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
-      [args.userId, args.workspaceId, actor.actorId],
-    );
+    for (const [workspaceId, level] of Object.entries(args.assignments)) {
+      if (level === 'none') {
+        await client.query(
+          `UPDATE xb_core.workspace_permissions
+              SET deleted_at = now(), deleted_by_actor_id = $3
+            WHERE user_id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
+          [args.userId, workspaceId, actor.actorId],
+        );
+      } else {
+        await client.query(
+          `INSERT INTO xb_core.workspace_permissions
+             (id, organization_id, workspace_id, user_id, access_level,
+              created_by_actor_id, updated_by_actor_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $6)
+           ON CONFLICT (user_id, workspace_id) WHERE deleted_at IS NULL
+           DO UPDATE SET access_level = EXCLUDED.access_level,
+                         updated_by_actor_id = EXCLUDED.updated_by_actor_id,
+                         updated_at = now()`,
+          [ulid(), orgId, workspaceId, args.userId, level, actor.actorId],
+        );
+      }
+    }
   });
 }
