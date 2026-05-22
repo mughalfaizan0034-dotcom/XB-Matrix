@@ -1,9 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Layers, ArrowRight, Upload as UploadIcon } from 'lucide-react';
+import {
+  ArrowRight,
+  Building2,
+  Layers,
+  Upload as UploadIcon,
+} from 'lucide-react';
 import {
   Badge,
   Button,
@@ -18,27 +23,28 @@ import {
   type ActiveWorkspaceSummary,
 } from '@/lib/session';
 import { workspaceTypeLabel } from '@/lib/api-workspaces';
-import { useSalesOrders } from '@/lib/api-sales';
-import { useInventory } from '@/lib/api-inventory';
-
-const DAYS_30_MS = 30 * 24 * 60 * 60 * 1000;
+import {
+  useDashboardKpis,
+  type DashboardKpiBundle,
+} from '@/lib/api-intelligence';
 
 /**
- * The dashboard is workspace-scoped — it cannot render without an
- * operational context. When no workspace is pinned (fresh login,
- * session restore, or "All workspaces" mode) we route to the full
- * /select-workspace picker rather than showing dashboard chrome.
- * No dashboard data renders before a workspace context exists.
+ * The dashboard is the central engine's view layer — every figure on
+ * this page comes from /v1/intelligence/dashboard, where the bundle
+ * is computed in SQL with workspace-scoped access checks. The page
+ * itself does no math: it picks fields off the payload, formats them
+ * for the locale, and renders. Adding a new dashboard tile means
+ * extending the engine, not the page.
+ *
+ * Workspace context: the dashboard cannot render without an active
+ * workspace, so we route to /select-workspace whenever /me resolves
+ * with no pin. While /me is still settling we hold rather than bounce
+ * (transient hiccups would otherwise eject the user).
  */
 export default function DashboardPage() {
   const router = useRouter();
   const { data: activeWorkspace } = useActiveWorkspace();
 
-  // `activeWorkspace` is `undefined` while /me is loading or if it
-  // errored, and `null` only once /me has resolved with no workspace
-  // pinned. Redirect ONLY on an explicit `null` — bouncing on
-  // `undefined` would eject the user from the dashboard on a transient
-  // session-fetch hiccup (e.g. an API cold start).
   useEffect(() => {
     if (activeWorkspace === null) {
       router.replace('/select-workspace?next=/dashboard');
@@ -46,7 +52,6 @@ export default function DashboardPage() {
   }, [activeWorkspace, router]);
 
   if (!activeWorkspace) {
-    // undefined → still settling; null → redirect in flight. Hold either way.
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-6 w-6 animate-pulse rounded-full bg-muted" />
@@ -72,46 +77,11 @@ export default function DashboardPage() {
 }
 
 function ActiveDashboard({ workspace }: { workspace: ActiveWorkspaceSummary }) {
-  // Stable 30-day window keyed off "today" — recomputes per mount, which
-  // is fine for dashboard purposes (no need to be reactive across midnight).
-  const { dateFrom, dateTo } = useMemo(() => {
-    const today = new Date();
-    const since = new Date(today.getTime() - DAYS_30_MS + 24 * 60 * 60 * 1000); // 30 days inclusive
-    return {
-      dateFrom: since.toISOString().slice(0, 10),
-      dateTo: today.toISOString().slice(0, 10),
-    };
-  }, []);
-
-  const salesQ = useSalesOrders({
-    workspaceId: workspace.id,
-    dateFrom,
-    dateTo,
-    // pageSize=1 — we only need aggregates, not the row data. Saves
-    // bandwidth on workspaces with large order volumes.
-    page: 0,
-    pageSize: 1,
-  });
-  const invQ = useInventory({
-    workspaceId: workspace.id,
-    page: 0,
-    pageSize: 1,
-  });
-
-  const sales = salesQ.data?.aggregates;
-  const inv = invQ.data?.aggregates;
-
-  // Days of stock cover = on-hand / (units sold per day over 30d).
-  // Honest fallback: '—' when we don't have both halves.
-  const stockCoverDays = useMemo(() => {
-    if (!sales || !inv) return null;
-    if (sales.totalQuantity <= 0 || inv.totalOnHand <= 0) return null;
-    const dailyVelocity = sales.totalQuantity / 30;
-    return inv.totalOnHand / dailyVelocity;
-  }, [sales, inv]);
-
-  const salesEmpty = !!sales && sales.totalOrders === 0;
-  const invEmpty = !!inv && inv.totalOnHand === 0 && inv.distinctSkus === 0;
+  const kpiQ = useDashboardKpis(workspace.id, 30);
+  const bundle = kpiQ.data;
+  const loading = kpiQ.isLoading;
+  const bothEmpty =
+    !!bundle && !bundle.salesReadiness.ready && !bundle.inventoryReadiness.ready;
 
   return (
     <>
@@ -133,6 +103,14 @@ function ActiveDashboard({ workspace }: { workspace: ActiveWorkspaceSummary }) {
                 <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Building2 className="h-3 w-3" />
                   <span>{workspace.organizationName}</span>
+                  {bundle ? (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>
+                        {bundle.window.from} → {bundle.window.to}
+                      </span>
+                    </>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -146,113 +124,12 @@ function ActiveDashboard({ workspace }: { workspace: ActiveWorkspaceSummary }) {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <Metric
-              label="Revenue (30d)"
-              value={
-                salesQ.isLoading
-                  ? '—'
-                  : sales && sales.totalOrders > 0
-                    ? formatTotal(sales.totalGross)
-                    : '0'
-              }
-              hint={salesQ.isLoading ? 'loading…' : 'sum of total_price; mixed currencies shown raw'}
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <Metric
-              label="Orders (30d)"
-              value={salesQ.isLoading ? '—' : (sales?.totalOrders ?? 0).toLocaleString()}
-              hint={`since ${dateFrom}`}
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <Metric
-              label="Units (30d)"
-              value={salesQ.isLoading ? '—' : (sales?.totalQuantity ?? 0).toLocaleString()}
-              hint="sum of order quantity"
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <Metric
-              label="Stock cover"
-              value={
-                stockCoverDays !== null
-                  ? `${stockCoverDays.toFixed(1)} d`
-                  : '—'
-              }
-              hint={
-                stockCoverDays !== null
-                  ? 'on-hand ÷ (units/30d)'
-                  : !sales || !inv
-                    ? 'loading…'
-                    : 'needs sales + inventory data'
-              }
-            />
-          </CardContent>
-        </Card>
-      </div>
+      <SalesTiles bundle={bundle} loading={loading} />
+      <InventoryTiles bundle={bundle} loading={loading} />
+      <CombinedTiles bundle={bundle} loading={loading} />
+      <MarketplaceBreakdown bundle={bundle} loading={loading} />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <Metric
-              label="On hand"
-              value={invQ.isLoading ? '—' : (inv?.totalOnHand ?? 0).toLocaleString()}
-              hint="latest snapshot per SKU"
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <Metric
-              label="Distinct SKUs"
-              value={invQ.isLoading ? '—' : (inv?.distinctSkus ?? 0).toLocaleString()}
-              hint="in latest inventory"
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <Metric
-              label="Warehouses"
-              value={invQ.isLoading ? '—' : (inv?.distinctWarehouses ?? 0).toLocaleString()}
-              hint="locations covered"
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <Metric
-              label="Inventory valuation"
-              value={
-                invQ.isLoading
-                  ? '—'
-                  : inv && Number(inv.totalValuation) > 0
-                    ? formatTotal(inv.totalValuation)
-                    : '—'
-              }
-              hint={
-                invQ.isLoading
-                  ? 'loading…'
-                  : inv && Number(inv.totalValuation) > 0
-                    ? 'sum where unit_cost set'
-                    : 'add unit_cost to your inventory CSV'
-              }
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      {(salesEmpty && invEmpty) ? (
+      {bothEmpty ? (
         <Card>
           <CardHeader>
             <CardTitle>Get started</CardTitle>
@@ -274,15 +151,255 @@ function ActiveDashboard({ workspace }: { workspace: ActiveWorkspaceSummary }) {
   );
 }
 
-// Workspace type → display label. Normalizes the retired "omni_channel"
-// to "General"; falls back to "Workspace" when no type is set.
+function SalesTiles({
+  bundle,
+  loading,
+}: {
+  bundle: DashboardKpiBundle | undefined;
+  loading: boolean;
+}) {
+  const s = bundle?.sales;
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Card>
+        <CardContent className="pt-6">
+          <Metric
+            label={`Revenue (${s?.windowDays ?? 30}d)`}
+            value={loading ? '—' : s && s.orders > 0 ? formatMoney(s.revenue) : '0'}
+            hint={loading ? 'loading…' : 'sum of order totals'}
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6">
+          <Metric
+            label={`Orders (${s?.windowDays ?? 30}d)`}
+            value={loading ? '—' : (s?.orders ?? 0).toLocaleString()}
+            hint={bundle ? `since ${bundle.window.from}` : 'last 30 days'}
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6">
+          <Metric
+            label={`Units (${s?.windowDays ?? 30}d)`}
+            value={loading ? '—' : (s?.units ?? 0).toLocaleString()}
+            hint="sum of order quantity"
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6">
+          <Metric
+            label="Avg. order value"
+            value={loading ? '—' : s?.averageOrderValue ? formatMoney(s.averageOrderValue) : '—'}
+            hint={loading ? 'loading…' : 'revenue ÷ orders'}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function InventoryTiles({
+  bundle,
+  loading,
+}: {
+  bundle: DashboardKpiBundle | undefined;
+  loading: boolean;
+}) {
+  const i = bundle?.inventory;
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Card>
+        <CardContent className="pt-6">
+          <Metric
+            label="On hand"
+            value={loading ? '—' : (i?.totalOnHand ?? 0).toLocaleString()}
+            hint={i?.snapshotDate ? `as of ${i.snapshotDate}` : 'latest snapshot per SKU'}
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6">
+          <Metric
+            label="Distinct SKUs"
+            value={loading ? '—' : (i?.distinctSkus ?? 0).toLocaleString()}
+            hint="in latest inventory"
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6">
+          <Metric
+            label="Warehouses"
+            value={loading ? '—' : (i?.distinctWarehouses ?? 0).toLocaleString()}
+            hint="locations covered"
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6">
+          <Metric
+            label="Inventory valuation"
+            value={
+              loading
+                ? '—'
+                : i && Number(i.totalValuation) > 0
+                  ? formatMoney(i.totalValuation)
+                  : '—'
+            }
+            hint={
+              loading
+                ? 'loading…'
+                : i && Number(i.totalValuation) > 0
+                  ? `${formatPercent(i.costCoverage)} of SKUs costed`
+                  : 'add unit_cost to your inventory CSV'
+            }
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function CombinedTiles({
+  bundle,
+  loading,
+}: {
+  bundle: DashboardKpiBundle | undefined;
+  loading: boolean;
+}) {
+  const c = bundle?.combined;
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Card>
+        <CardContent className="pt-6">
+          <Metric
+            label="Stock cover"
+            value={loading ? '—' : c?.stockCoverDays ? `${c.stockCoverDays} d` : '—'}
+            hint={
+              loading
+                ? 'loading…'
+                : c?.stockCoverDays
+                  ? 'on-hand ÷ daily velocity'
+                  : 'needs sales + inventory'
+            }
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6">
+          <Metric
+            label="Stockout risk"
+            value={loading ? '—' : (c?.stockoutRiskSkus ?? 0).toLocaleString()}
+            hint={
+              bundle
+                ? `SKUs under ${bundle.dosTargetDays}-day target`
+                : 'SKUs below DOS target'
+            }
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6">
+          <Metric
+            label="Dead stock"
+            value={loading ? '—' : (c?.deadStockSkus ?? 0).toLocaleString()}
+            hint="on-hand with zero sales in window"
+          />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6">
+          <Metric
+            label="Daily velocity"
+            value={
+              loading
+                ? '—'
+                : bundle?.sales.dailyVelocity
+                  ? Number(bundle.sales.dailyVelocity).toLocaleString(undefined, {
+                      maximumFractionDigits: 2,
+                    })
+                  : '—'
+            }
+            hint="units sold per day (window)"
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function MarketplaceBreakdown({
+  bundle,
+  loading,
+}: {
+  bundle: DashboardKpiBundle | undefined;
+  loading: boolean;
+}) {
+  if (loading || !bundle) return null;
+  if (bundle.topMarketplaces.length === 0) {
+    if (!bundle.salesReadiness.ready) return null;
+    return null;
+  }
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Top marketplaces</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-hidden rounded-md border border-border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2">Marketplace</th>
+                <th className="px-3 py-2 text-right">Orders</th>
+                <th className="px-3 py-2 text-right">Units</th>
+                <th className="px-3 py-2 text-right">Revenue</th>
+                <th className="px-3 py-2 text-right">Share</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bundle.topMarketplaces.map((m) => (
+                <tr key={m.marketplace} className="border-t border-border">
+                  <td className="px-3 py-2 font-medium text-foreground">{m.marketplace}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{m.orders.toLocaleString()}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{m.units.toLocaleString()}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatMoney(m.revenue)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                    {formatPercent(m.revenueShare)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Engine-output renderers ---------------------------------------------
+// These never compute — they format the bytes the engine emits.
+
+function formatMoney(amount: string): string {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return amount;
+  return n.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatPercent(share: string): string {
+  const n = Number(share);
+  if (!Number.isFinite(n)) return '—';
+  return `${(n * 100).toFixed(0)}%`;
+}
+
 function prettyType(t: string | null): string {
   const label = workspaceTypeLabel(t);
   return label === '—' ? 'Workspace' : label;
 }
 
-function formatTotal(amount: string): string {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return amount;
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}

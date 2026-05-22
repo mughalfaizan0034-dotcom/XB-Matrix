@@ -11,6 +11,13 @@ import { OrganizationCard } from '@/components/organization-card';
 import { NewOrganizationDialog } from '@/components/new-organization-dialog';
 import { InternalUsersPanel } from '@/components/internal-users-panel';
 import { ProfileSection } from '@/components/profile-section';
+import {
+  PlatformAuditPanel,
+  PlatformBillingPanel,
+  PlatformDiagnosticsPanel,
+  PlatformFeatureFlagsPanel,
+  PlatformIntegrationsPanel,
+} from '@/components/platform-panels';
 import { usePersistedStringSet } from '@/lib/use-persisted-set';
 import { usePersistedString } from '@/lib/use-persisted-string';
 import { useScrolledPast } from '@/lib/use-scrolled';
@@ -42,14 +49,6 @@ type Section =
 const SECTIONS: ReadonlyArray<Section> = [
   'organizations',
   'internal-users',
-  'platform-audit',
-  'feature-flags',
-  'diagnostics',
-  'billing-ops',
-  'system-integrations',
-];
-
-const SOON_SECTIONS: ReadonlyArray<Section> = [
   'platform-audit',
   'feature-flags',
   'diagnostics',
@@ -129,11 +128,11 @@ export default function SettingsPage() {
             items={[
               { key: 'organizations',      label: 'Organizations' },
               { key: 'internal-users',     label: 'Internal Users' },
-              { key: 'platform-audit',     label: 'Platform Audit',     badge: <SoonBadge /> },
-              { key: 'feature-flags',      label: 'Feature Flags',      badge: <SoonBadge /> },
-              { key: 'diagnostics',        label: 'Diagnostics',        badge: <SoonBadge /> },
-              { key: 'billing-ops',        label: 'Billing Ops',        badge: <SoonBadge /> },
-              { key: 'system-integrations',label: 'System Integrations',badge: <SoonBadge /> },
+              { key: 'platform-audit',     label: 'Platform Audit' },
+              { key: 'feature-flags',      label: 'Feature Flags' },
+              { key: 'diagnostics',        label: 'Diagnostics' },
+              { key: 'billing-ops',        label: 'Billing Ops' },
+              { key: 'system-integrations',label: 'System Integrations' },
             ]}
           >
             <TabPanel tabKey="organizations" className="pt-4">
@@ -142,11 +141,21 @@ export default function SettingsPage() {
             <TabPanel tabKey="internal-users" className="pt-4">
               <InternalUsersPanel />
             </TabPanel>
-            {SOON_SECTIONS.map((s) => (
-              <TabPanel key={s} tabKey={s} className="pt-4">
-                <SectionPlaceholder section={s} />
-              </TabPanel>
-            ))}
+            <TabPanel tabKey="platform-audit" className="pt-4">
+              <PlatformAuditPanel />
+            </TabPanel>
+            <TabPanel tabKey="feature-flags" className="pt-4">
+              <PlatformFeatureFlagsPanel />
+            </TabPanel>
+            <TabPanel tabKey="diagnostics" className="pt-4">
+              <PlatformDiagnosticsPanel />
+            </TabPanel>
+            <TabPanel tabKey="billing-ops" className="pt-4">
+              <PlatformBillingPanel />
+            </TabPanel>
+            <TabPanel tabKey="system-integrations" className="pt-4">
+              <PlatformIntegrationsPanel />
+            </TabPanel>
           </Tabs>
         ) : (
           // organization_admin — sees their own org card to manage it.

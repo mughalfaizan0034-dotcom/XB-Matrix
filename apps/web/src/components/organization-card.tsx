@@ -73,30 +73,35 @@ export function OrganizationCard({
       { key: 'edit',  label: 'Edit organization',  icon: Pencil,  onSelect: () => setEdit(true) },
       { key: 'audit', label: 'View audit history', icon: History, onSelect: () => setAudit(true), divider: true },
     ];
-    if (o.organizationStatus === 'active') {
-      items.push({
-        key: 'suspend',
-        label: 'Suspend',
-        icon: Pause,
-        divider: true,
-        onSelect: () => setConfirm({ transition: 'suspend' }),
-      });
-      items.push({
-        key: 'archive',
-        label: 'Archive',
-        icon: Archive,
-        onSelect: () => setConfirm({ transition: 'archive' }),
-      });
-    } else {
-      items.push({
-        key: 'reactivate',
-        label: o.organizationStatus === 'suspended' ? 'Reactivate' : 'Restore to active',
-        icon: Play,
-        divider: true,
-        onSelect: () => simpleTransition(reactivate, 'Reactivated'),
-      });
-    }
+    // Lifecycle transitions (suspend / archive / reactivate / delete)
+    // are PLATFORM admin actions — only internal managers should see
+    // them. An org_admin can still edit the organization and manage
+    // its workspaces + users via the tabs below; suspending or
+    // archiving their own org from the UI would only ever be a footgun.
     if (isManager) {
+      if (o.organizationStatus === 'active') {
+        items.push({
+          key: 'suspend',
+          label: 'Suspend',
+          icon: Pause,
+          divider: true,
+          onSelect: () => setConfirm({ transition: 'suspend' }),
+        });
+        items.push({
+          key: 'archive',
+          label: 'Archive',
+          icon: Archive,
+          onSelect: () => setConfirm({ transition: 'archive' }),
+        });
+      } else {
+        items.push({
+          key: 'reactivate',
+          label: o.organizationStatus === 'suspended' ? 'Reactivate' : 'Restore to active',
+          icon: Play,
+          divider: true,
+          onSelect: () => simpleTransition(reactivate, 'Reactivated'),
+        });
+      }
       items.push({
         key: 'delete',
         label: 'Soft delete',

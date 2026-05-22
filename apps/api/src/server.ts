@@ -29,6 +29,8 @@ import { inventoryRoutes } from './routes/inventory.js';
 import { skuAliasRoutes } from './routes/sku-aliases.js';
 import { unresolvedSkuRoutes } from './routes/unresolved-sku.js';
 import { permissionRoutes } from './routes/permissions.js';
+import { platformRoutes } from './routes/platform.js';
+import { intelligenceRoutes } from './routes/intelligence.js';
 import { bootstrapRoutes } from './routes/bootstrap.js';
 
 export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
@@ -97,6 +99,11 @@ export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   await app.register(skuAliasRoutes, { prefix: '/v1/sku-aliases' });
   await app.register(unresolvedSkuRoutes, { prefix: '/v1/unresolved-sku' });
   await app.register(permissionRoutes, { prefix: '/v1/permissions' });
+  await app.register(platformRoutes, { prefix: '/v1/platform' });
+  // Intelligence/engine layer — workspace-scoped, read-only. Backs
+  // dashboard + module pages + reports + (later) AI insights. All KPI
+  // math happens here; the frontend renders engine output verbatim.
+  await app.register(intelligenceRoutes, { prefix: '/v1/intelligence' });
   // Temporary bootstrap / testing surface — internal-manager only.
   // Speeds up multi-user workflow validation while invitations +
   // permissions matrix UIs are still under construction.
