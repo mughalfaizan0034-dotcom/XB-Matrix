@@ -170,9 +170,36 @@ owned warehouse, retail all land here, distinguished by
 
 ### channel_ads
 
-Period-grain like sales, plus `ad_platform_code` and
-`target_marketplace`. Metrics: impressions, clicks, orders, total_cost,
-sales.
+Period-grain like sales. Shipped in migration 0023.
+
+Dimensions:
+- `ad_platform_code` — provider class (`amazon_ads`, `walmart_connect`,
+  `meta_ads`, `google_ads`, `tiktok_ads`, …). The spender.
+- `target_marketplace_code` — what the spend drove into
+  (`amazon_us`, `walmart`, `shopify`). Lets the engine answer
+  "off-Amazon spend driving Amazon traffic" without a join.
+- `region_code`
+- `campaign_name`, `campaign_type` (current mapper output);
+  `campaign_id`, `ad_group_id`, `ad_group_name`, `ad_id`,
+  `targeting_type`, `placement` (forward-looking, populated when API
+  ingestion lands).
+- `sku_normalized` (NULL for brand / aggregate campaigns).
+- **`attribution_window_days`** — first-class dimension. Amazon and
+  others emit the same campaign-period at 1d / 7d / 14d / 30d
+  windows; storing the window as a dimension lets the engine pivot
+  per analysis (TACOS over 14d, ROAS over 7d, …) without baking a
+  connector decision into the warehouse. Nullable for the legacy
+  mapper shape; the mapper PR adding window extraction is a separate
+  atomic slice.
+
+Additive metrics ONLY: `impressions`, `clicks`, `attributed_orders`,
+`spend`, `attributed_sales`, `currency_code`. Derived metrics — ACOS,
+ROAS, CPC, CTR, CVR, TACOS — are engine outputs computed in
+`intelligence-service`. Canonical never derives.
+
+Natural-key uniqueness includes `attribution_window_days` and every
+dimension, so re-uploads of the same period at the same window UPSERT
+rather than duplicate.
 
 ## 8. Legacy reconciliation
 
