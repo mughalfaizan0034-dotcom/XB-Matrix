@@ -11,9 +11,14 @@ import { requireActiveWorkspace } from './workspace-service.js';
 import { getValidator } from '../uploads/validators/index.js';
 import { getMapper } from '../uploads/mappers/index.js';
 import { writeUnresolvedQueue } from '../uploads/mappers/helpers.js';
-import type { NormalizedSale } from '../uploads/mappers/types.js';
+import type {
+  NormalizedAdPerformance,
+  NormalizedSale,
+} from '../uploads/mappers/types.js';
 import type { SalesPerformanceRow } from '../uploads/mappers/sales-performance.js';
+import type { AdvertisingPerformanceRow } from '../uploads/mappers/advertising-performance.js';
 import { writeChannelSales } from '../uploads/canonical/channel-sales-writer.js';
+import { writeChannelAds } from '../uploads/canonical/channel-ads-writer.js';
 
 export type UploadStatus = 'queued' | 'uploading' | 'validating' | 'ready' | 'failed';
 
@@ -265,15 +270,19 @@ export async function createUpload(
         });
 
         // ----- Canonical layer wiring ----------------------------------
-        // Validator → mapper → channel_sales writer (+ unresolved queue),
+        // Validator → mapper → canonical writer (+ unresolved queue),
         // all in the upload's transaction so a failed canonical write
         // rolls the upload status back to 'validating' rather than
         // ending in a partial 'ready'.
         //
-        // Sales is wired now; inventory_position / advertising_performance
-        // land when channel_inventory / channel_ads canonical tables
-        // ship. Legacy adapters (amazon_sales / walmart_sales) wire here
-        // too once their validators surface parsed rows.
+        // Wired kinds:
+        //   sales_performance      → channel_sales
+        //   advertising_performance → channel_ads (migration 0023)
+        //
+        // Pending: inventory_position → channel_inventory (when that
+        // canonical table ships). Per-platform adapters (amazon_sales,
+        // amazon_ads, walmart_sales) stay validator-only — the
+        // operational templates above are the wired path.
         const ingestionExtra: Record<string, unknown> = {};
         if (result.ok && result.rows && input.uploadKind === 'sales_performance') {
           const mapper = getMapper(input.uploadKind);
@@ -309,6 +318,57 @@ export async function createUpload(
             );
             ingestionExtra.canonical = {
               target: 'xb_canonical.channel_sales',
+              mapped: mapResult.stats.mappedCount,
+              unresolved: mapResult.stats.unresolvedCount,
+              upserted: written.upserted,
+              removed: written.removed,
+              unresolvedQueued: queued.inserted,
+              unresolvedTruncated: queued.truncated,
+            };
+          }
+        } else if (
+          result.ok &&
+          result.rows &&
+          input.uploadKind === 'advertising_performance'
+        ) {
+          const mapper = getMapper(input.uploadKind);
+          if (mapper) {
+            const mapResult = await mapper.map({
+              app,
+              actor,
+              client,
+              organizationId: orgId,
+              workspaceId: input.workspaceId,
+              uploadId: id,
+              uploadKind: input.uploadKind,
+              rows: result.rows as ReadonlyArray<AdvertisingPerformanceRow>,
+            });
+            const written = await writeChannelAds(
+              app,
+              client,
+              actor,
+              orgId,
+              input.workspaceId,
+              id,
+              mapResult.mapped as ReadonlyArray<NormalizedAdPerformance>,
+            );
+            // Same unresolved-queue pattern as sales — ad SKUs that
+            // failed `tryResolve()` surface in the operator queue
+            // alongside sales SKUs. Brand / aggregate campaign rows
+            // (skuName = 'ALL' / '*') are not pushed to the queue —
+            // the mapper emits them as sku_normalized = null instead.
+            const queued = await writeUnresolvedQueue(
+              app,
+              client,
+              actor,
+              orgId,
+              input.workspaceId,
+              id,
+              input.uploadKind,
+              mapResult.unresolved,
+            );
+            ingestionExtra.canonical = {
+              target: 'xb_canonical.channel_ads',
               mapped: mapResult.stats.mappedCount,
               unresolved: mapResult.stats.unresolvedCount,
               upserted: written.upserted,
