@@ -22,6 +22,21 @@ export interface EngineReadiness {
   readonly action?: { readonly label: string; readonly href: string };
 }
 
+/**
+ * Provenance block emitted alongside every engine response. The
+ * frontend renders these fields when a tooltip / debug view needs to
+ * answer "where did this number come from" — it never recomputes or
+ * filters by them. Mirrors the backend EngineProvenance contract; the
+ * two must stay in lock-step (public-repo hygiene rule:
+ * no silent response-shape drift).
+ */
+export interface EngineProvenance {
+  readonly computedAt: string;
+  readonly sourceUploadIds: ReadonlyArray<string>;
+  readonly canonicalRowCount: number;
+  readonly engineVersion: string;
+}
+
 // ---------- Dashboard ------------------------------------------------
 
 export interface DashboardSalesKpis {
@@ -73,6 +88,7 @@ export interface DashboardKpiBundle {
   readonly combined: DashboardCombinedKpis;
   readonly topMarketplaces: ReadonlyArray<MarketplaceBreakdownEntry>;
   readonly dosTargetDays: string;
+  readonly provenance: EngineProvenance;
 }
 
 export function useDashboardKpis(workspaceId: string | null, windowDays = 30) {
@@ -107,6 +123,7 @@ export interface AdvertisingSummary {
   readonly windowDays: number;
   readonly readiness: EngineReadiness;
   readonly kpis: AdvertisingKpis;
+  readonly provenance: EngineProvenance;
 }
 
 export function useAdvertisingSummary(workspaceId: string | null, windowDays = 30) {
@@ -132,6 +149,7 @@ export interface UnitEconomicsSummary {
     readonly skusWithSellingPrice: number;
     readonly readinessShare: string;
   };
+  readonly provenance: EngineProvenance;
 }
 
 export function useUnitEconomicsSummary(workspaceId: string | null) {
@@ -156,6 +174,7 @@ export interface ShipmentsReadiness {
     readonly skusDeadStock: number;
     readonly dosTargetDays: string;
   };
+  readonly provenance: EngineProvenance;
 }
 
 export function useShipmentsReadiness(workspaceId: string | null) {
@@ -188,6 +207,7 @@ export interface ReportRegistry {
     readonly inventoryRows: number;
     readonly adsRows: number;
   };
+  readonly provenance: EngineProvenance;
 }
 
 export function useReportRegistry(workspaceId: string | null) {
