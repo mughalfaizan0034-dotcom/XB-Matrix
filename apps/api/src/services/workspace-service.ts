@@ -100,6 +100,14 @@ export interface AccessibleWorkspace {
   readonly workspaceStatus: Workspace['workspaceStatus'];
   readonly organizationId: OrganizationId;
   readonly organizationName: string;
+  /**
+   * Resolved access level for the requesting actor — present only on
+   * the active-workspace summary (so the frontend can disable write
+   * actions for view-only users). Optional on switcher-list rows
+   * because internal managers can switch into workspaces beyond their
+   * permission grants.
+   */
+  readonly accessLevel?: WorkspaceAccessLevel;
 }
 
 /**
@@ -307,8 +315,8 @@ export async function loadActiveWorkspaceForSession(
                AND wp.deleted_at IS NULL
           )`;
   }
-  const { rows } = await app.withConnection(actor, (client) =>
-    client.query<{
+  const result = await app.withConnection(actor, async (client) => {
+    const { rows } = await client.query<{
       id: string;
       workspace_name: string;
       workspace_type: Workspace['workspaceType'];
@@ -328,10 +336,17 @@ export async function loadActiveWorkspaceForSession(
           ${permsFilter}
         LIMIT 1`,
       params,
-    ),
-  );
-  const r = rows[0];
-  if (!r) return null;
+    );
+    const r = rows[0];
+    if (!r) return null;
+    const accessLevel = await resolveWorkspaceAccessLevel(client, actor, {
+      id: r.id,
+      organization_id: r.organization_id,
+    });
+    return { row: r, accessLevel };
+  });
+  if (!result) return null;
+  const r = result.row;
   return {
     id: r.id as WorkspaceId,
     workspaceName: r.workspace_name,
@@ -339,6 +354,7 @@ export async function loadActiveWorkspaceForSession(
     workspaceStatus: r.workspace_status,
     organizationId: r.organization_id as OrganizationId,
     organizationName: r.organization_name,
+    accessLevel: result.accessLevel,
   };
 }
 
@@ -356,11 +372,51 @@ export async function loadActiveWorkspaceForSession(
  * Throws (409) when there is no active workspace, and validates that
  * the workspace is still real, active, and inside the actor's scope.
  */
+export type WorkspaceAccessLevel = 'view' | 'edit';
+
+/**
+ * Compute the effective access level of the actor on the given
+ * workspace. internal_manager / super_admin and an organization_admin
+ * on their own org always carry 'edit'. For organization_user the
+ * level comes from workspace_permissions; a missing row falls back to
+ * 'view' (visibility filters elsewhere ensure no-access actors never
+ * reach this code path).
+ */
+async function resolveWorkspaceAccessLevel(
+  client: import('pg').PoolClient,
+  actor: ActorContext,
+  workspace: { id: string; organization_id: string },
+): Promise<WorkspaceAccessLevel> {
+  if (actor.isInternalManager) return 'edit';
+  if (
+    actor.effectiveRole === 'organization_admin' &&
+    actor.organizationId !== null &&
+    (actor.organizationId as string) === workspace.organization_id
+  ) {
+    return 'edit';
+  }
+  const { rows } = await client.query<{ access_level: string }>(
+    `SELECT wp.access_level
+       FROM xb_core.workspace_permissions wp
+       JOIN xb_core.users u ON u.id = wp.user_id
+      WHERE u.actor_id = $1
+        AND wp.workspace_id = $2
+        AND wp.deleted_at IS NULL`,
+    [actor.actorId, workspace.id],
+  );
+  return (rows[0]?.access_level as WorkspaceAccessLevel) ?? 'view';
+}
+
 export async function requireActiveWorkspace(
   app: FastifyInstance,
   actor: ActorContext,
   sessionId: string | null,
-): Promise<{ workspaceId: WorkspaceId; organizationId: OrganizationId }> {
+  requiredLevel: WorkspaceAccessLevel = 'view',
+): Promise<{
+  workspaceId: WorkspaceId;
+  organizationId: OrganizationId;
+  accessLevel: WorkspaceAccessLevel;
+}> {
   if (!sessionId) {
     throw new ConflictError(
       'This action requires an interactive session.',
@@ -386,8 +442,11 @@ export async function requireActiveWorkspace(
   }
 
   // RLS-scoped — must run with the actor's connection context.
-  const { rows: wsRows } = await app.withConnection(actor, (client) =>
-    client.query<{ id: string; organization_id: string }>(
+  // Workspace validation + access-level resolution happen in one
+  // connection so the permission row check piggybacks the same RLS
+  // context.
+  const result = await app.withConnection(actor, async (client) => {
+    const { rows: wsRows } = await client.query<{ id: string; organization_id: string }>(
       `SELECT w.id, w.organization_id
          FROM xb_core.workspaces w
          JOIN xb_core.organizations o ON o.id = w.organization_id
@@ -397,22 +456,33 @@ export async function requireActiveWorkspace(
           AND o.deleted_at IS NULL
           AND o.organization_status = 'active'`,
       [session.active_workspace_id],
-    ),
-  );
-  const ws = wsRows[0];
-  if (!ws) {
+    );
+    const ws = wsRows[0];
+    if (!ws) return null;
+    const accessLevel = await resolveWorkspaceAccessLevel(client, actor, ws);
+    return { ws, accessLevel };
+  });
+
+  if (!result) {
     throw new ConflictError(
       'Your active workspace is no longer available. Pick another workspace.',
       'active_workspace_unavailable',
     );
   }
-  if (!actor.isInternalManager && ws.organization_id !== (actor.organizationId as string | null)) {
+  if (!actor.isInternalManager && result.ws.organization_id !== (actor.organizationId as string | null)) {
     throw new ForbiddenError('workspace is not in your organization', 'workspace_scope');
+  }
+  if (requiredLevel === 'edit' && result.accessLevel !== 'edit') {
+    throw new ForbiddenError(
+      'This workspace is view-only for you. Ask an admin for edit access.',
+      'workspace_view_only',
+    );
   }
 
   return {
-    workspaceId: ws.id as WorkspaceId,
-    organizationId: ws.organization_id as OrganizationId,
+    workspaceId: result.ws.id as WorkspaceId,
+    organizationId: result.ws.organization_id as OrganizationId,
+    accessLevel: result.accessLevel,
   };
 }
 

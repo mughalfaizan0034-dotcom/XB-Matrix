@@ -34,6 +34,14 @@ export interface ActiveWorkspaceSummary {
   readonly workspaceStatus: 'active' | 'archived';
   readonly organizationId: string;
   readonly organizationName: string;
+  /**
+   * The current actor's resolved access level on this workspace.
+   * 'view' is read-only — write surfaces (uploads, retries, deletes,
+   * future inventory/forecast writes) must hide their controls and
+   * the API rejects them. 'edit' is the operational level. Internal
+   * managers and org_admins always carry 'edit'.
+   */
+  readonly accessLevel: 'view' | 'edit';
 }
 
 interface MeResponse {

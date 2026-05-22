@@ -485,7 +485,7 @@ export async function deleteUpload(
       module: 'uploads',
       action: 'delete',
     });
-    const active = await requireActiveWorkspace(app, actor, actor.sessionId);
+    const active = await requireActiveWorkspace(app, actor, actor.sessionId, 'edit');
     if (active.workspaceId !== row.workspace_id) {
       throw new ConflictError(
         "Switch to this upload's workspace before deleting it.",
@@ -540,7 +540,7 @@ export async function retryUpload(
     // Retry re-queues ingestion — a write. It must run inside the
     // upload's own workspace as the pinned session context, so a stale
     // or cross-workspace client can't trigger processing elsewhere.
-    const active = await requireActiveWorkspace(app, actor, actor.sessionId);
+    const active = await requireActiveWorkspace(app, actor, actor.sessionId, 'edit');
     if (active.workspaceId !== row.workspace_id) {
       throw new ConflictError(
         "Switch to this upload's workspace before retrying it.",

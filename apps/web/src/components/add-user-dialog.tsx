@@ -14,6 +14,7 @@ import {
 import { useCreateUser, type CreateUserRole, type UserSummary } from '@/lib/api-users';
 import type { Organization } from '@/lib/api-orgs';
 import { describeError, useSession } from '@/lib/session';
+import { ApiError } from '@/lib/api-client';
 
 /**
  * Direct add-user dialog — the PRIMARY user-creation path while email
@@ -42,8 +43,8 @@ const ROLE_LABEL: Record<CreateUserRole, string> = {
   super_admin:        'Super admin',
   internal_manager:   'Internal · Manager',
   internal_staff:     'Internal · Staff',
-  organization_admin: 'Org · Admin',
-  organization_user:  'Org · User',
+  organization_admin: 'Admin',
+  organization_user:  'User',
 };
 
 export function AddUserDialog({ open, onClose, scope = 'organization', organization = null }: Props) {
@@ -58,6 +59,7 @@ export function AddUserDialog({ open, onClose, scope = 'organization', organizat
   const [password, setPassword] = useState(suggestPassword());
   const [role, setRole] = useState<CreateUserRole>(defaultRole);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [usernameSuggestions, setUsernameSuggestions] = useState<ReadonlyArray<string>>([]);
   const [created, setCreated] = useState<UserSummary | null>(null);
 
   // Tiered create permissions (mirrors users-service.createUser):
@@ -78,6 +80,7 @@ export function AddUserDialog({ open, onClose, scope = 'organization', organizat
       setPassword(suggestPassword());
       setRole(defaultRole);
       setSubmitError(null);
+      setUsernameSuggestions([]);
       setCreated(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -91,9 +94,11 @@ export function AddUserDialog({ open, onClose, scope = 'organization', organizat
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitError(null);
+    setUsernameSuggestions([]);
+    const submitted = username.trim().toLowerCase();
     try {
       const user = await create.mutateAsync({
-        username: username.trim().toLowerCase(),
+        username: submitted,
         displayName: displayName.trim(),
         password,
         role,
@@ -104,6 +109,9 @@ export function AddUserDialog({ open, onClose, scope = 'organization', organizat
       toast.push('success', `Created ${user.username}.`);
     } catch (err) {
       setSubmitError(describeError(err));
+      if (isUsernameConflict(err)) {
+        setUsernameSuggestions(suggestUsernameVariants(submitted));
+      }
     }
   }
 
@@ -255,8 +263,8 @@ export function AddUserDialog({ open, onClose, scope = 'organization', organizat
                 ) : (
                   <>
                     {/* Organization scope — customer/tenant users only. */}
-                    <option value="organization_user">Org · User</option>
-                    <option value="organization_admin">Org · Admin</option>
+                    <option value="organization_user">User</option>
+                    <option value="organization_admin">Admin</option>
                   </>
                 )}
                 {/* Super admin is intentionally NOT offered — provisioned only via DB migration */}
@@ -267,6 +275,25 @@ export function AddUserDialog({ open, onClose, scope = 'organization', organizat
           {submitError ? (
             <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
               {submitError}
+              {usernameSuggestions.length > 0 ? (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-red-900">
+                  <span className="font-medium">Try:</span>
+                  {usernameSuggestions.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => {
+                        setUsername(s);
+                        setSubmitError(null);
+                        setUsernameSuggestions([]);
+                      }}
+                      className="rounded-md border border-red-200 bg-white px-2 py-0.5 font-mono text-xs text-red-900 hover:bg-red-100"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </form>
@@ -298,6 +325,43 @@ function CredentialRow({ label, value, mono }: { label: string; value: string; m
         <Copy className="h-3.5 w-3.5" />
       </Button>
     </div>
+  );
+}
+
+/**
+ * Generate up to 5 username variants based on the conflicting input.
+ * Strategy: strip a trailing numeric suffix to find the "stem" so e.g.
+ * "billu1" → stem "billu" → variants billu.1, billu_1, billu2, billu3,
+ * billu.2. Empty/garbage inputs return [].
+ */
+function suggestUsernameVariants(base: string): string[] {
+  const clean = base.toLowerCase().replace(/[^a-z0-9._-]/g, '');
+  if (clean.length < 1) return [];
+  const stem = clean.replace(/\d+$/, '') || clean;
+  const candidates = [
+    `${stem}.1`,
+    `${stem}_1`,
+    `${stem}1`,
+    `${stem}2`,
+    `${stem}.2`,
+  ];
+  const seen = new Set<string>([clean]);
+  return candidates.filter((s) => {
+    if (seen.has(s)) return false;
+    seen.add(s);
+    return /^[a-z0-9._-]{3,120}$/.test(s);
+  });
+}
+
+/** Detect the "username already taken" 409 from the create-user endpoint. */
+function isUsernameConflict(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  if (err.status !== 409) return false;
+  return (
+    err.code === 'username_exists' ||
+    err.code === 'username_taken' ||
+    err.code === 'duplicate_username' ||
+    /username/i.test(err.message)
   );
 }
 

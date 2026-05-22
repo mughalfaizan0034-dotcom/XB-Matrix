@@ -103,8 +103,9 @@ export const uploadRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // Resolve the write context before consuming the file body, so an
-    // upload with no pinned workspace fails fast without buffering.
-    const { workspaceId } = await requireActiveWorkspace(app, actor, actor.sessionId);
+    // upload with no pinned workspace (or a view-only grant) fails
+    // fast without buffering.
+    const { workspaceId } = await requireActiveWorkspace(app, actor, actor.sessionId, 'edit');
 
     let kindRaw: string | undefined;
     let filePart: {

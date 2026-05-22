@@ -467,7 +467,9 @@ function prettyRole(u: UserSummary): string {
     if (u.internalRole === 'super_admin') return 'Super admin';
     return u.internalRole === 'manager' ? 'Internal manager' : 'Internal staff';
   }
-  return u.orgRole === 'admin' ? 'Organization admin' : 'Organization user';
+  // Inside an org context, "Organization" prefix is redundant — the
+  // user is already scoped to the org card they appear in.
+  return u.orgRole === 'admin' ? 'Admin' : 'User';
 }
 
 function formatDate(iso: string): string {

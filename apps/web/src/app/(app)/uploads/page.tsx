@@ -101,6 +101,10 @@ export default function UploadsPage() {
   const { data: user } = useSession();
   const { data: activeWorkspace } = useActiveWorkspace();
   const crossWorkspace = !activeWorkspace;
+  // View-only workspaces hide every write surface. Backend enforces
+  // this too (requireActiveWorkspace 'edit' on create/retry/delete);
+  // the UI just avoids dead buttons.
+  const canEdit = activeWorkspace?.accessLevel === 'edit';
 
   const [tableState, tableActions] = useDataTableState({
     storageKey: 'uploads-table',
@@ -167,7 +171,9 @@ export default function UploadsPage() {
     const items: DropdownMenuItem[] = [
       { key: 'open', label: 'Inspect ingestion', onSelect: () => setOpenUploadId(u.id) },
     ];
-    if (u.uploadStatus === 'failed') {
+    // Write actions (retry / delete) are edit-only. View-only users
+    // can still inspect ingestion via the drawer.
+    if (canEdit && u.uploadStatus === 'failed') {
       items.push({
         key: 'retry',
         label: 'Retry ingestion',
@@ -176,14 +182,16 @@ export default function UploadsPage() {
         onSelect: () => onRetry(u),
       });
     }
-    items.push({
-      key: 'delete',
-      label: 'Delete upload',
-      icon: Trash2,
-      variant: 'danger',
-      divider: items.length > 1,
-      onSelect: () => setDeleteTarget(u),
-    });
+    if (canEdit) {
+      items.push({
+        key: 'delete',
+        label: 'Delete upload',
+        icon: Trash2,
+        variant: 'danger',
+        divider: items.length > 1,
+        onSelect: () => setDeleteTarget(u),
+      });
+    }
     return items;
   }
 
@@ -411,10 +419,17 @@ export default function UploadsPage() {
             >
               <Plus className="h-3.5 w-3.5" /> Pick a workspace to upload
             </Link>
-          ) : (
+          ) : canEdit ? (
             <Button size="sm" onClick={() => setShowUpload(true)}>
               <Plus className="mr-1 h-3.5 w-3.5" /> New upload
             </Button>
+          ) : (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground"
+              title="Your access to this workspace is view-only. Ask an admin for edit access."
+            >
+              View-only access
+            </span>
           )
         }
       />
