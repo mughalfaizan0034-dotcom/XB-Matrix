@@ -216,6 +216,16 @@ export interface NormalizedAdPerformance {
   readonly attributedSales: number;
   readonly currencyCode: string;
 
+  /**
+   * Attribution window the source attributed `attributedOrders` /
+   * `attributedSales` against. Null when the source doesn't carry one
+   * (older Amazon Ads exports, brand-awareness rows). Persisted on
+   * `xb_canonical.channel_ads.attribution_window_days` so the engine
+   * pivots ACOS / TACOS / ROAS per analysis without baking a connector
+   * decision into the warehouse.
+   */
+  readonly attributionWindowDays: number | null;
+
   readonly action: 'add' | 'update' | 'remove';
   readonly source: NormalizedSource;
 }

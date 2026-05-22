@@ -30,6 +30,8 @@ export interface AmazonAdsRow {
   readonly currency: string;
   readonly platform: string;          // 'amazon'
   readonly targetPlatform: string;    // marketplace driven (amazon_us, ...)
+  /** Optional attribution window in days [1, 90]; null when not supplied. */
+  readonly attributionWindowDays: number | null;
 }
 
 /**
@@ -104,6 +106,8 @@ export const amazonAdsMapper: UploadMapper<AmazonAdsRow, NormalizedAdPerformance
         spend: r.totalCost,
         attributedSales: r.sales,
         currencyCode: r.currency.toUpperCase(),
+        // Carried through verbatim — null round-trips to canonical.
+        attributionWindowDays: r.attributionWindowDays,
         action: r.action,
         source: {
           platform: 'amazon_ads',

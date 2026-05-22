@@ -28,6 +28,8 @@ export interface AdvertisingPerformanceRow {
   readonly totalCost: number;
   readonly sales: number;
   readonly currency: string;
+  /** Optional attribution window in days [1, 90]; null when not supplied. */
+  readonly attributionWindowDays: number | null;
 }
 
 /**
@@ -108,6 +110,9 @@ export const advertisingPerformanceMapper: UploadMapper<
         spend: r.totalCost,
         attributedSales: r.sales,
         currencyCode: r.currency.toUpperCase(),
+        // Carried through verbatim — the mapper does not invent or
+        // default a window. Null round-trips to canonical as null.
+        attributionWindowDays: r.attributionWindowDays,
         action: r.action,
         source: {
           platform: adPlatformCode,
