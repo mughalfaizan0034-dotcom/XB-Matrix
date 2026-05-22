@@ -73,11 +73,15 @@ export function UsersListNested({ organization }: { organization: Organization }
   const isSelf = (u: UserSummary) => session?.userId === u.id;
 
   function buildMenu(u: UserSummary): DropdownMenuItem[] {
+    // All row-level admin actions require admin capability. The list
+    // itself only renders for actors who can reach it, but render-time
+    // gating is the security boundary — never assume "they wouldn't
+    // see this list otherwise."
+    if (!canAdd) return [];
     const items: DropdownMenuItem[] = [];
     // Workspace permissions matrix — only meaningful for org users
-    // (internal users bypass workspace permissions). Admins manage,
-    // org_users cannot edit anyone's permissions.
-    if (canAdd && u.userKind === 'organization') {
+    // (internal users bypass workspace permissions).
+    if (u.userKind === 'organization') {
       items.push({
         key: 'permissions',
         label: 'Manage permissions…',
@@ -101,8 +105,7 @@ export function UsersListNested({ organization }: { organization: Organization }
         onSelect: () => setConfirm({ kind: 'reactivate', user: u }),
       });
     }
-    // Remove is available for any not-already-removed user (the list
-    // only ever shows non-deleted users). Self-removal is blocked.
+    // Self-removal is blocked even for admins.
     items.push({
       key: 'remove',
       label: 'Remove user',

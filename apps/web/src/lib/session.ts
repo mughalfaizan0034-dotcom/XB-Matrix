@@ -78,9 +78,13 @@ export function useSignIn() {
     mutationFn: (vars: { username: string; password: string; rememberDevice?: boolean }) =>
       api.post<SignInResponse>('/v1/auth/sign-in', vars),
     onSuccess: (data) => {
-      // Sign-in returns just the user; the session starts with no active
-      // workspace selected. Seed the cache shape so consumers don't have
-      // to wait for /me to re-fetch.
+      // Auth-boundary cache isolation: HARD wipe every cached query
+      // before seeding the new actor's session. invalidateQueries alone
+      // is not enough — stale tenant data from the previous actor would
+      // flash on the first render of the new account until refetches
+      // complete. queryClient.clear() removes the data outright; the
+      // new actor's queries hydrate from empty.
+      qc.clear();
       qc.setQueryData(SESSION_QUERY_KEY, { user: data.user, activeWorkspace: null });
       // Land on the workspace picker (nav hidden) — the user chooses a
       // workspace, then the full app chrome appears.
@@ -95,8 +99,13 @@ export function useSignOut() {
   return useMutation({
     mutationFn: () => api.post<{ signedOut: boolean }>('/v1/auth/sign-out'),
     onSuccess: () => {
+      // HARD wipe. Anything in cache could carry tenant data from the
+      // outgoing actor; the next account that signs in must start from
+      // an empty cache. setQueryData on the session key happens after
+      // clear() so the null/null shape is present immediately for
+      // consumers that read SESSION_QUERY_KEY synchronously.
+      qc.clear();
       qc.setQueryData(SESSION_QUERY_KEY, { user: null, activeWorkspace: null });
-      qc.invalidateQueries();
       router.push('/sign-in');
     },
   });

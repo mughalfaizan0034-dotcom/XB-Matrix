@@ -60,6 +60,12 @@ const SOON_SECTIONS: ReadonlyArray<Section> = [
 export default function SettingsPage() {
   const { data: user } = useSession();
   const isInternal = user?.userKind === 'internal';
+  // organization_user — the customer end-user — has no business seeing
+  // any organization, workspace, or other-user row in Settings. They
+  // see ONLY their own profile (display name + password). All other
+  // tenant data is gated server-side, but we also short-circuit here
+  // so no list query is even issued for this actor.
+  const isOrgUser = user?.effectiveRole === 'organization_user';
 
   const [sectionRaw, setSection] = usePersistedString(SECTION_STORAGE_KEY, 'organizations');
   const section: Section = SECTIONS.includes(sectionRaw as Section)
@@ -112,7 +118,11 @@ export default function SettingsPage() {
       </div>
 
       <div className="px-6 py-4 lg:px-8">
-        {isInternal ? (
+        {isOrgUser ? (
+          // organization_user — only the self-service profile surface.
+          // No org cards, no workspace lists, no other-user rows.
+          <ProfileSection />
+        ) : isInternal ? (
           <Tabs<Section>
             value={activeSection}
             onChange={(s) => setSection(s)}
@@ -139,8 +149,7 @@ export default function SettingsPage() {
             ))}
           </Tabs>
         ) : (
-          // Organization users get the Organizations section directly —
-          // no platform-admin nav.
+          // organization_admin — sees their own org card to manage it.
           <OrganizationsSection isManager={isManager} onCreate={() => setShowNewOrg(true)} />
         )}
       </div>
