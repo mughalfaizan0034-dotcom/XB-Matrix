@@ -345,7 +345,12 @@ export async function loadActiveWorkspaceForSession(
     });
     return { row: r, accessLevel };
   });
-  if (!result) return null;
+  // null from the outer query → no session/workspace.
+  // null accessLevel → the actor has lost access (permission row gone)
+  // even though the session still points at this workspace. Surface as
+  // "no active workspace" so the UI bounces to the picker, which then
+  // shows nothing for this actor.
+  if (!result || result.accessLevel === null) return null;
   const r = result.row;
   return {
     id: r.id as WorkspaceId,
@@ -382,11 +387,17 @@ export type WorkspaceAccessLevel = 'view' | 'edit';
  * 'view' (visibility filters elsewhere ensure no-access actors never
  * reach this code path).
  */
+/**
+ * Returns null when the actor has no grant on this workspace (no
+ * permission row AND not an implicit-access role). Callers decide
+ * whether null is fatal (require helpers) or just a downgrade
+ * (read paths that fall back to the visibility filter).
+ */
 async function resolveWorkspaceAccessLevel(
   client: import('pg').PoolClient,
   actor: ActorContext,
   workspace: { id: string; organization_id: string },
-): Promise<WorkspaceAccessLevel> {
+): Promise<WorkspaceAccessLevel | null> {
   if (actor.isInternalManager) return 'edit';
   if (
     actor.effectiveRole === 'organization_admin' &&
@@ -404,7 +415,64 @@ async function resolveWorkspaceAccessLevel(
         AND wp.deleted_at IS NULL`,
     [actor.actorId, workspace.id],
   );
-  return (rows[0]?.access_level as WorkspaceAccessLevel) ?? 'view';
+  if (rows.length === 0) return null;
+  return rows[0]!.access_level as WorkspaceAccessLevel;
+}
+
+/**
+ * Assert the actor has at least `requiredLevel` access to a specific
+ * workspace identified by id (NOT the session-active one). The
+ * intelligence APIs use this — they take a workspaceId in the query
+ * and must verify access independently of session pinning. Throws on
+ * any failure (workspace missing, out of org scope, no grant,
+ * insufficient level).
+ */
+export async function requireWorkspaceAccess(
+  app: FastifyInstance,
+  actor: ActorContext,
+  workspaceId: WorkspaceId,
+  requiredLevel: WorkspaceAccessLevel = 'view',
+): Promise<{ organizationId: OrganizationId; accessLevel: WorkspaceAccessLevel }> {
+  const result = await app.withConnection(actor, async (client) => {
+    const { rows } = await client.query<{ id: string; organization_id: string }>(
+      `SELECT w.id, w.organization_id
+         FROM xb_core.workspaces w
+         JOIN xb_core.organizations o ON o.id = w.organization_id
+        WHERE w.id = $1
+          AND w.deleted_at IS NULL
+          AND w.workspace_status = 'active'
+          AND o.deleted_at IS NULL
+          AND o.organization_status = 'active'`,
+      [workspaceId],
+    );
+    const ws = rows[0];
+    if (!ws) return null;
+    const accessLevel = await resolveWorkspaceAccessLevel(client, actor, ws);
+    return { ws, accessLevel };
+  });
+  if (!result) throw new NotFoundError('workspace', workspaceId);
+  if (
+    !actor.isInternalManager &&
+    result.ws.organization_id !== (actor.organizationId as string | null)
+  ) {
+    throw new ForbiddenError('workspace is not in your organization', 'workspace_scope');
+  }
+  if (result.accessLevel === null) {
+    throw new ForbiddenError(
+      'You do not have access to this workspace.',
+      'workspace_no_access',
+    );
+  }
+  if (requiredLevel === 'edit' && result.accessLevel !== 'edit') {
+    throw new ForbiddenError(
+      'This workspace is view-only for you. Ask an admin for edit access.',
+      'workspace_view_only',
+    );
+  }
+  return {
+    organizationId: result.ws.organization_id as OrganizationId,
+    accessLevel: result.accessLevel,
+  };
 }
 
 export async function requireActiveWorkspace(
@@ -471,6 +539,12 @@ export async function requireActiveWorkspace(
   }
   if (!actor.isInternalManager && result.ws.organization_id !== (actor.organizationId as string | null)) {
     throw new ForbiddenError('workspace is not in your organization', 'workspace_scope');
+  }
+  if (result.accessLevel === null) {
+    throw new ForbiddenError(
+      'You no longer have access to this workspace.',
+      'workspace_no_access',
+    );
   }
   if (requiredLevel === 'edit' && result.accessLevel !== 'edit') {
     throw new ForbiddenError(
