@@ -8,6 +8,7 @@ import {
 } from './types.js';
 import {
   normalizeColumnName,
+  optionalIntInRange,
   optionalNonNegDecimal,
   optionalNonNegInt,
   optionalString,
@@ -41,12 +42,24 @@ import {
  *   platform        — e.g., amazon
  *   target_platform — channel/marketplace targeted (e.g., amazon_us)
  *
+ * Optional:
+ *   attribution_window_days
+ *                   — integer in [1, 90]. Amazon Advertising emits the
+ *                     same campaign-period at multiple attribution
+ *                     windows (1d / 7d / 14d / 30d); stored as a
+ *                     first-class dimension on xb_canonical.channel_ads
+ *                     so the engine can pivot ACOS / TACOS / ROAS by
+ *                     window. Blank / missing → null. Source files that
+ *                     don't carry the window column (early Amazon ads
+ *                     exports) keep validating; the canonical column is
+ *                     nullable.
+ *
  * Sanity:
  *   - clicks ≤ impressions
  *   - start_date ≤ end_date
  *
- * Canonical insertion into `ppc_performance_period` lands when
- * Spec 3 §10.9+ DDL ships.
+ * Canonical insertion into `xb_canonical.channel_ads` (migration 0023)
+ * lands once the mapper writer slice ships.
  */
 export const amazonAdsValidator: UploadValidator = {
   kind: 'amazon_ads',
@@ -123,6 +136,17 @@ export const amazonAdsValidator: UploadValidator = {
 
     const distinctCampaigns = new Set(accepted.map((r) => r.campaignName)).size;
     const distinctPlatforms = new Set(accepted.map((r) => r.platform)).size;
+    // Attribution-window coverage — additive counts only. Derived
+    // window-pivoted analysis lives in intelligence-service.
+    const rowsWithWindow = accepted.reduce(
+      (a, r) => a + (r.attributionWindowDays !== null ? 1 : 0),
+      0,
+    );
+    const distinctAttributionWindows = new Set(
+      accepted
+        .map((r) => r.attributionWindowDays)
+        .filter((w): w is number => w !== null),
+    ).size;
     const totals = accepted.reduce(
       (a, r) => {
         a.impressions += r.impressions;
@@ -178,11 +202,17 @@ export const amazonAdsValidator: UploadValidator = {
           totalAttributedOrders: totals.orders,
           totalCost: totals.cost.toFixed(4),
           totalAttributedSales: totals.sales.toFixed(4),
+          // derivedAcos / derivedRoas: kept for upload-summary back-compat;
+          // tracked for removal in a separate legacy-cleanup PR. The
+          // engine (intelligence-service) is the single source of truth
+          // for derived metrics under the three-layer rule.
           derivedAcos,
           derivedRoas,
           actionCounts,
           dateRange,
-          note: 'Validated; canonical insertion into ppc_performance_period lands when Spec 3 §10.9+ DDL ships.',
+          rowsWithAttributionWindow: rowsWithWindow,
+          distinctAttributionWindows,
+          note: 'Validated; canonical insertion into xb_canonical.channel_ads (migration 0023) lands once the mapper writer slice ships.',
         },
       },
     };
@@ -221,6 +251,8 @@ interface ParsedRow {
   currency: string;
   platform: string;
   targetPlatform: string;
+  /** See module-level docstring; null when the source doesn't supply it. */
+  attributionWindowDays: number | null;
 }
 
 type RowResult = { ok: true; row: ParsedRow } | { ok: false; errors: ValidationError[] };
@@ -245,6 +277,13 @@ function parseRow(raw: Record<string, string>, rowNumber: number): RowResult {
   const currency = requiredCurrency(ctx, 'currency', raw.currency);
   const platform = requiredString(ctx, 'platform', raw.platform, 80);
   const targetPlatform = requiredString(ctx, 'target_platform', raw.target_platform, 80);
+  const attributionWindowDays = optionalIntInRange(
+    ctx,
+    'attribution_window_days',
+    raw.attribution_window_days,
+    1,
+    90,
+  );
 
   if (impressions >= 0 && clicks >= 0 && clicks > impressions) {
     errors.push({
@@ -285,6 +324,7 @@ function parseRow(raw: Record<string, string>, rowNumber: number): RowResult {
       currency,
       platform,
       targetPlatform,
+      attributionWindowDays,
     },
   };
 }

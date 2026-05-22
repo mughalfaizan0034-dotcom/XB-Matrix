@@ -148,6 +148,35 @@ export function optionalNonNegInt(
   return requiredNonNegInt(ctx, column, s);
 }
 
+/**
+ * Optional integer that, when present, must be in `[min, max]` inclusive.
+ * Returns `null` for missing/blank cells — semantically distinct from 0
+ * because canonical columns this feeds (e.g. `attribution_window_days`)
+ * treat null as "not supplied / not applicable" while 0 would be an
+ * invalid window value. Pushes a row error when present but outside
+ * range or non-integer, and returns null so the row keeps validating.
+ */
+export function optionalIntInRange(
+  ctx: ParseContext,
+  column: string,
+  raw: string | undefined,
+  min: number,
+  max: number,
+): number | null {
+  const s = (raw ?? '').trim();
+  if (!s) return null;
+  const n = Number(s);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    ctx.errors.push({
+      row: ctx.rowNumber,
+      column,
+      message: `${column} must be an integer between ${min} and ${max} (got "${s}").`,
+    });
+    return null;
+  }
+  return n;
+}
+
 /** Required non-negative decimal (parsed as Number; precision held in caller). */
 export function requiredNonNegDecimal(
   ctx: ParseContext,

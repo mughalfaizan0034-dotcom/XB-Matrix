@@ -8,6 +8,7 @@ import {
 } from './types.js';
 import {
   normalizeColumnName,
+  optionalIntInRange,
   optionalNonNegDecimal,
   optionalNonNegInt,
   requiredAction,
@@ -53,6 +54,16 @@ import {
  *   total_cost        — non-neg decimal (ad spend)
  *   sales             — non-neg decimal (attributed sales, default 0)
  *   currency          — 3-letter ISO
+ *
+ * Optional:
+ *   attribution_window_days
+ *                     — integer in [1, 90]. Stored as a first-class
+ *                       dimension on xb_canonical.channel_ads so the
+ *                       engine can pivot ACOS / TACOS / ROAS by window
+ *                       (e.g. TACOS over 14d, ROAS over 7d) without
+ *                       baking a connector decision into the warehouse.
+ *                       Blank / missing → null (canonical column
+ *                       nullable; engine treats null as "unknown window").
  *
  * Sanity:
  *   - clicks ≤ impressions
@@ -129,6 +140,19 @@ export const advertisingPerformanceValidator: UploadValidator = {
     const distinctCampaigns = new Set(accepted.map((r) => r.campaignName)).size;
     const distinctPlatforms = new Set(accepted.map((r) => r.platform)).size;
     const distinctTargets = new Set(accepted.map((r) => r.targetMarketplace)).size;
+    // Attribution-window coverage — additive counts only. Derived
+    // analysis (TACOS / ROAS by window) is the engine's job; the
+    // validator just reports inputs so operators see at-a-glance
+    // whether the file carries window dimensions or not.
+    const rowsWithWindow = accepted.reduce(
+      (a, r) => a + (r.attributionWindowDays !== null ? 1 : 0),
+      0,
+    );
+    const distinctAttributionWindows = new Set(
+      accepted
+        .map((r) => r.attributionWindowDays)
+        .filter((w): w is number => w !== null),
+    ).size;
     const totals = accepted.reduce(
       (a, r) => {
         a.impressions += r.impressions;
@@ -183,11 +207,19 @@ export const advertisingPerformanceValidator: UploadValidator = {
           totalAttributedOrders: totals.orders,
           totalCost: totals.cost.toFixed(4),
           totalAttributedSales: totals.sales.toFixed(4),
+          // derivedAcos / derivedRoas are deliberately NOT computed in
+          // the validator — derived metrics are engine outputs
+          // (intelligence-service) so dashboards and the validator
+          // summary can never disagree about ACOS / ROAS values for
+          // the same rows. Tracked for removal in a separate
+          // legacy-cleanup PR; the engine surfaces them post-mapping.
           derivedAcos,
           derivedRoas,
           actionCounts,
           dateRange,
-          note: 'Validated; canonical insertion into channel_ads lands when Spec 3 §10.9+ DDL ships.',
+          rowsWithAttributionWindow: rowsWithWindow,
+          distinctAttributionWindows,
+          note: 'Validated; canonical insertion into channel_ads lands once the mapper writer slice ships (migration 0023 already shipped).',
         },
       },
     };
@@ -216,6 +248,13 @@ interface ParsedRow {
   totalCost: number;
   sales: number;
   currency: string;
+  /**
+   * Attribution window for `orders` + `sales`. Null when the source
+   * doesn't supply it; canonical channel_ads stores null verbatim and
+   * the engine treats it as "unknown window" (excluded from
+   * window-pivoted views, included in the all-window TACOS rollup).
+   */
+  attributionWindowDays: number | null;
 }
 
 type RowResult = { ok: true; row: ParsedRow } | { ok: false; errors: ValidationError[] };
@@ -240,6 +279,13 @@ function parseRow(raw: Record<string, string>, rowNumber: number): RowResult {
   const totalCost = requiredNonNegDecimal(ctx, 'total_cost', raw.total_cost);
   const sales = optionalNonNegDecimal(ctx, 'sales', raw.sales);
   const currency = requiredCurrency(ctx, 'currency', raw.currency);
+  const attributionWindowDays = optionalIntInRange(
+    ctx,
+    'attribution_window_days',
+    raw.attribution_window_days,
+    1,
+    90,
+  );
 
   if (impressions >= 0 && clicks >= 0 && clicks > impressions) {
     errors.push({
@@ -264,6 +310,7 @@ function parseRow(raw: Record<string, string>, rowNumber: number): RowResult {
       action, uid, startDate, endDate, campaignName, campaignType,
       platform, targetMarketplace, skuName,
       impressions, clicks, orders, totalCost, sales, currency,
+      attributionWindowDays,
     },
   };
 }

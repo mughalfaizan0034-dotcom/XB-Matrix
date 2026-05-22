@@ -64,10 +64,15 @@ total, receiving, fc_transfer, reserved, damaged
 **Advertising Performance**
 ```
 action, uid, start_date, end_date, campaign_name, campaign_type,
-platform,               -- amazonads.com, walmartconnect.com, meta.com, googleads.com, tiktokads.com
-target_marketplace,     -- amazon.com, amazon.ca, walmart.com, shopify, tiktokshop
+platform,                -- amazonads.com, walmartconnect.com, meta.com, googleads.com, tiktokads.com
+target_marketplace,      -- amazon.com, amazon.ca, walmart.com, shopify, tiktokshop
 sku_name,
-impressions, clicks, orders, total_cost, sales, currency
+impressions, clicks, orders, total_cost, sales, currency,
+attribution_window_days  -- OPTIONAL. integer in [1, 90]. blank → null.
+                         -- first-class dimension on channel_ads so the
+                         -- engine pivots ACOS / TACOS / ROAS by window
+                         -- (1d / 7d / 14d / 30d) without baking a
+                         -- connector decision into canonical.
 ```
 
 ## 3. Connectors
