@@ -120,6 +120,33 @@ export async function listAccessibleWorkspaces(
   const isManager = actor.isInternalManager;
   if (!isManager && !actor.organizationId) return [];
 
+  // organization_user is gated on workspace_permissions presence —
+  // permission rows are the source of truth, not org membership. Org
+  // admins still see every workspace in their own org (they manage
+  // permissions; otherwise they'd have to grant themselves access to
+  // every workspace). Internal managers bypass via RLS.
+  const isOrgUser = actor.effectiveRole === 'organization_user';
+
+  const params: unknown[] = [];
+  let orgFilter = '';
+  let permsFilter = '';
+  if (!isManager) {
+    params.push(actor.organizationId);
+    orgFilter = `AND w.organization_id = $${params.length}`;
+  }
+  if (isOrgUser) {
+    params.push(actor.actorId);
+    permsFilter = `
+       AND EXISTS (
+         SELECT 1 FROM xb_core.workspace_permissions wp
+           JOIN xb_core.users u ON u.id = wp.user_id
+          WHERE u.actor_id = $${params.length}
+            AND wp.workspace_id = w.id
+            AND wp.access_level <> 'none'
+            AND wp.deleted_at IS NULL
+       )`;
+  }
+
   const sql = `
     SELECT w.id, w.workspace_name, w.workspace_type, w.workspace_status,
            w.organization_id, o.display_name AS organization_name
@@ -129,10 +156,10 @@ export async function listAccessibleWorkspaces(
        AND o.deleted_at IS NULL
        AND w.workspace_status = 'active'
        AND o.organization_status = 'active'
-       ${isManager ? '' : 'AND w.organization_id = $1'}
+       ${orgFilter}
+       ${permsFilter}
      ORDER BY o.display_name ASC, w.workspace_name ASC
   `;
-  const params = isManager ? [] : [actor.organizationId];
 
   return app.withConnection(actor, async (client) => {
     const { rows } = await client.query<{
@@ -260,6 +287,26 @@ export async function loadActiveWorkspaceForSession(
   // withConnection so the actor's org context is set — a raw pool query
   // has no context and sees zero rows, making the active workspace
   // silently vanish on every page load / refresh.
+  //
+  // organization_user is also gated on workspace_permissions: if perms
+  // are revoked the session's pinned workspace surfaces as null on the
+  // next /me, so the user is bounced to the picker (which then shows
+  // nothing). Internal/managers bypass; org_admin keeps implicit access.
+  const isOrgUser = actor.effectiveRole === 'organization_user';
+  const params: unknown[] = [sessionId];
+  let permsFilter = '';
+  if (isOrgUser) {
+    params.push(actor.actorId);
+    permsFilter = `
+          AND EXISTS (
+            SELECT 1 FROM xb_core.workspace_permissions wp
+              JOIN xb_core.users u ON u.id = wp.user_id
+             WHERE u.actor_id = $${params.length}
+               AND wp.workspace_id = w.id
+               AND wp.access_level <> 'none'
+               AND wp.deleted_at IS NULL
+          )`;
+  }
   const { rows } = await app.withConnection(actor, (client) =>
     client.query<{
       id: string;
@@ -278,8 +325,9 @@ export async function loadActiveWorkspaceForSession(
           AND s.revoked_at IS NULL
           AND w.deleted_at IS NULL
           AND o.deleted_at IS NULL
+          ${permsFilter}
         LIMIT 1`,
-      [sessionId],
+      params,
     ),
   );
   const r = rows[0];

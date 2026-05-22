@@ -28,6 +28,7 @@ import { salesRoutes } from './routes/sales.js';
 import { inventoryRoutes } from './routes/inventory.js';
 import { skuAliasRoutes } from './routes/sku-aliases.js';
 import { unresolvedSkuRoutes } from './routes/unresolved-sku.js';
+import { permissionRoutes } from './routes/permissions.js';
 import { bootstrapRoutes } from './routes/bootstrap.js';
 
 export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
@@ -95,6 +96,7 @@ export async function buildServer(config: ApiConfig): Promise<FastifyInstance> {
   await app.register(inventoryRoutes, { prefix: '/v1/inventory' });
   await app.register(skuAliasRoutes, { prefix: '/v1/sku-aliases' });
   await app.register(unresolvedSkuRoutes, { prefix: '/v1/unresolved-sku' });
+  await app.register(permissionRoutes, { prefix: '/v1/permissions' });
   // Temporary bootstrap / testing surface — internal-manager only.
   // Speeds up multi-user workflow validation while invitations +
   // permissions matrix UIs are still under construction.
