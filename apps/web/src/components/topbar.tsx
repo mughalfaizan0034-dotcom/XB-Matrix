@@ -1,15 +1,21 @@
 'use client';
 
-import { ChevronDown, LogOut, Search } from 'lucide-react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { ChevronDown, LifeBuoy, LogOut, Search, UserCircle } from 'lucide-react';
 import { DropdownMenu, useToast, type DropdownMenuItem } from '@xb/ui';
 import { cn } from '@xb/ui/lib/cn';
 import { useSession, useSignOut, describeError } from '@/lib/session';
+import { roleLabel } from '@/lib/role-labels';
 import { WorkspaceSwitcher } from '@/components/workspace-switcher';
+import { ProfileDialog } from '@/components/profile-dialog';
 
 export function Topbar() {
   const { data: user } = useSession();
   const signOut = useSignOut();
   const toast = useToast();
+  const router = useRouter();
+  const [showProfile, setShowProfile] = useState(false);
 
   async function onSignOut() {
     try {
@@ -27,6 +33,19 @@ export function Topbar() {
     .toUpperCase();
 
   const menuItems: DropdownMenuItem[] = [
+    {
+      key: 'profile',
+      label: 'Profile',
+      icon: UserCircle,
+      onSelect: () => setShowProfile(true),
+    },
+    {
+      key: 'support',
+      label: 'Manage Support Tickets',
+      icon: LifeBuoy,
+      onSelect: () => router.push('/support'),
+      divider: true,
+    },
     {
       key: 'sign-out',
       label: signOut.isPending ? 'Signing out…' : 'Sign out',
@@ -66,7 +85,7 @@ export function Topbar() {
                 <span className="hidden text-left leading-tight md:block">
                   <span className="block text-xs font-medium text-foreground">{user.displayName}</span>
                   <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {user.effectiveRole.replace('_', ' ')}
+                    {roleLabel(user.effectiveRole)}
                   </span>
                 </span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -82,6 +101,8 @@ export function Topbar() {
           />
         ) : null}
       </div>
+
+      <ProfileDialog open={showProfile} onClose={() => setShowProfile(false)} />
     </header>
   );
 }

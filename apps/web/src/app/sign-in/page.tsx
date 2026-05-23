@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button, FormField, Input, useToast } from '@xb/ui';
 import { describeError, useSession, useSignIn } from '@/lib/session';
+import { useAccessibleWorkspaces } from '@/lib/api-workspaces-switch';
 
 export default function SignInPage() {
   return (
@@ -53,11 +54,23 @@ function SignInForm() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberDevice, setRememberDevice] = useState(false);
-  const next = search?.get('next') ?? '/dashboard';
+  // Honor explicit `?next=` (deep-link bounce back), otherwise route
+  // based on workspace access: users with workspaces land on
+  // /dashboard, users without workspaces land on /academy. Forcing a
+  // workspace picker on a user who has none is a dead end.
+  const explicitNext = search?.get('next');
+  const { data: accessible, isLoading: accLoading } = useAccessibleWorkspaces();
 
   useEffect(() => {
-    if (user) router.replace(next);
-  }, [user, router, next]);
+    if (!user) return;
+    if (explicitNext) {
+      router.replace(explicitNext);
+      return;
+    }
+    if (accLoading) return;
+    const hasWorkspaces = (accessible?.length ?? 0) > 0;
+    router.replace(hasWorkspaces ? '/dashboard' : '/academy');
+  }, [user, accessible, accLoading, explicitNext, router]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

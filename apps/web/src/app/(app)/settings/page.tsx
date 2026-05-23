@@ -10,7 +10,6 @@ import { useOrganizations, type Organization } from '@/lib/api-orgs';
 import { OrganizationCard } from '@/components/organization-card';
 import { NewOrganizationDialog } from '@/components/new-organization-dialog';
 import { InternalUsersPanel } from '@/components/internal-users-panel';
-import { ProfileSection } from '@/components/profile-section';
 import {
   PlatformAuditPanel,
   PlatformBillingPanel,
@@ -118,9 +117,13 @@ export default function SettingsPage() {
 
       <div className="px-6 py-4 lg:px-8">
         {isOrgUser ? (
-          // organization_user — only the self-service profile surface.
-          // No org cards, no workspace lists, no other-user rows.
-          <ProfileSection />
+          // organization_user has no Settings surface. Personal account
+          // moved to the topbar Profile dialog; org / workspace admin
+          // is for org_admin / internal roles only. Render an honest
+          // empty notice rather than redirecting the route (which can
+          // race the session hydration). The sidebar already hides
+          // Settings for no-workspace users.
+          <OrgUserSettingsNotice />
         ) : isInternal ? (
           <Tabs<Section>
             value={activeSection}
@@ -164,6 +167,20 @@ export default function SettingsPage() {
       </div>
 
       <NewOrganizationDialog open={showNewOrg} onClose={() => setShowNewOrg(false)} />
+    </div>
+  );
+}
+
+function OrgUserSettingsNotice() {
+  return (
+    <div className="rounded-lg border border-dashed border-border bg-card px-6 py-12 text-center">
+      <h3 className="font-heading text-sm font-semibold text-foreground">
+        Settings is for organization administrators
+      </h3>
+      <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+        Personal account actions live in the Profile menu (top right).
+        Ask an administrator if you need broader access in this workspace.
+      </p>
     </div>
   );
 }
@@ -359,8 +376,8 @@ function EmptyState({
       </div>
     );
   }
-  // No organization assigned — render the self-service profile section
-  // so the user can at least manage their own display name and password
-  // while waiting for an admin to grant access.
-  return <ProfileSection />;
+  // No organization assigned. Personal account actions live in the
+  // topbar Profile dialog now, so Settings shows an empty notice
+  // rather than re-rendering account fields here.
+  return <OrgUserSettingsNotice />;
 }
