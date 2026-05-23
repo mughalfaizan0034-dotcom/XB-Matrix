@@ -93,13 +93,18 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
+                // Brand-aligned active state per project_design_system:
+                // navy structural fill keeps the enterprise base color,
+                // plus a 3px orange left-border accent that carries the
+                // brand identity (matches the logo X). The border lives
+                // inside the row padding so the rounded shape stays clean.
+                'relative flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
                 active
-                  ? 'bg-navy text-white'
+                  ? 'bg-navy text-white before:absolute before:left-0 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-orange'
                   : 'text-foreground/80 hover:bg-muted hover:text-foreground',
               )}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className={cn('h-4 w-4', active && 'text-orange-300')} />
               <span className="flex-1">{item.label}</span>
               {item.comingSoon ? (
                 <span

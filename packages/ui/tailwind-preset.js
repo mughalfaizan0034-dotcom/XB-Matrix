@@ -43,7 +43,10 @@ module.exports = {
         foreground: '#0F172A',
         border: '#E2E8F0',
         input: '#E2E8F0',
-        ring: '#0F2D4B',
+        // Focus ring uses brand orange for energetic interaction feedback
+        // per project_design_system orange-emphasis rule. Navy stays the
+        // structural color (sidebar logo, topbar avatar, page chrome).
+        ring: '#F0691E',
         muted: { DEFAULT: '#F1F5F9', foreground: '#475569' },
         accent: { DEFAULT: '#F0691E', foreground: '#FFFFFF' },
         primary: { DEFAULT: '#0F2D4B', foreground: '#FFFFFF' },
