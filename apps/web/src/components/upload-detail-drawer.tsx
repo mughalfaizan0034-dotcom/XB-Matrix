@@ -53,7 +53,7 @@ export function UploadDetailDrawer({ uploadId, onClose }: Props) {
     setDownloading(true);
     try {
       const url = await fetchUploadDownloadUrl(upload.id);
-      // Open in a new tab — the signed URL triggers a download via
+      // Open in a new tab, the signed URL triggers a download via
       // content-disposition so the user gets a save dialog.
       window.open(url, '_blank', 'noopener');
     } catch (err) {
@@ -124,7 +124,7 @@ export function UploadDetailDrawer({ uploadId, onClose }: Props) {
           ) : (
             <Section title="Validation">
               <p className="text-xs text-muted-foreground">
-                No validator is wired for <code className="font-mono">{upload.uploadKind}</code> yet —
+                No validator is wired for <code className="font-mono">{upload.uploadKind}</code> yet -
                 files are stored but not parsed. Per-module validators land with each business
                 module (sales, inventory, ad spend).
               </p>
@@ -175,7 +175,7 @@ const STATUS_DESCRIPTION: Record<UploadStatus, string> = {
   uploading:  'Bytes are streaming to storage.',
   validating: 'Running validation against the registered schema.',
   ready:      'Stored successfully and available for downstream pipelines.',
-  failed:     'Something went wrong — see the error message below. You can retry.',
+  failed:     'Something went wrong, see the error message below. You can retry.',
 };
 
 /**
@@ -198,7 +198,7 @@ function ValidationSummaryRenderer({ summary }: { summary: Record<string, unknow
 
   const hasStandardShape = typeof s.rowsParsed === 'number';
   if (!hasStandardShape) {
-    // Unknown shape — fall back to raw JSON so the data is still inspectable.
+    // Unknown shape, fall back to raw JSON so the data is still inspectable.
     return (
       <pre className="overflow-x-auto rounded-md border border-border bg-muted/30 p-3 text-xs text-foreground">
         {JSON.stringify(summary, null, 2)}
@@ -264,9 +264,9 @@ function ValidationSummaryRenderer({ summary }: { summary: Record<string, unknow
                 {s.errors.map((e, i) => (
                   <tr key={i}>
                     <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
-                      {e.row > 0 ? e.row : '—'}
+                      {e.row > 0 ? e.row : '-'}
                     </td>
-                    <td className="px-3 py-1.5 font-mono text-foreground">{e.column ?? '—'}</td>
+                    <td className="px-3 py-1.5 font-mono text-foreground">{e.column ?? '-'}</td>
                     <td className="px-3 py-1.5 text-foreground">{e.message}</td>
                   </tr>
                 ))}
@@ -301,7 +301,7 @@ function SummaryStat({
 /**
  * Sales-specific extras (totalGrossAmount, distinctSkus, dateRange).
  * Renders nothing when the upload isn't sales-kind or those fields
- * aren't present — safe to call for every validator's summary.
+ * aren't present, safe to call for every validator's summary.
  */
 function SalesExtraPanel({ extra }: { extra?: Record<string, unknown> }) {
   if (!extra) return null;

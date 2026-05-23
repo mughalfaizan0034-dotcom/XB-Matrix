@@ -39,7 +39,7 @@ export const WORKSPACE_TYPE_OPTIONS = [
 /** Human-readable label for a stored workspace-type value. */
 export function workspaceTypeLabel(raw: string | null): string {
   const v = (raw ?? '').trim().toLowerCase();
-  if (!v) return '—';
+  if (!v) return '-';
   const match = WORKSPACE_TYPE_OPTIONS.find((t) => t.value === v);
   if (match) return match.label;
   // Legacy free-text values predate the controlled vocabulary; the

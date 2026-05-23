@@ -20,25 +20,25 @@ import {
 } from './csv-helpers.js';
 
 /**
- * Amazon sales validator — spec template (Part 1 §Uploads).
+ * Amazon sales validator, spec template (Part 1 §Uploads).
  *
  * Required columns (case-insensitive, snake/camel-tolerant):
- *   action            — 'upsert' | 'delete'
- *   uid               — unique row identifier (caller-managed)
- *   start_date        — period start (YYYY-MM-DD or parseable)
- *   end_date          — period end (inclusive)
- *   channel           — marketplace / channel name
- *   sku               — SKU identifier
- *   sessions_total    — non-negative int
- *   sessions_b2b      — non-negative int (defaults 0)
- *   orders_total      — non-negative int
- *   orders_b2b        — non-negative int (defaults 0)
- *   units_total       — non-negative int
- *   units_b2b         — non-negative int (defaults 0)
- *   sales_total       — non-negative decimal
- *   sales_b2b         — non-negative decimal (defaults 0)
- *   refunds_total     — non-negative decimal (defaults 0)
- *   refunds_b2b       — non-negative decimal (defaults 0)
+ *   action           , 'upsert' | 'delete'
+ *   uid              , unique row identifier (caller-managed)
+ *   start_date       , period start (YYYY-MM-DD or parseable)
+ *   end_date         , period end (inclusive)
+ *   channel          , marketplace / channel name
+ *   sku              , SKU identifier
+ *   sessions_total   , non-negative int
+ *   sessions_b2b     , non-negative int (defaults 0)
+ *   orders_total     , non-negative int
+ *   orders_b2b       , non-negative int (defaults 0)
+ *   units_total      , non-negative int
+ *   units_b2b        , non-negative int (defaults 0)
+ *   sales_total      , non-negative decimal
+ *   sales_b2b        , non-negative decimal (defaults 0)
+ *   refunds_total    , non-negative decimal (defaults 0)
+ *   refunds_b2b      , non-negative decimal (defaults 0)
  *
  * Sanity:
  *   - sessions_b2b <= sessions_total

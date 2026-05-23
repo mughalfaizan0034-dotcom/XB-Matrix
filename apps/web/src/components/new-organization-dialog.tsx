@@ -39,7 +39,7 @@ export function NewOrganizationDialog({
     setSubmitError(null);
   }
 
-  // Reset every time the dialog opens — never leak stale values from a
+  // Reset every time the dialog opens, never leak stale values from a
   // previous attempt.
   useEffect(() => {
     if (open) resetState();
@@ -63,7 +63,7 @@ export function NewOrganizationDialog({
       toast.push('success', `Organization "${displayName}" created.`);
       onClose();
     } catch (err) {
-      // Conflict is the common case — surface inline and keep the dialog
+      // Conflict is the common case, surface inline and keep the dialog
       // open with values preserved. Other errors go to the toast.
       if (err instanceof ApiError && err.status === 409) {
         setSubmitError(err.message);
@@ -123,7 +123,7 @@ export function NewOrganizationDialog({
           {(p) => (
             <Input
               {...p}
-              value={slug || '—'}
+              value={slug || '-'}
               readOnly
               tabIndex={-1}
               className="bg-muted/40 font-mono text-xs text-muted-foreground"

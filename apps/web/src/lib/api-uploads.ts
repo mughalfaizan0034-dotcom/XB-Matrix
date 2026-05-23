@@ -7,13 +7,13 @@ import { api } from './api-client';
 export type UploadStatus = 'queued' | 'uploading' | 'validating' | 'ready' | 'failed';
 
 export const UPLOAD_KINDS = [
-  // PRIMARY all-channel templates — one normalized shape per operational
+  // PRIMARY all-channel templates, one normalized shape per operational
   // dataset. Marketplace/platform is a column inside the row.
   'sales_performance',
   'inventory_position',
   'advertising_performance',
 
-  // SECONDARY per-marketplace adapters — preserve platform-native
+  // SECONDARY per-marketplace adapters, preserve platform-native
   // field names at the ingestion edge. Mappers translate to the same
   // Normalized* contract. Demoted in the UI.
   'amazon_sales',
@@ -21,10 +21,10 @@ export const UPLOAD_KINDS = [
   'amazon_ads',
   'walmart_sales',
 
-  // Generic passthrough — no validator, no canonical.
+  // Generic passthrough, no validator, no canonical.
   'generic',
 
-  // LEGACY kinds — kept so existing uploads still display correctly.
+  // LEGACY kinds, kept so existing uploads still display correctly.
   // No new uploads should be created against these.
   'sales',
   'inventory',
@@ -126,7 +126,7 @@ export interface CreateUploadInput {
 }
 
 /**
- * Create an upload. The target workspace is NOT sent by the client —
+ * Create an upload. The target workspace is NOT sent by the client -
  * the server writes into the session's active workspace. This is the
  * no-leakage guarantee: the browser cannot choose where data lands.
  */

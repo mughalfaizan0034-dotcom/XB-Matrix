@@ -22,7 +22,7 @@ import {
 } from './csv-helpers.js';
 
 /**
- * Walmart sales validator — architectural-validation slice.
+ * Walmart sales validator, architectural-validation slice.
  *
  * The point of this validator is NOT to be feature-complete with
  * Walmart's actual seller reports. It exists to prove the connector
@@ -31,31 +31,31 @@ import {
  * with no Amazon-specific behavior leaking into the downstream layers.
  *
  * Required columns (Walmart-native field names where they differ from
- * Amazon — the validator captures them as-is; the mapper translates
+ * Amazon, the validator captures them as-is; the mapper translates
  * to the marketplace-agnostic NormalizedSale shape):
- *   action          — 'upsert' | 'delete'
- *   uid             — caller-managed unique row id (idempotency)
- *   start_date      — period start
- *   end_date        — inclusive period end
- *   marketplace     — walmart_us (only US for now; Walmart MX/CA later)
- *   item_id         — Walmart item identifier (resolves to platform_sku alias)
- *   gtin            — optional secondary identifier (UPC/EAN/GTIN)
- *   page_views      — Walmart's term for sessions (non-neg int)
- *   orders          — non-neg int
- *   units           — non-neg int
- *   gmv             — Walmart's term for sales/revenue (non-neg decimal)
- *   refunds         — non-neg decimal (default 0)
- *   currency        — 3-letter ISO
+ *   action         , 'upsert' | 'delete'
+ *   uid            , caller-managed unique row id (idempotency)
+ *   start_date     , period start
+ *   end_date       , inclusive period end
+ *   marketplace    , walmart_us (only US for now; Walmart MX/CA later)
+ *   item_id        , Walmart item identifier (resolves to platform_sku alias)
+ *   gtin           , optional secondary identifier (UPC/EAN/GTIN)
+ *   page_views     , Walmart's term for sessions (non-neg int)
+ *   orders         , non-neg int
+ *   units          , non-neg int
+ *   gmv            , Walmart's term for sales/revenue (non-neg decimal)
+ *   refunds        , non-neg decimal (default 0)
+ *   currency       , 3-letter ISO
  *
  * Sanity:
  *   - start_date ≤ end_date
  *   - orders ≤ page_views (lightweight smoke check; not all reports
  *     guarantee this, so this is a warning-shaped error, not a hard
- *     rule — kept as strict-mode for the validation slice)
+ *     rule, kept as strict-mode for the validation slice)
  *
  * Note: Walmart does NOT have an Amazon-style B2B/total split, so the
  * mapper will land NormalizedSale.*B2b columns as 0. That divergence
- * is captured at the mapper edge, not in the canonical shape — engines
+ * is captured at the mapper edge, not in the canonical shape, engines
  * read sessions_total / orders_total uniformly and aggregate.
  */
 export const walmartSalesValidator: UploadValidator = {
@@ -233,7 +233,7 @@ function parseRow(raw: Record<string, string>, rowNumber: number): RowResult {
   const currency = requiredCurrency(ctx, 'currency', raw.currency);
 
   // Sanity: orders shouldn't exceed page_views. Walmart reports
-  // occasionally violate this (sessions sampling) — kept strict for
+  // occasionally violate this (sessions sampling), kept strict for
   // the architectural-validation slice; loosen if real-world data
   // shows it's too aggressive.
   if (pageViews >= 0 && orders >= 0 && orders > pageViews) {

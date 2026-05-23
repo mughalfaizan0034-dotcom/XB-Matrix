@@ -8,7 +8,7 @@ import { useReportRegistry } from '@/lib/api-intelligence';
 import { EngineView } from '@/components/engine-view';
 
 /**
- * Reports — engine-published output catalog.
+ * Reports, engine-published output catalog.
  *
  * The engine emits a fixed registry of operational reports keyed to
  * the workspace's available data. Each entry carries an `available`
@@ -21,7 +21,7 @@ export default function ReportsPage() {
   const q = useReportRegistry(ws?.id ?? null);
 
   return (
-    <EngineView title="Reports" subtitle="Generated reports — engine outputs only." loading={q.isLoading || (!!ws && !q.data)}>
+    <EngineView title="Reports" subtitle="Generated reports, engine outputs only." loading={q.isLoading || (!!ws && !q.data)}>
       {q.data ? (
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -66,7 +66,7 @@ export default function ReportsPage() {
 
           <p className="text-xs text-muted-foreground">
             All figures inside each report are computed by the central intelligence engine on
-            canonical tables. The frontend never recalculates a KPI — it renders engine output.
+            canonical tables. The frontend never recalculates a KPI, it renders engine output.
           </p>
         </div>
       ) : null}

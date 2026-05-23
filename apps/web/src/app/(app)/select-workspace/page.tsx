@@ -275,7 +275,7 @@ function groupByOrganization(
     });
   }
   const groups = [...map.values()];
-  // Workspaces within each group always sorted alphabetically — sort
+  // Workspaces within each group always sorted alphabetically, sort
   // only changes the org order.
   for (const g of groups) {
     g.workspaces.sort((a, b) => a.workspaceName.localeCompare(b.workspaceName));
@@ -283,7 +283,7 @@ function groupByOrganization(
   if (sort === 'org') {
     groups.sort((a, b) => a.organizationName.localeCompare(b.organizationName));
   }
-  // 'recent' sort isn't available on AccessibleWorkspace yet — endpoint
+  // 'recent' sort isn't available on AccessibleWorkspace yet, endpoint
   // doesn't return createdAt. Falls back to org order with a TODO.
   return groups;
 }
@@ -292,7 +292,7 @@ function groupByOrganization(
 // to "General"; falls back to "Workspace" when no type is set.
 function prettyType(t: AccessibleWorkspace['workspaceType']): string {
   const label = workspaceTypeLabel(t);
-  return label === '—' ? 'Workspace' : label;
+  return label === '-' ? 'Workspace' : label;
 }
 
 function SkeletonList() {

@@ -10,12 +10,12 @@ import {
 import { EngineView } from '@/components/engine-view';
 
 /**
- * Advertisements (PPC) — engine-output view of campaign performance.
+ * Advertisements (PPC), engine-output view of campaign performance.
  *
  * Every figure comes from /v1/intelligence/advertising, which is
  * computed server-side from xb_canonical.channel_ads (additive
  * primitives) joined to channel_sales (for TACOS denominator). The
- * page is a pure renderer — no divides, no sums, no derived metrics.
+ * page is a pure renderer, no divides, no sums, no derived metrics.
  *
  * Attribution window defaults to 14 days (industry-standard reporting
  * window). The engine pivots ACOS / TACOS / ROAS / CPC / CTR / CVR
@@ -30,7 +30,7 @@ export default function PpcPage() {
   return (
     <EngineView
       title="Advertisements"
-      subtitle="Spend, ACOS, TACOS, ROAS — engine-computed."
+      subtitle="Spend, ACOS, TACOS, ROAS, engine-computed."
       loading={q.isLoading || (!!ws && !data)}
       readiness={data?.readiness}
       emptyStateBody={
@@ -185,9 +185,9 @@ function formatValue(
   v: string | number | null,
   format: 'money' | 'percent' | 'int' | 'ratio',
 ): string {
-  if (v === null || v === undefined) return '—';
+  if (v === null || v === undefined) return '-';
   const n = typeof v === 'string' ? Number(v) : v;
-  if (!Number.isFinite(n)) return '—';
+  if (!Number.isFinite(n)) return '-';
   switch (format) {
     case 'money':
       return n.toLocaleString(undefined, {

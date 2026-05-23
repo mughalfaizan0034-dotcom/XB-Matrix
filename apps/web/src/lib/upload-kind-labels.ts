@@ -7,7 +7,7 @@ import type { UploadKind } from './api-uploads';
  * Performance, Inventory Position, Advertising Performance, …), not
  * the marketplace. Per-platform kinds are "source formats" feeding
  * each category. This module is the single source of truth for how
- * the UI labels each kind — the dropdown, the history column, the
+ * the UI labels each kind, the dropdown, the history column, the
  * detail drawer, the validation-errors panel all read from here.
  *
  * See CLAUDE.md "uploads are operational categories" + the matching
@@ -27,15 +27,15 @@ export interface KindMeta {
   readonly category: UploadCategory;
   readonly categoryLabel: string;     // "Sales Performance"
   readonly platformLabel: string;     // "All-channel" / "Amazon" / "Walmart" / ...
-  readonly compactLabel: string;       // "Sales · Amazon" — for table cells
-  readonly fullLabel: string;          // "Sales Performance — Amazon" — for dropdowns
+  readonly compactLabel: string;       // "Sales · Amazon", for table cells
+  readonly fullLabel: string;          // "Sales Performance, Amazon", for dropdowns
   readonly /** PRIMARY normalized kind for its category. */ primary?: boolean;
   readonly /** Per-marketplace adapter rather than the normalized kind. */ adapter?: boolean;
   readonly legacy?: boolean;
 }
 
 export const UPLOAD_KIND_META: Record<UploadKind, KindMeta> = {
-  // PRIMARY datasets — one normalized template per operational category.
+  // PRIMARY datasets, one normalized template per operational category.
   sales_performance: {
     category: 'sales',
     categoryLabel: 'Sales Report',
@@ -60,14 +60,14 @@ export const UPLOAD_KIND_META: Record<UploadKind, KindMeta> = {
     fullLabel: 'Ads Report',
     primary: true,
   },
-  // SECONDARY per-marketplace adapters — kept only so legacy rows
+  // SECONDARY per-marketplace adapters, kept only so legacy rows
   // display correctly; not offered for new uploads.
   amazon_sales: {
     category: 'sales',
     categoryLabel: 'Sales Performance',
     platformLabel: 'Amazon adapter',
     compactLabel: 'Sales · Amazon adapter',
-    fullLabel: 'Sales Performance — Amazon adapter',
+    fullLabel: 'Sales Performance, Amazon adapter',
     adapter: true,
   },
   walmart_sales: {
@@ -75,7 +75,7 @@ export const UPLOAD_KIND_META: Record<UploadKind, KindMeta> = {
     categoryLabel: 'Sales Performance',
     platformLabel: 'Walmart adapter',
     compactLabel: 'Sales · Walmart adapter',
-    fullLabel: 'Sales Performance — Walmart adapter',
+    fullLabel: 'Sales Performance, Walmart adapter',
     adapter: true,
   },
   amazon_inventory: {
@@ -83,7 +83,7 @@ export const UPLOAD_KIND_META: Record<UploadKind, KindMeta> = {
     categoryLabel: 'Inventory Position',
     platformLabel: 'Amazon FBA adapter',
     compactLabel: 'Inventory · Amazon FBA adapter',
-    fullLabel: 'Inventory Position — Amazon FBA adapter',
+    fullLabel: 'Inventory Position, Amazon FBA adapter',
     adapter: true,
   },
   amazon_ads: {
@@ -91,7 +91,7 @@ export const UPLOAD_KIND_META: Record<UploadKind, KindMeta> = {
     categoryLabel: 'Advertising Performance',
     platformLabel: 'Amazon Ads adapter',
     compactLabel: 'Ads · Amazon adapter',
-    fullLabel: 'Advertising Performance — Amazon Ads adapter',
+    fullLabel: 'Advertising Performance, Amazon Ads adapter',
     adapter: true,
   },
   generic: {
@@ -101,7 +101,7 @@ export const UPLOAD_KIND_META: Record<UploadKind, KindMeta> = {
     compactLabel: 'Generic file',
     fullLabel: 'Generic file (no validator)',
   },
-  // Legacy kinds — keep them displayable so existing rows render, but
+  // Legacy kinds, keep them displayable so existing rows render, but
   // mark explicitly so the UI can de-emphasize them.
   sales: {
     category: 'sales',

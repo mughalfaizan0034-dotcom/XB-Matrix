@@ -42,14 +42,14 @@ import { UploadDialog } from '@/components/upload-dialog';
 import { UploadDetailDrawer } from '@/components/upload-detail-drawer';
 
 /**
- * Uploads — ingestion operations console.
+ * Uploads, ingestion operations console.
  *
  * Not a file manager: each row is one ingestion event tracked through
  * its lifecycle (queued → validating → processing → success/failed).
  * Validation errors and processing detail live inline (the detail
  * drawer), not in separate tabs. Long term this same monitor will also
  * surface API syncs, scheduled imports, connector runs and webhook
- * ingestion — architected as "ingestion operations", not "uploads".
+ * ingestion, architected as "ingestion operations", not "uploads".
  */
 const STATUS_TONE: Record<string, 'success' | 'warning' | 'neutral' | 'danger'> = {
   queued:          'neutral',
@@ -83,7 +83,7 @@ const REPORT_TYPE_LABEL: Record<UploadCategory, string> = {
 
 // Filterable report types. Settlement / Forecasting / Generic are
 // intentionally NOT offered as filters:
-//   - Generic isn't a report category — it's an absence of one.
+//   - Generic isn't a report category, it's an absence of one.
 //   - Settlement isn't an ingestion surface we collect from customers.
 //   - Forecasting flows the other way (we share forecasts with the
 //     user, not the reverse).
@@ -115,7 +115,7 @@ export default function UploadsPage() {
   const reportFilter = (tableState.filters.reportType as UploadCategory | undefined) ?? undefined;
   const workspaceFilter = (tableState.filters.workspaceId as string | undefined) ?? undefined;
 
-  // Workspace catalog — names for the cross-workspace column + filter.
+  // Workspace catalog, names for the cross-workspace column + filter.
   const workspacesQ = useWorkspaces({});
   const workspaceById = useMemo(() => {
     const m = new Map<string, string>();
@@ -266,7 +266,7 @@ export default function UploadsPage() {
           const vs = vsummary(u);
           return (
             <span data-numeric="true" className="text-xs text-foreground">
-              {typeof vs?.rowsParsed === 'number' ? vs.rowsParsed.toLocaleString() : '—'}
+              {typeof vs?.rowsParsed === 'number' ? vs.rowsParsed.toLocaleString() : '-'}
             </span>
           );
         },
@@ -295,7 +295,7 @@ export default function UploadsPage() {
             return u.uploadStatus === 'failed' ? (
               <Badge tone="danger">parse error</Badge>
             ) : (
-              <span className="text-xs text-muted-foreground">—</span>
+              <span className="text-xs text-muted-foreground">-</span>
             );
           }
           return errs > 0 ? (
@@ -337,7 +337,7 @@ export default function UploadsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [crossWorkspace, workspaceById]);
 
-  // Report-type filtering is client-side over the current page — the
+  // Report-type filtering is client-side over the current page, the
   // API has no kind-category filter yet (low row counts per workspace).
   const allRows = uploadsQ.data?.items ?? [];
   const rows = useMemo(
@@ -418,7 +418,7 @@ export default function UploadsPage() {
               <Link
                 href="/select-workspace?next=/uploads"
                 className="inline-flex items-center gap-1.5 rounded-md bg-navy px-3 py-1.5 text-xs font-medium text-white hover:bg-navy/90"
-                title="Ingestion writes into one workspace — pick one to continue."
+                title="Ingestion writes into one workspace, pick one to continue."
               >
                 <Plus className="h-3.5 w-3.5" /> Pick a workspace to upload
               </Link>
@@ -438,7 +438,7 @@ export default function UploadsPage() {
         }
       />
 
-      {/* Active write-context banner — operators need an unambiguous
+      {/* Active write-context banner, operators need an unambiguous
           signal of where ingested data lands. */}
       {activeWorkspace ? (
         <div className="flex items-center gap-3 rounded-md border border-navy/20 bg-navy/[0.04] px-4 py-2.5">
@@ -461,7 +461,7 @@ export default function UploadsPage() {
         </div>
       ) : null}
 
-      {/* Single-view ingestion monitor — no tabs. Templates moved to
+      {/* Single-view ingestion monitor, no tabs. Templates moved to
           the Download Template modal in the top action bar; concept
           docs live at /academy/upload-templates. */}
       <div className="flex flex-col gap-3">
@@ -659,7 +659,7 @@ function summaryText(u: UploadSummary): string {
   }
   if (u.uploadStatus === 'queued' || u.uploadStatus === 'uploading') return 'Awaiting validation';
   if (u.uploadStatus === 'validating') return 'Validating…';
-  return '—';
+  return '-';
 }
 
 /** Error count for the Errors column; null when unknown / not validated. */

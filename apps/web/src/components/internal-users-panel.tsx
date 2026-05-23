@@ -21,7 +21,7 @@ import { AddUserDialog } from '@/components/add-user-dialog';
 import { ResetPasswordDialog } from '@/components/users-list-nested';
 
 /**
- * Internal Users — XB Matrix platform staff (super_admin /
+ * Internal Users, XB Matrix platform staff (super_admin /
  * internal_manager / internal_staff). This is the platform-administration
  * layer, deliberately separate from per-organization (tenant) users.
  * Internal users operate cross-org and have no organization.
@@ -116,7 +116,7 @@ export function InternalUsersPanel() {
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <ShieldCheck className="h-4 w-4" />
           <span>
-            Platform staff — cross-organization administrators. Not tied to any tenant.
+            Platform staff, cross-organization administrators. Not tied to any tenant.
           </span>
         </div>
         {canManage ? (
@@ -221,7 +221,7 @@ function prettyInternalRole(u: UserSummary): string {
   if (u.internalRole === 'super_admin') return 'Super admin';
   if (u.internalRole === 'manager') return 'Internal manager';
   if (u.internalRole === 'staff') return 'Internal staff';
-  // Defensive — an organization user should never appear in this list.
+  // Defensive, an organization user should never appear in this list.
   return 'Internal user';
 }
 

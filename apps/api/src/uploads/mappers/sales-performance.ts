@@ -37,7 +37,7 @@ export interface SalesPerformanceRow {
 }
 
 /**
- * Sales Performance mapper — operates on a normalized all-channel
+ * Sales Performance mapper, operates on a normalized all-channel
  * row shape. The marketplace column drives the per-row source
  * platform / marketplace / region derivation; no per-marketplace
  * branching is needed downstream because every row produces the

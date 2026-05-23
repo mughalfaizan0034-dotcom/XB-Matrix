@@ -18,7 +18,7 @@ import {
 } from './csv-helpers.js';
 
 /**
- * Inventory Position — the all-channel normalized template.
+ * Inventory Position, the all-channel normalized template.
  *
  * One file can mix rows from every inventory pool the operator runs:
  * FBA per country, FBM, owned warehouses, 3PL pools, retail. The
@@ -26,21 +26,21 @@ import {
  * canonical layer (channel_inventory) decomposes each row into
  * per-state positions (available / reserved / inbound / transfer /
  * damaged) downstream so engines can compute blended DOS, transfer
- * planning, replenishment, etc. — see CLAUDE.md Part 6.
+ * planning, replenishment, etc., see CLAUDE.md Part 6.
  *
  * Columns (2026-05-20 all-channel direction):
- *   action      — add | update | remove
- *   uid         — caller-supplied unique row id (idempotency)
- *   date        — snapshot date (YYYY-MM-DD)
- *   channel     — fulfillment channel (fba, fbm, dtc, 3pl, retail, …)
- *   marketplace — pool source: amazon.com, amazon.ca, walmart.com,
+ *   action     , add | update | remove
+ *   uid        , caller-supplied unique row id (idempotency)
+ *   date       , snapshot date (YYYY-MM-DD)
+ *   channel    , fulfillment channel (fba, fbm, dtc, 3pl, retail, …)
+ *   marketplace, pool source: amazon.com, amazon.ca, walmart.com,
  *                 warehouse, 3pl, retail, …
- *   sku         — SKU identifier
- *   total       — total units in the pool (non-neg int)
- *   receiving   — inbound to the pool (non-neg int, default 0)
- *   fc_transfer — in transit between fulfillment centers (default 0)
- *   reserved    — reserved against open orders (default 0)
- *   damaged     — damaged / unsellable (default 0)
+ *   sku        , SKU identifier
+ *   total      , total units in the pool (non-neg int)
+ *   receiving  , inbound to the pool (non-neg int, default 0)
+ *   fc_transfer, in transit between fulfillment centers (default 0)
+ *   reserved   , reserved against open orders (default 0)
+ *   damaged    , damaged / unsellable (default 0)
  *
  * Sanity: receiving + fc_transfer + reserved + damaged ≤ total.
  */

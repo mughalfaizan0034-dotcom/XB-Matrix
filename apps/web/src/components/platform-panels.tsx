@@ -12,7 +12,7 @@ import {
  * Read-only diagnostic surfaces for internal managers. Backs the
  * Platform Audit / Feature Flags / Diagnostics / Billing Ops /
  * System Integrations sections in Settings. All math happens server-
- * side — these components are pure renderers.
+ * side, these components are pure renderers.
  */
 
 // ---------- Platform Audit ----------
@@ -58,7 +58,7 @@ export function PlatformAuditPanel() {
                     ) : null}
                   </td>
                   <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
-                    {e.organizationId ? `${e.organizationId.slice(0, 8)}…` : '—'}
+                    {e.organizationId ? `${e.organizationId.slice(0, 8)}…` : '-'}
                   </td>
                   <td className="px-4 py-2 text-xs text-muted-foreground">
                     <span className="font-mono">{e.actorKind}</span>
@@ -101,7 +101,7 @@ export function PlatformDiagnosticsPanel() {
             <StatusTile
               label="Database"
               value={data.database.connected ? 'connected' : 'down'}
-              hint={data.database.latencyMs !== null ? `${data.database.latencyMs} ms` : '—'}
+              hint={data.database.latencyMs !== null ? `${data.database.latencyMs} ms` : '-'}
               tone={data.database.connected ? 'success' : 'danger'}
             />
             <StatusTile
@@ -146,7 +146,7 @@ export function PlatformBillingPanel() {
   return (
     <SectionShell
       title="Billing Ops"
-      description="Manual invoicing tracker. Billing happens outside the platform — this view shows each tenant's current standing for reconciliation."
+      description="Manual invoicing tracker. Billing happens outside the platform, this view shows each tenant's current standing for reconciliation."
     >
       {isLoading ? (
         <SkeletonRows />
@@ -211,7 +211,7 @@ export function PlatformFeatureFlagsPanel() {
   return (
     <SectionShell
       title="Feature Flags"
-      description="Platform-wide and per-scope rollout controls. Read-only — flag definitions live in the catalog migration."
+      description="Platform-wide and per-scope rollout controls. Read-only, flag definitions live in the catalog migration."
     >
       {isLoading ? (
         <SkeletonRows />
@@ -258,10 +258,10 @@ export function PlatformIntegrationsPanel() {
     >
       <div className="rounded-lg border border-dashed border-border bg-card px-6 py-10 text-center">
         <p className="text-sm text-foreground">
-          All ingestion currently flows through the <strong>Uploads</strong> module — CSV ingestion is the only active channel.
+          All ingestion currently flows through the <strong>Uploads</strong> module, CSV ingestion is the only active channel.
         </p>
         <p className="mx-auto mt-2 max-w-xl text-xs text-muted-foreground">
-          Direct connectors (Amazon SP-API / Walmart / Shopify / Meta Ads / Google Ads), scheduled syncs, webhook ingestion, and ERP/3PL feeds will surface here as they ship. The downstream pipeline already treats every source identically — adding a connector adds a validator + mapper at the ingestion edge only.
+          Direct connectors (Amazon SP-API / Walmart / Shopify / Meta Ads / Google Ads), scheduled syncs, webhook ingestion, and ERP/3PL feeds will surface here as they ship. The downstream pipeline already treats every source identically, adding a connector adds a validator + mapper at the ingestion edge only.
         </p>
         <span className="mt-3 inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           reserved for future updates

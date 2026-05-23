@@ -24,7 +24,7 @@ interface NavItem {
   readonly href: string;
   readonly icon: React.ComponentType<{ className?: string }>;
   /**
-   * Tag a route as "Coming soon" — shows a small pill on the sidebar
+   * Tag a route as "Coming soon", shows a small pill on the sidebar
    * entry. The route stays accessible (no route gate); the page itself
    * renders a Coming Soon shell. Used today for Unit Economics until
    * the Expenses ingestion phase ships
@@ -48,7 +48,7 @@ const NAV: ReadonlyArray<NavItem> = [
 ];
 
 /**
- * Nav rows always navigate — every workspace-scoped page handles its
+ * Nav rows always navigate, every workspace-scoped page handles its
  * own "pick a workspace" empty state.
  *
  * Visibility: organization users with NO accessible workspaces collapse
@@ -58,7 +58,7 @@ const NAV: ReadonlyArray<NavItem> = [
  * full nav returns the moment an admin grants them workspace access.
  *
  * Internal users (super_admin / internal_manager / internal_staff) keep
- * the full nav regardless — they always have platform context to work
+ * the full nav regardless, they always have platform context to work
  * with via /select-workspace.
  */
 export function Sidebar() {
@@ -119,7 +119,7 @@ export function Sidebar() {
         })}
       </nav>
       <div className="border-t border-border p-3 text-xs text-muted-foreground">
-        {/* Stays below V1.0.0 until the final launch. Bump on every push —
+        {/* Stays below V1.0.0 until the final launch. Bump on every push -
             patch most of the time, minor for bigger slices. */}
         V0.18.7
       </div>

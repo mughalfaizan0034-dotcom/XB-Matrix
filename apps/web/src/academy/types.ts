@@ -8,11 +8,11 @@ import type { ComponentType } from 'react';
  * slice; MDX can replace this when the article count grows beyond
  * what's pleasant to write in JSX.
  *
- * Articles are platform-level knowledge — every authenticated user
+ * Articles are platform-level knowledge, every authenticated user
  * sees every article (per project_academy_surface visibility model).
  */
 export interface AcademyArticleMeta {
-  /** URL slug — must match the route segment under /academy/[slug]. */
+  /** URL slug, must match the route segment under /academy/[slug]. */
   readonly slug: string;
   /** Short title shown in the index, sidebar, and article header. */
   readonly title: string;
@@ -20,7 +20,7 @@ export interface AcademyArticleMeta {
   readonly section: AcademySection;
   /** One-line summary for index cards + search results. */
   readonly summary: string;
-  /** Search tags — supplements the title/headings in client-side search. */
+  /** Search tags, supplements the title/headings in client-side search. */
   readonly tags: ReadonlyArray<string>;
   /** When `true`, the article renders as a "Coming soon" placeholder. */
   readonly stub?: boolean;

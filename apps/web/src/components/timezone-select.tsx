@@ -5,7 +5,7 @@ import { TIMEZONE_GROUPS } from '@xb/types/timezones';
 
 /**
  * Reusable timezone picker built on the shared TIMEZONE_GROUPS list.
- * Uses native <optgroup> for region grouping — accessible, no extra deps.
+ * Uses native <optgroup> for region grouping, accessible, no extra deps.
  *
  * If `value` is a timezone NOT in the curated list (e.g. legacy data),
  * we render it as a leading "Other" option so the user sees their current

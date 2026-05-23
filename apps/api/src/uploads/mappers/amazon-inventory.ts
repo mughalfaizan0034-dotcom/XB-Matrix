@@ -43,7 +43,7 @@ export interface AmazonInventoryRow {
  *      this but defensive clamping keeps mapper output non-negative.
  *   4. Emits up to 5 NormalizedInventoryPosition rows per source row,
  *      one per non-zero state. Zero-count states are skipped to keep
- *      canonical lean — engines treat missing rows as zero anyway.
+ *      canonical lean, engines treat missing rows as zero anyway.
  */
 export const amazonInventoryMapper: UploadMapper<
   AmazonInventoryRow,

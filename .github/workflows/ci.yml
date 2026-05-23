@@ -29,6 +29,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Em-dash guard
+        # Platform-wide ban on em dashes in user-visible strings and
+        # code comments (project_design_system memory). Scopes to
+        # apps/web/src + apps/api/src/uploads where strings surface
+        # to operators. Fails loud rather than let them silently drift
+        # back in. Use comma, period, colon, or rewrite instead.
+        run: |
+          set -e
+          MATCHES=$(grep -rn "$(printf '\xe2\x80\x94')" apps/web/src apps/api/src/uploads 2>/dev/null || true)
+          if [ -n "$MATCHES" ]; then
+            echo "::error::Em dashes are banned platform-wide. Replace with comma, period, colon, or rewrite."
+            echo "$MATCHES"
+            exit 1
+          fi
+
       - name: Typecheck
         run: pnpm typecheck
 

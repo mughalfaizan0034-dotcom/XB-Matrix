@@ -23,7 +23,7 @@ export default function ForgotPasswordPage() {
       if (err instanceof ApiError && err.code === 'rate_limited') {
         setError(err.message);
       } else {
-        // Always succeed visually — we never leak whether an email exists.
+        // Always succeed visually, we never leak whether an email exists.
         setSubmitted(true);
       }
     } finally {

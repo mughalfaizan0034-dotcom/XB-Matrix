@@ -15,7 +15,7 @@ import {
  * Validated row shape produced by `walmart-sales` validator. Walmart-
  * native field names live here (item_id, page_views, gmv); the mapper
  * translates them into the marketplace-agnostic NormalizedSale shape.
- * Downstream engines never see "item_id" or "gmv" — they read
+ * Downstream engines never see "item_id" or "gmv", they read
  * sessionsTotal, salesTotal, etc., uniformly across every connector.
  */
 export interface WalmartSalesRow {
@@ -35,9 +35,9 @@ export interface WalmartSalesRow {
 }
 
 /**
- * Walmart sales mapper — translates Walmart Item Performance rows
+ * Walmart sales mapper, translates Walmart Item Performance rows
  * into NormalizedSale. The output shape is identical to amazon-sales
- * mapper's output by design — that's the architectural-validation
+ * mapper's output by design, that's the architectural-validation
  * win. Engines, summaries, dashboards, forecasting, and reporting
  * read the same NormalizedSale interface regardless of source.
  *
@@ -46,7 +46,7 @@ export interface WalmartSalesRow {
  *      source_platform='walmart'. This is the primary path.
  *   2. If that misses and we have a gtin, try resolving by gtin as
  *      alias_type='gtin' WITHOUT source context (barcodes are
- *      universal). This is the cross-platform identity bridge — a
+ *      universal). This is the cross-platform identity bridge, a
  *      product uploaded to Amazon with a UPC alias becomes
  *      automatically resolvable from Walmart too.
  *   3. If both miss, park the row in the unresolved queue keyed on
@@ -81,7 +81,7 @@ export const walmartSalesMapper: UploadMapper<WalmartSalesRow, NormalizedSale> =
         null,
       );
 
-      // Fallback: GTIN. Universal barcode — no source context. This
+      // Fallback: GTIN. Universal barcode, no source context. This
       // is what lets a product mapped via Amazon UPC automatically
       // resolve on Walmart too without re-mapping.
       if (resolution.resolved === null && r.gtin) {

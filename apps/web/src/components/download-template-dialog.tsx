@@ -17,13 +17,13 @@ import {
 import { generateUploadGuidePdf, type GuideDataset } from '@/lib/upload-guide-pdf';
 
 /**
- * Download Template dialog — enterprise modal that replaces the
+ * Download Template dialog, enterprise modal that replaces the
  * old Uploads-page Templates tab + grid.
  *
  * Minimal copy by design: each dataset row carries the title, a tight
  * one-line summary, and a Download CSV action. Concept explanations
  * (column meanings, validation rules, ingestion philosophy) live in
- * the Academy article at /academy/upload-templates — linked from the
+ * the Academy article at /academy/upload-templates, linked from the
  * footer. The Download guide PDF stays available for offline reference.
  */
 
@@ -86,10 +86,10 @@ const TEMPLATES: ReadonlyArray<TemplateRow> = [
     ],
     sampleRows: [
       ['add', '2026-05-01-amazonads-WIDGET-A', '2026-05-01', '2026-05-07',
-       'Widget A — SP', 'sponsored_products', 'amazonads.com', 'amazon.com', 'WIDGET-A',
+       'Widget A, SP', 'sponsored_products', 'amazonads.com', 'amazon.com', 'WIDGET-A',
        18450, 420, 28, '142.50', '599.40', 'USD', 14],
       ['add', '2026-05-01-meta-WIDGET-A', '2026-05-01', '2026-05-07',
-       'Widget A — Prospecting', 'social', 'meta.com', 'shopify', 'WIDGET-A',
+       'Widget A, Prospecting', 'social', 'meta.com', 'shopify', 'WIDGET-A',
        42100, 380, 14, '210.00', '420.00', 'USD', 7],
     ],
   },
@@ -123,7 +123,7 @@ const TEMPLATES: ReadonlyArray<TemplateRow> = [
   {
     id: 'sku_status',
     title: 'SKU Status',
-    summary: 'Active / discontinued flag — keeps analytics intact while excluding from replenishment.',
+    summary: 'Active / discontinued flag, keeps analytics intact while excluding from replenishment.',
     filename: '',
     headers: [],
     sampleRows: [],

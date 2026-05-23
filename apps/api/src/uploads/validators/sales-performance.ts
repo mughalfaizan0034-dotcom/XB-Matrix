@@ -20,7 +20,7 @@ import {
 } from './csv-helpers.js';
 
 /**
- * Sales Performance — the all-channel normalized template.
+ * Sales Performance, the all-channel normalized template.
  *
  * One file can mix rows from Amazon US / Amazon CA / Walmart / Shopify
  * / TikTok Shop / any future marketplace. The `marketplace` column on
@@ -29,32 +29,32 @@ import {
  * "Walmart sales".
  *
  * Per-marketplace validators (amazon_sales, walmart_sales) still exist
- * as ingestion ADAPTERS — they translate platform-shaped exports into
+ * as ingestion ADAPTERS, they translate platform-shaped exports into
  * this same canonical sales shape. The primary template exposed to
  * users is this one.
  *
  * Columns (Part 5 + 2026-05-20 all-channel direction):
- *   action            — add | update | remove
- *   uid               — caller-supplied unique row id (idempotency)
- *   start_date        — period start (YYYY-MM-DD)
- *   end_date          — period end (inclusive)
- *   channel           — fulfillment / retail channel label
+ *   action           , add | update | remove
+ *   uid              , caller-supplied unique row id (idempotency)
+ *   start_date       , period start (YYYY-MM-DD)
+ *   end_date         , period end (inclusive)
+ *   channel          , fulfillment / retail channel label
  *                       (e.g. fba, fbm, dtc, retail, wholesale)
- *   marketplace       — marketplace/source identity
+ *   marketplace      , marketplace/source identity
  *                       (e.g. amazon.com, amazon.ca, walmart.com,
  *                        shopify, tiktokshop, meta.com)
- *   sku               — SKU identifier (resolved to normalized sku
+ *   sku              , SKU identifier (resolved to normalized sku
  *                       via xb_master.sku_aliases downstream)
- *   sessions_total    — non-neg int
- *   sessions_b2b      — non-neg int (default 0)
- *   orders_total      — non-neg int
- *   orders_b2b        — non-neg int (default 0)
- *   units_total       — non-neg int
- *   units_b2b         — non-neg int (default 0)
- *   sales_total       — non-neg decimal
- *   sales_b2b         — non-neg decimal (default 0)
- *   refunds_total     — non-neg decimal (default 0)
- *   refunds_b2b       — non-neg decimal (default 0)
+ *   sessions_total   , non-neg int
+ *   sessions_b2b     , non-neg int (default 0)
+ *   orders_total     , non-neg int
+ *   orders_b2b       , non-neg int (default 0)
+ *   units_total      , non-neg int
+ *   units_b2b        , non-neg int (default 0)
+ *   sales_total      , non-neg decimal
+ *   sales_b2b        , non-neg decimal (default 0)
+ *   refunds_total    , non-neg decimal (default 0)
+ *   refunds_b2b      , non-neg decimal (default 0)
  *
  * Sanity:
  *   - b2b columns ≤ their _total counterparts

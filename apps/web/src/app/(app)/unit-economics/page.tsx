@@ -4,18 +4,18 @@ import { Badge, Card, CardContent, PageHeader } from '@xb/ui';
 import { LineChart, PieChart, Receipt, Scale } from 'lucide-react';
 
 /**
- * Unit Economics — locked as Coming Soon.
+ * Unit Economics, locked as Coming Soon.
  *
  * The platform ingests sales + ads today but no expense data
  * (COGS, landed cost, marketplace/fulfillment fees, marketing
  * allocations, overhead). Without those inputs, any per-unit
- * margin surface would be misleading or incomplete — so the engine
+ * margin surface would be misleading or incomplete, so the engine
  * derivations stay hidden behind this Coming Soon shell until the
  * Expenses ingestion phase ships (see project_expenses_and_unit_economics
  * memory).
  *
  * The /v1/intelligence/unit-economics endpoint still exists and still
- * reports input readiness, but it's deliberately NOT surfaced here —
+ * reports input readiness, but it's deliberately NOT surfaced here -
  * the page must communicate "not yet measurable" rather than "almost
  * there", so operators don't read the current data as financially
  * authoritative.
@@ -39,7 +39,7 @@ export default function UnitEconomicsPage() {
           <p className="max-w-3xl text-sm text-muted-foreground">
             True per-unit margin requires landed cost, marketplace fees,
             fulfillment costs, marketing allocations, and operational
-            overhead — none of which are ingested yet. Surfacing partial
+            overhead, none of which are ingested yet. Surfacing partial
             calculations now would risk treating incomplete data as
             financially authoritative, so the module stays locked until
             those inputs land.
@@ -60,7 +60,7 @@ export default function UnitEconomicsPage() {
           <PreviewTile
             icon={Receipt}
             title="Fully-loaded TACOS"
-            body="Spend ÷ net revenue (after fees and returns) — beyond the current top-line TACOS."
+            body="Spend ÷ net revenue (after fees and returns), beyond the current top-line TACOS."
           />
           <PreviewTile
             icon={LineChart}

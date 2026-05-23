@@ -18,7 +18,7 @@ export interface SessionUser {
     | 'system';
   readonly organizationId: string | null;
   readonly username: string;
-  /** Email is optional in the auth-pivot phase — admins create users without one. */
+  /** Email is optional in the auth-pivot phase, admins create users without one. */
   readonly email: string | null;
   readonly displayName: string;
   readonly userKind: 'internal' | 'organization';
@@ -36,7 +36,7 @@ export interface ActiveWorkspaceSummary {
   readonly organizationName: string;
   /**
    * The current actor's resolved access level on this workspace.
-   * 'view' is read-only — write surfaces (uploads, retries, deletes,
+   * 'view' is read-only, write surfaces (uploads, retries, deletes,
    * future inventory/forecast writes) must hide their controls and
    * the API rejects them. 'edit' is the operational level. Internal
    * managers and org_admins always carry 'edit'.
@@ -88,13 +88,13 @@ export function useSignIn() {
     onSuccess: (data) => {
       // Auth-boundary cache isolation: HARD wipe every cached query
       // before seeding the new actor's session. invalidateQueries alone
-      // is not enough — stale tenant data from the previous actor would
+      // is not enough, stale tenant data from the previous actor would
       // flash on the first render of the new account until refetches
       // complete. queryClient.clear() removes the data outright; the
       // new actor's queries hydrate from empty.
       qc.clear();
       qc.setQueryData(SESSION_QUERY_KEY, { user: data.user, activeWorkspace: null });
-      // Land on the workspace picker (nav hidden) — the user chooses a
+      // Land on the workspace picker (nav hidden), the user chooses a
       // workspace, then the full app chrome appears.
       router.push('/select-workspace');
     },

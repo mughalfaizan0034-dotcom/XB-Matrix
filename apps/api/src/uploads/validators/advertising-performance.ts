@@ -22,13 +22,13 @@ import {
 } from './csv-helpers.js';
 
 /**
- * Advertising Performance — the all-channel normalized template.
+ * Advertising Performance, the all-channel normalized template.
  *
  * One file can mix campaigns from every ad platform: Amazon Ads,
  * Walmart Connect, Meta Ads, Google Ads, TikTok Ads. Two source
  * dimensions per row:
- *   - `platform`           — the ad platform itself
- *   - `target_marketplace` — where the spend drove demand into
+ *   - `platform`          , the ad platform itself
+ *   - `target_marketplace`, where the spend drove demand into
  *
  * Both dimensions matter for blended TACOS / cross-channel
  * attribution: a Meta Ads campaign may target amazon.com (off-amazon
@@ -36,28 +36,28 @@ import {
  * spend source from the destination marketplace.
  *
  * Columns (2026-05-20 all-channel direction):
- *   action            — add | update | remove
- *   uid               — caller-supplied unique row id (idempotency)
- *   start_date        — period start (YYYY-MM-DD)
- *   end_date          — period end (inclusive)
- *   campaign_name     — campaign display name
- *   campaign_type     — sponsored_products, sponsored_brands,
+ *   action           , add | update | remove
+ *   uid              , caller-supplied unique row id (idempotency)
+ *   start_date       , period start (YYYY-MM-DD)
+ *   end_date         , period end (inclusive)
+ *   campaign_name    , campaign display name
+ *   campaign_type    , sponsored_products, sponsored_brands,
  *                       sponsored_display, search, shopping, social, …
- *   platform          — amazonads.com, walmartconnect.com, meta.com,
+ *   platform         , amazonads.com, walmartconnect.com, meta.com,
  *                       googleads.com, tiktokads.com, …
- *   target_marketplace— amazon.com, amazon.ca, walmart.com, shopify,
+ *   target_marketplace- amazon.com, amazon.ca, walmart.com, shopify,
  *                       tiktokshop, …
- *   sku_name          — SKU label (or 'ALL' / '*' for aggregate rows)
- *   impressions       — non-neg int
- *   clicks            — non-neg int, ≤ impressions
- *   orders            — non-neg int (attributed orders, default 0)
- *   total_cost        — non-neg decimal (ad spend)
- *   sales             — non-neg decimal (attributed sales, default 0)
- *   currency          — 3-letter ISO
+ *   sku_name         , SKU label (or 'ALL' / '*' for aggregate rows)
+ *   impressions      , non-neg int
+ *   clicks           , non-neg int, ≤ impressions
+ *   orders           , non-neg int (attributed orders, default 0)
+ *   total_cost       , non-neg decimal (ad spend)
+ *   sales            , non-neg decimal (attributed sales, default 0)
+ *   currency         , 3-letter ISO
  *
  * Optional:
  *   attribution_window_days
- *                     — integer in [1, 90]. Stored as a first-class
+ *                    , integer in [1, 90]. Stored as a first-class
  *                       dimension on xb_canonical.channel_ads so the
  *                       engine can pivot ACOS / TACOS / ROAS by window
  *                       (e.g. TACOS over 14d, ROAS over 7d) without
@@ -140,7 +140,7 @@ export const advertisingPerformanceValidator: UploadValidator = {
     const distinctCampaigns = new Set(accepted.map((r) => r.campaignName)).size;
     const distinctPlatforms = new Set(accepted.map((r) => r.platform)).size;
     const distinctTargets = new Set(accepted.map((r) => r.targetMarketplace)).size;
-    // Attribution-window coverage — additive counts only. Derived
+    // Attribution-window coverage, additive counts only. Derived
     // analysis (TACOS / ROAS by window) is the engine's job; the
     // validator just reports inputs so operators see at-a-glance
     // whether the file carries window dimensions or not.
@@ -213,7 +213,7 @@ export const advertisingPerformanceValidator: UploadValidator = {
           totalCost: totals.cost.toFixed(4),
           totalAttributedSales: totals.sales.toFixed(4),
           // derivedAcos / derivedRoas are deliberately NOT computed in
-          // the validator — derived metrics are engine outputs
+          // the validator, derived metrics are engine outputs
           // (intelligence-service) so dashboards and the validator
           // summary can never disagree about ACOS / ROAS values for
           // the same rows. Tracked for removal in a separate

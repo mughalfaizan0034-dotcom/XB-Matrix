@@ -5,14 +5,14 @@ import type { UploadKind } from '../../services/upload-service.js';
 import type { AliasType } from '../../services/sku-alias-service.js';
 
 /**
- * Mapping layer — the translator between platform-shaped upload rows
+ * Mapping layer, the translator between platform-shaped upload rows
  * (Amazon, Walmart, Shopify, …) and platform-agnostic NormalizedEntity
  * objects. Validators parse + sanity-check the source CSV. Mappers
  * take that validated, platform-shaped data and produce normalized
  * commerce entities the canonical writers + engines consume.
  *
  * Architecture rule (CLAUDE.md Part 4): connector-specific code lives
- * at the ingestion edge — validators + mappers only. After this layer,
+ * at the ingestion edge, validators + mappers only. After this layer,
  * every downstream layer (canonical, summary, intelligence, UI) is
  * channel-agnostic and reasons about NormalizedEntities.
  *
@@ -55,7 +55,7 @@ export interface MapperInput<TRow> {
 }
 
 export interface MapperResult<TEntity> {
-  /** Successfully mapped rows — ready for canonical insertion. */
+  /** Successfully mapped rows, ready for canonical insertion. */
   readonly mapped: ReadonlyArray<TEntity>;
   /** Rows parked in xb_master.unresolved_sku_rows for later replay. */
   readonly unresolved: ReadonlyArray<UnresolvedRecord>;
@@ -87,7 +87,7 @@ export interface UnresolvedRecord {
  * Per-kind mapper. Adding a new connector is two steps: write its
  * validator (ingestion edge) + write its mapper (translation edge).
  * After this layer, downstream code never knows which platform a row
- * came from — it filters on `source_platform` / `source_marketplace`
+ * came from, it filters on `source_platform` / `source_marketplace`
  * if it wants per-channel slicing.
  */
 export interface UploadMapper<TRow, TEntity> {
@@ -96,7 +96,7 @@ export interface UploadMapper<TRow, TEntity> {
 }
 
 // =====================================================================
-// NormalizedEntity contracts — platform-agnostic shapes every connector
+// NormalizedEntity contracts, platform-agnostic shapes every connector
 // produces and every downstream layer consumes.
 // =====================================================================
 
@@ -118,7 +118,7 @@ export interface NormalizedSource {
 }
 
 /**
- * NormalizedSale — period-grain row destined for
+ * NormalizedSale, period-grain row destined for
  * xb_canonical.channel_sales (Spec 3 / CLAUDE.md Part 5). One row per
  * (sku × marketplace × period × b2b/total split). The b2b split is
  * preserved as separate columns rather than separate rows so engines
@@ -134,7 +134,7 @@ export interface NormalizedSale {
    * channel labels are not fulfillment methods.
    */
   readonly channel?: string | null;
-  readonly fulfillmentType: string | null;   // fba, fbm, dtc, 3pl — null when unknown
+  readonly fulfillmentType: string | null;   // fba, fbm, dtc, 3pl, null when unknown
   readonly periodStart: string;              // YYYY-MM-DD
   readonly periodEnd: string;                // YYYY-MM-DD
   readonly periodGrain: 'day' | 'week' | 'month';
@@ -157,12 +157,12 @@ export interface NormalizedSale {
 }
 
 /**
- * NormalizedInventoryPosition — destined for xb_canonical.channel_inventory
+ * NormalizedInventoryPosition, destined for xb_canonical.channel_inventory
  * (CLAUDE.md Part 6). One row per
  * (sku × marketplace × inventory_location × inventory_state × ownership).
  * The validator's Amazon row (total / receiving / fc_transfer / reserved /
- * damaged) splits into multiple NormalizedInventoryPosition entries —
- * one per state — so engines can compute "sellable" by filtering on
+ * damaged) splits into multiple NormalizedInventoryPosition entries -
+ * one per state, so engines can compute "sellable" by filtering on
  * inventory_state='available'.
  */
 export interface NormalizedInventoryPosition {
@@ -191,7 +191,7 @@ export type InventoryState =
   | 'unsellable';
 
 /**
- * NormalizedAdPerformance — destined for xb_canonical.channel_ads
+ * NormalizedAdPerformance, destined for xb_canonical.channel_ads
  * (CLAUDE.md Part 4). One row per
  * (sku × ad_platform × campaign × target_marketplace × period). SKU
  * is optional because some campaign types (Sponsored Brands, awareness)

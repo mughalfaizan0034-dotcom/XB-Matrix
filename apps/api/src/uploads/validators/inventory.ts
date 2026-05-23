@@ -13,15 +13,15 @@ import {
  * Inventory upload validator.
  *
  * Expected CSV columns (case-insensitive, snake/camel-tolerant):
- *   sku             — string, non-empty, ≤ 200 chars
- *   warehouse       — string, non-empty, ≤ 120 chars
- *   snapshot_date   — ISO date or anything Date.parse can read
- *   on_hand         — non-negative integer
- *   reserved        — non-negative integer (default 0)
- *   available       — non-negative integer (default: on_hand - reserved)
- *   inbound         — non-negative integer (default 0)
- *   unit_cost       — non-negative decimal (optional)
- *   currency        — 3-letter ISO code (required when unit_cost present)
+ *   sku            , string, non-empty, ≤ 200 chars
+ *   warehouse      , string, non-empty, ≤ 120 chars
+ *   snapshot_date  , ISO date or anything Date.parse can read
+ *   on_hand        , non-negative integer
+ *   reserved       , non-negative integer (default 0)
+ *   available      , non-negative integer (default: on_hand - reserved)
+ *   inbound        , non-negative integer (default 0)
+ *   unit_cost      , non-negative decimal (optional)
+ *   currency       , 3-letter ISO code (required when unit_cost present)
  *
  * Same strict mode + bulk-insert pattern as sales:
  *   - any row error → entire upload rejected

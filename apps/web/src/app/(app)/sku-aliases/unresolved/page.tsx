@@ -114,7 +114,7 @@ export default function UnresolvedSkuPage() {
           return parts.length ? (
             <span className="text-sm text-foreground">{parts.join(' · ')}</span>
           ) : (
-            <span className="text-xs text-muted-foreground">—</span>
+            <span className="text-xs text-muted-foreground">-</span>
           );
         },
       },
@@ -169,7 +169,7 @@ export default function UnresolvedSkuPage() {
                   if (r.stillUnresolved) {
                     toast.push(
                       'info',
-                      'No alias matches yet — add one and replay again.',
+                      'No alias matches yet, add one and replay again.',
                     );
                   } else {
                     toast.push(
@@ -285,7 +285,7 @@ export default function UnresolvedSkuPage() {
           <CardContent className="pt-5">
             <Metric
               label="Pending rows"
-              value={agg ? agg.pendingRows.toLocaleString() : '—'}
+              value={agg ? agg.pendingRows.toLocaleString() : '-'}
               hint="rows blocked behind unresolved aliases"
             />
           </CardContent>
@@ -294,7 +294,7 @@ export default function UnresolvedSkuPage() {
           <CardContent className="pt-5">
             <Metric
               label="Unique aliases"
-              value={agg ? agg.distinctAliases.toLocaleString() : '—'}
+              value={agg ? agg.distinctAliases.toLocaleString() : '-'}
               hint="distinct codes needing a mapping"
             />
           </CardContent>
@@ -303,7 +303,7 @@ export default function UnresolvedSkuPage() {
           <CardContent className="pt-5">
             <Metric
               label="Affected uploads"
-              value={agg ? agg.distinctUploads.toLocaleString() : '—'}
+              value={agg ? agg.distinctUploads.toLocaleString() : '-'}
               hint="uploads with at least one parked row"
             />
           </CardContent>
@@ -422,7 +422,7 @@ export default function UnresolvedSkuPage() {
       />
 
       {/*
-        Restore mutation isn't wired to a button here yet — the page only
+        Restore mutation isn't wired to a button here yet, the page only
         shows pending rows. A future enhancement adds a "Dismissed" view
         with a per-row Restore action that calls useRestoreUnresolved().
       */}

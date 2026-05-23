@@ -7,8 +7,8 @@ import type { NormalizedSale } from '../mappers/types.js';
 /**
  * Canonical writer for xb_canonical.channel_sales (0020).
  *
- * Consumes NormalizedSale entities — the platform-agnostic shape every
- * sales mapper produces — and upserts them into the canonical table on
+ * Consumes NormalizedSale entities, the platform-agnostic shape every
+ * sales mapper produces, and upserts them into the canonical table on
  * the natural key. No marketplace-specific code: Amazon, Walmart,
  * Shopify rows all flow through the same writer because they are the
  * same shape by the time they get here.
@@ -16,7 +16,7 @@ import type { NormalizedSale } from '../mappers/types.js';
  * Lifecycle from the `action` column on the source row:
  *   - 'add'    → INSERT, upsert on conflict (operational reality: an
  *                "add" of a key that already exists is a re-upload).
- *   - 'update' → same as add — both upsert on the natural key.
+ *   - 'update' → same as add, both upsert on the natural key.
  *   - 'remove' → DELETE on the natural key. Canonical period rows are
  *                not soft-deleted (schema.md §3); a future-replay can
  *                re-INSERT the same key cleanly.

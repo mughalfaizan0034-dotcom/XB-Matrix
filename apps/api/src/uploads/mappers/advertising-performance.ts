@@ -33,7 +33,7 @@ export interface AdvertisingPerformanceRow {
 }
 
 /**
- * Advertising Performance mapper — all-channel. Each row carries the
+ * Advertising Performance mapper, all-channel. Each row carries the
  * ad platform AND the target marketplace separately, so the canonical
  * layer can answer:
  *   - blended TACOS across every ad platform (no platform filter)
@@ -110,7 +110,7 @@ export const advertisingPerformanceMapper: UploadMapper<
         spend: r.totalCost,
         attributedSales: r.sales,
         currencyCode: r.currency.toUpperCase(),
-        // Carried through verbatim — the mapper does not invent or
+        // Carried through verbatim, the mapper does not invent or
         // default a window. Null round-trips to canonical as null.
         attributionWindowDays: r.attributionWindowDays,
         action: r.action,
@@ -141,7 +141,7 @@ export const advertisingPerformanceMapper: UploadMapper<
 
 /**
  * SKU alias scope for an ad platform: aliases registered against the
- * marketplace owner — e.g., Amazon Ads SKUs resolve via 'amazon'
+ * marketplace owner, e.g., Amazon Ads SKUs resolve via 'amazon'
  * source_platform; Walmart Connect via 'walmart'; Meta/Google/TikTok
  * Ads share aliases with the target marketplace operator owns.
  */

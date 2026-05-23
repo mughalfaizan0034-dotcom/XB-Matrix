@@ -13,14 +13,14 @@ import {
  * Sales upload validator.
  *
  * Expected CSV columns (case-insensitive, snake_case_or_camelCase tolerated):
- *   order_id        — string, non-empty, ≤ 200 chars
- *   sku             — string, non-empty, ≤ 200 chars
- *   quantity        — positive integer
- *   unit_price      — non-negative decimal (parsed at 4-decimal precision)
- *   currency        — 3-letter uppercase code
- *   order_date      — ISO date (YYYY-MM-DD) or any value Date.parse can read
- *   marketplace     — optional string
- *   channel         — optional string
+ *   order_id       , string, non-empty, ≤ 200 chars
+ *   sku            , string, non-empty, ≤ 200 chars
+ *   quantity       , positive integer
+ *   unit_price     , non-negative decimal (parsed at 4-decimal precision)
+ *   currency       , 3-letter uppercase code
+ *   order_date     , ISO date (YYYY-MM-DD) or any value Date.parse can read
+ *   marketplace    , optional string
+ *   channel        , optional string
  *
  * Strict mode: if any row has any error, the whole upload is rejected
  * (status='failed', no canonical rows inserted). The user fixes the
@@ -111,7 +111,7 @@ export const salesValidator: UploadValidator = {
       };
     }
 
-    // All rows valid — bulk insert.
+    // All rows valid, bulk insert.
     if (accepted.length > 0) {
       await bulkInsertSales(input.client, {
         organizationId: input.organizationId,
@@ -233,7 +233,7 @@ function parseSalesRow(raw: Record<string, string>, rowNumber: number): RowParse
   if (!dateRaw) {
     errors.push({ row: rowNumber, column: 'order_date', message: 'order_date is required.' });
   } else {
-    // Accept YYYY-MM-DD, ISO timestamps, MM/DD/YYYY, etc — anything Date.parse handles.
+    // Accept YYYY-MM-DD, ISO timestamps, MM/DD/YYYY, etc, anything Date.parse handles.
     const ts = Date.parse(dateRaw);
     if (Number.isNaN(ts)) {
       errors.push({

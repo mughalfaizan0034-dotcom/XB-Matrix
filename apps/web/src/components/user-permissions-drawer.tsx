@@ -11,7 +11,7 @@ import {
 import { describeError } from '@/lib/session';
 
 /**
- * Per-user workspace permissions matrix — rows are the user's
+ * Per-user workspace permissions matrix, rows are the user's
  * organization workspaces, columns are None / View / Edit, exactly one
  * radio selected per row.
  *
@@ -19,7 +19,7 @@ import { describeError } from '@/lib/session';
  * server-side (missing row IS none). The UI displays 'none' as the
  * default radio for workspaces the user has never been granted.
  *
- * 'edit' is the operational admin level inside a workspace — there is
+ * 'edit' is the operational admin level inside a workspace, there is
  * no separate workspace-admin radio. Platform administration stays a
  * system role.
  */
@@ -59,7 +59,7 @@ export function UserPermissionsDrawer({ userId, onClose }: Props) {
 
   async function onSave() {
     if (!userId || !data) return;
-    // Send only the workspaces that actually changed — minimal payload,
+    // Send only the workspaces that actually changed, minimal payload,
     // safer audit footprint.
     const diff: Record<string, WorkspaceAccessLevel> = {};
     for (const w of data.workspaces) {
@@ -79,7 +79,7 @@ export function UserPermissionsDrawer({ userId, onClose }: Props) {
     <Drawer
       open={open}
       onClose={save.isPending ? () => undefined : onClose}
-      title={data ? `Permissions — ${data.displayName}` : 'Permissions'}
+      title={data ? `Permissions, ${data.displayName}` : 'Permissions'}
       description={data ? `@${data.username} · ${data.organizationName}` : undefined}
     >
       {isLoading || !data ? (
@@ -146,10 +146,10 @@ export function UserPermissionsDrawer({ userId, onClose }: Props) {
 
           {/* Footer key + save */}
           <p className="text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">None</span> — workspace hidden, no
-            APIs/AI access. <span className="font-medium text-foreground">View</span> —
+            <span className="font-medium text-foreground">None</span>, workspace hidden, no
+            APIs/AI access. <span className="font-medium text-foreground">View</span> -
             read-only dashboards, reports, AI insights.{' '}
-            <span className="font-medium text-foreground">Edit</span> — full operational
+            <span className="font-medium text-foreground">Edit</span>, full operational
             access: uploads, configuration, future automations.
           </p>
 

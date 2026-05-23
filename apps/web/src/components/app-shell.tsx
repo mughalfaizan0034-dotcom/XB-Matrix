@@ -7,7 +7,7 @@ import { Topbar } from '@/components/topbar';
 /**
  * App shell. On most routes it renders the full sidebar + topbar
  * chrome. On the workspace picker (where a freshly-signed-in user
- * lands before choosing a workspace) the nav is hidden — the user
+ * lands before choosing a workspace) the nav is hidden, the user
  * picks a workspace first, then the full chrome appears.
  */
 const NAV_HIDDEN_ROUTES = ['/select-workspace'];

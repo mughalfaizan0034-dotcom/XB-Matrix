@@ -4,11 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from './api-client';
 
 /**
- * Frontend client for /v1/intelligence/* — the engine-output layer.
+ * Frontend client for /v1/intelligence/*, the engine-output layer.
  *
  * Architectural rule (CLAUDE.md): all KPI math is server-side. These
  * hooks return shapes that the UI renders verbatim. We never sum,
- * divide, or derive anything from these payloads — if a calculation
+ * divide, or derive anything from these payloads, if a calculation
  * is missing the engine should compute it, not the page.
  *
  * Every payload includes a `readiness` block so the page can render
@@ -25,7 +25,7 @@ export interface EngineReadiness {
 /**
  * Provenance block emitted alongside every engine response. The
  * frontend renders these fields when a tooltip / debug view needs to
- * answer "where did this number come from" — it never recomputes or
+ * answer "where did this number come from", it never recomputes or
  * filters by them. Mirrors the backend EngineProvenance contract; the
  * two must stay in lock-step (public-repo hygiene rule:
  * no silent response-shape drift).

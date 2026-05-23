@@ -7,8 +7,8 @@ import type { NormalizedAdPerformance } from '../mappers/types.js';
 /**
  * Canonical writer for xb_canonical.channel_ads (migration 0023).
  *
- * Consumes NormalizedAdPerformance entities — the platform-agnostic
- * shape every ad mapper produces — and upserts them into the canonical
+ * Consumes NormalizedAdPerformance entities, the platform-agnostic
+ * shape every ad mapper produces, and upserts them into the canonical
  * table on the natural key. No platform-specific code: Amazon Ads,
  * Walmart Connect, Meta, Google, TikTok rows all flow through the
  * same writer because they are the same shape by the time they get
@@ -18,7 +18,7 @@ import type { NormalizedAdPerformance } from '../mappers/types.js';
  *   - 'add'    → INSERT, upsert on conflict (re-upload of the same
  *                period at the same attribution window is the
  *                operational reality).
- *   - 'update' → same as add — both upsert on the natural key.
+ *   - 'update' → same as add, both upsert on the natural key.
  *   - 'remove' → DELETE on the natural key. Canonical period rows are
  *                not soft-deleted (schema.md §3); a future replay can
  *                re-INSERT the same key cleanly.
@@ -101,7 +101,7 @@ export async function writeChannelAds(
     //
     // Forward-looking columns (campaign_id, ad_group_id, ad_group_name,
     // ad_id, targeting_type, placement, profile_id, account_code) are
-    // intentionally inserted as NULL — the current mapper doesn't carry
+    // intentionally inserted as NULL, the current mapper doesn't carry
     // them. The mapper PR that adds API-level ingestion (SP-API /
     // Walmart Connect API) will populate them; the canonical table is
     // ready for both shapes.
