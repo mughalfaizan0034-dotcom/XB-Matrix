@@ -23,6 +23,14 @@ interface NavItem {
   readonly label: string;
   readonly href: string;
   readonly icon: React.ComponentType<{ className?: string }>;
+  /**
+   * Tag a route as "Coming soon" — shows a small pill on the sidebar
+   * entry. The route stays accessible (no route gate); the page itself
+   * renders a Coming Soon shell. Used today for Unit Economics until
+   * the Expenses ingestion phase ships
+   * (project_expenses_and_unit_economics memory).
+   */
+  readonly comingSoon?: boolean;
 }
 
 const NAV: ReadonlyArray<NavItem> = [
@@ -33,7 +41,7 @@ const NAV: ReadonlyArray<NavItem> = [
   { label: 'Shipments',     href: '/shipments'      , icon: Truck },
   { label: 'Uploads',       href: '/uploads'        , icon: Upload },
   { label: 'Reports',       href: '/reports'        , icon: FileSpreadsheet },
-  { label: 'Unit Economics', href: '/unit-economics', icon: BarChart3 },
+  { label: 'Unit Economics', href: '/unit-economics', icon: BarChart3, comingSoon: true },
   { label: 'SKU Aliases',   href: '/sku-aliases'    , icon: Package },
   { label: 'Academy',       href: '/academy'        , icon: BookOpen },
   { label: 'Settings',      href: '/settings'       , icon: Settings },
@@ -89,6 +97,19 @@ export function Sidebar() {
             >
               <Icon className="h-4 w-4" />
               <span className="flex-1">{item.label}</span>
+              {item.comingSoon ? (
+                <span
+                  className={cn(
+                    'rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide',
+                    active
+                      ? 'bg-white/15 text-white/90'
+                      : 'bg-muted text-muted-foreground',
+                  )}
+                  aria-label="Coming soon"
+                >
+                  Soon
+                </span>
+              ) : null}
             </Link>
           );
         })}
