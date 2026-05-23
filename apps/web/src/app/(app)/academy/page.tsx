@@ -1,107 +1,78 @@
-'use client';
-
-import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, BookOpen, Search } from 'lucide-react';
-import { Badge, Card, CardContent, PageHeader } from '@xb/ui';
-import {
-  ACADEMY_SECTIONS,
-  listArticles,
-  searchArticles,
-  type AcademyArticle,
-  type AcademySection,
-} from '@/academy/index';
+import { ArrowRight, BookOpen } from 'lucide-react';
+import { Badge } from '@xb/ui';
+import { listArticles } from '@/academy/index';
 
 /**
- * Academy index, searchable topic catalogue. Every authenticated user
- * sees every article (platform-level knowledge). Stubs render with a
- * "Coming soon" badge but stay listed so the topic outline is visible
- * end-to-end.
+ * Academy welcome page.
+ *
+ * The category navigation lives in the persistent sidebar (rendered
+ * by the academy layout via AcademyShell). The body here is a short
+ * intro plus a small set of recommended starting points, doc-style.
  */
 export default function AcademyIndexPage() {
-  const [query, setQuery] = useState('');
-  const matches = useMemo(() => searchArticles(query), [query]);
-  const grouped = useMemo(() => groupBySection(matches), [matches]);
+  const featured = listArticles()
+    .filter((a) => !a.meta.stub)
+    .slice(0, 3);
 
   return (
-    <div className="flex flex-col gap-6 p-6 lg:p-8">
-      <PageHeader
-        title="Academy"
-        description="Concepts, data-pipeline reference, and operational guidance for XB Matrix."
-      />
+    <article className="flex flex-col gap-8">
+      <header className="flex flex-col gap-2">
+        <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700">
+          <BookOpen className="h-3 w-3" />
+          xB Matrix Academy
+        </div>
+        <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">
+          The operating manual for xB Matrix
+        </h1>
+        <p className="max-w-2xl text-base leading-7 text-muted-foreground">
+          Concepts, data-pipeline reference, and operational guidance.
+          Use the category sidebar to browse, or search the full
+          Academy from any article.
+        </p>
+      </header>
 
-      <div className="relative max-w-xl">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search Academy, topics, terms, concepts"
-          className="h-10 w-full rounded-md border border-border bg-background pl-10 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-        />
-      </div>
-
-      {matches.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            No articles match “{query}”.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="flex flex-col gap-6">
-          {ACADEMY_SECTIONS.filter((s) => grouped[s].length > 0).map((section) => (
-            <section key={section} className="flex flex-col gap-3">
-              <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                {section}
-              </h2>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {grouped[section].map((article) => (
-                  <ArticleCard key={article.meta.slug} article={article} />
-                ))}
-              </div>
-            </section>
+      <section className="flex flex-col gap-3">
+        <h2 className="font-heading text-xs font-semibold uppercase tracking-[0.12em] text-orange">
+          Start here
+        </h2>
+        <ul className="flex flex-col gap-2">
+          {featured.map((a) => (
+            <li key={a.meta.slug}>
+              <Link
+                href={`/academy/${a.meta.slug}`}
+                className="group flex items-start justify-between gap-3 rounded-md border border-border bg-card px-4 py-3 transition-colors hover:border-orange-300"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-heading text-sm font-semibold text-foreground">
+                      {a.meta.title}
+                    </span>
+                    <Badge tone="info">{a.meta.category}</Badge>
+                  </div>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    {a.meta.summary}
+                  </p>
+                </div>
+                <ArrowRight className="mt-1 h-4 w-4 flex-shrink-0 text-muted-foreground group-hover:text-orange" />
+              </Link>
+            </li>
           ))}
-        </div>
-      )}
-    </div>
+        </ul>
+      </section>
+
+      <section className="flex flex-col gap-3 border-t border-border pt-6">
+        <h2 className="font-heading text-xs font-semibold uppercase tracking-[0.12em] text-orange">
+          What lives here
+        </h2>
+        <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
+          Every article follows the same structure: Overview, Why it
+          matters, How it works, Example workflow, Common mistakes,
+          Q&amp;A, and Related concepts. Use the Q&amp;A blocks for
+          quick answers, and the related-concepts footer to traverse
+          neighbouring topics.
+        </p>
+      </section>
+    </article>
   );
 }
-
-function ArticleCard({ article }: { article: AcademyArticle }) {
-  const { meta } = article;
-  return (
-    <Link
-      href={`/academy/${meta.slug}`}
-      className="group block rounded-lg border border-border bg-card p-4 transition-shadow hover:shadow-xb-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <BookOpen className="h-4 w-4 text-orange" aria-hidden="true" />
-          <h3 className="font-heading text-sm font-semibold text-foreground">
-            {meta.title}
-          </h3>
-        </div>
-        {meta.stub ? <Badge tone="neutral">Coming soon</Badge> : null}
-      </div>
-      <p className="mt-2 line-clamp-3 text-sm text-muted-foreground">{meta.summary}</p>
-      <div className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-muted-foreground group-hover:text-foreground">
-        Read <ArrowRight className="h-3 w-3" />
-      </div>
-    </Link>
-  );
-}
-
-function groupBySection(
-  articles: ReadonlyArray<AcademyArticle>,
-): Record<AcademySection, ReadonlyArray<AcademyArticle>> {
-  const out = ACADEMY_SECTIONS.reduce(
-    (acc, section) => {
-      acc[section] = [];
-      return acc;
-    },
-    {} as Record<AcademySection, AcademyArticle[]>,
-  );
-  for (const a of articles) out[a.meta.section].push(a);
-  return out;
-}
-

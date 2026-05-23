@@ -1,32 +1,24 @@
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
-import { Badge, Card, CardContent, PageHeader } from '@xb/ui';
+import { Badge } from '@xb/ui';
 import { getArticle, listArticles } from '@/academy/index';
 
 /**
  * Academy article view, SERVER component.
  *
  * Resolves the slug against the typed article registry. Stub articles
- * render with a "Coming soon" placeholder while preserving the article
- * shell so future content slots in cleanly.
+ * render with a "Coming soon" placeholder while preserving the
+ * article shell. Real articles compose Section primitives in the
+ * canonical order (Overview, WhyItMatters, HowItWorks,
+ * ExampleWorkflow, CommonMistakes, QA, Related) inside their Body.
  *
- * SERVER-component requirement (not optional): the `deploy-web`
- * workflow builds with `output: export` (GitHub Pages static export).
- * Static export forbids client-component pages for dynamic routes;
- * the route must be a server component AND export
- * `generateStaticParams()` so every slug is pre-rendered at build
- * time. Locally `pnpm build` does not set the export env, so the
- * stricter constraint only shows in CI deploy.
- *
- * Nothing here needs client state. The article body components are
- * pure JSX, Links are server-renderable, and the slug comes from the
- * server-component `params` prop instead of the `useParams` hook.
+ * SERVER-component requirement: the deploy-web workflow builds with
+ * output: export (GitHub Pages static export). Dynamic routes must
+ * export generateStaticParams and stay server-rendered.
  */
 
 export function generateStaticParams(): Array<{ slug: string }> {
-  // One static path per registered article (including stubs, so deep
-  // links land instead of 404ing while the stub is on the roadmap).
+  // One static path per registered article (stubs included so deep
+  // links land instead of 404ing).
   return listArticles().map((a) => ({ slug: a.meta.slug }));
 }
 
@@ -40,76 +32,37 @@ export default function AcademyArticlePage({ params }: PageProps) {
 
   const { meta, Body } = article;
   return (
-    <div className="flex flex-col gap-6 p-6 lg:p-8">
-      <div className="flex flex-col gap-2">
-        <Link
-          href="/academy"
-          className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-3 w-3" /> Academy
-        </Link>
-        <PageHeader
-          title={meta.title}
-          description={meta.summary}
-        />
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge tone="info">{meta.section}</Badge>
+    <article className="flex flex-col gap-8">
+      <header className="flex flex-col gap-3 border-b border-border pb-6">
+        <div className="flex items-center gap-2">
+          <Badge tone="info">{meta.category}</Badge>
           {meta.stub ? <Badge tone="neutral">Coming soon</Badge> : null}
         </div>
-      </div>
+        <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">
+          {meta.title}
+        </h1>
+        <p className="max-w-2xl text-base leading-7 text-muted-foreground">
+          {meta.summary}
+        </p>
+      </header>
 
       {meta.stub ? (
         <StubPlaceholder />
       ) : (
-        <Card>
-          <CardContent className="pt-6">
-            <Body />
-          </CardContent>
-        </Card>
+        <div className="flex flex-col gap-8">
+          <Body />
+        </div>
       )}
-
-      <RelatedArticles currentSlug={meta.slug} />
-    </div>
+    </article>
   );
 }
 
 function StubPlaceholder() {
   return (
-    <Card>
-      <CardContent className="py-12 text-center text-sm text-muted-foreground">
-        This Academy article is on the roadmap and ships in a future
-        release. Until then, the topic outline is visible from the
-        Academy index so you can see what's coming.
-      </CardContent>
-    </Card>
-  );
-}
-
-function RelatedArticles({ currentSlug }: { currentSlug: string }) {
-  const others = listArticles().filter((a) => a.meta.slug !== currentSlug).slice(0, 4);
-  if (others.length === 0) return null;
-  return (
-    <section className="flex flex-col gap-3 border-t border-border pt-6">
-      <h2 className="font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        Continue reading
-      </h2>
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-        {others.map((a) => (
-          <Link
-            key={a.meta.slug}
-            href={`/academy/${a.meta.slug}`}
-            className="flex items-start justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm hover:shadow-xb-sm"
-          >
-            <span>
-              <span className="font-medium text-foreground">{a.meta.title}</span>
-              <span className="ml-2 text-xs text-muted-foreground">{a.meta.section}</span>
-            </span>
-            {a.meta.stub ? (
-              <Badge tone="neutral">Coming soon</Badge>
-            ) : null}
-          </Link>
-        ))}
-      </div>
-    </section>
+    <div className="rounded-md border border-dashed border-border bg-card px-6 py-12 text-center text-sm text-muted-foreground">
+      This Academy article is on the roadmap and ships in a future
+      release. The topic outline is visible in the sidebar so you can
+      see what is coming.
+    </div>
   );
 }

@@ -1,16 +1,16 @@
-import type { AcademyArticle, AcademyArticleMeta } from './types.js';
+import type { AcademyArticle, AcademyArticleMeta, AcademyCategory } from './types.js';
 import { uploadTemplatesArticle } from './articles/upload-templates.js';
 
 /**
  * Academy article registry.
  *
- * One real article today (Upload Templates) plus 14 typed stubs that
- * render as "Coming soon" placeholders. Stubs ship now so the topic
- * outline is visible end-to-end and operators can see what's planned;
- * each stub gets fleshed out in subsequent atomic PRs.
+ * One real article today (Upload Templates) plus typed stubs covering
+ * every category in the doc-style outline. Stubs render with a
+ * "Coming soon" placeholder so the topic structure is visible end-
+ * to-end; each gets fleshed out in subsequent atomic PRs.
  *
  * Visibility: every authenticated user sees every article (platform-
- * level knowledge; see project_academy_surface memory).
+ * level knowledge; see project_academy_surface universal-access rule).
  */
 
 function stub(meta: Omit<AcademyArticleMeta, 'stub'>): AcademyArticle {
@@ -24,136 +24,146 @@ const ARTICLES: ReadonlyArray<AcademyArticle> = [
   // -- Real content ---------------------------------------------------
   uploadTemplatesArticle,
 
-  // -- Stubs (alphabetized inside each section) -----------------------
+  // -- Getting Started ------------------------------------------------
   stub({
     slug: 'getting-started',
     title: 'Getting Started',
-    section: 'Getting Started',
-    summary: 'Orientation tour of XB Matrix, workspace setup, your first upload, and the operational dashboard.',
+    category: 'Getting Started',
+    summary: 'Orientation tour of XB Matrix: workspaces, your first upload, the operational dashboard.',
     tags: ['onboarding', 'workspace', 'first steps'],
   }),
-  stub({
-    slug: 'permissions-and-organization-setup',
-    title: 'Permissions & Organization Setup',
-    section: 'Getting Started',
-    summary: 'Roles, workspace access levels, and how organizations + users + workspaces fit together.',
-    tags: ['permissions', 'roles', 'workspace', 'organization'],
-  }),
 
-  stub({
-    slug: 'sku-normalization',
-    title: 'SKU Normalization',
-    section: 'Data Pipeline',
-    summary: 'How platform-specific SKU codes resolve to one canonical sku_normalized, alias maps, the unresolved queue, and resolution rules.',
-    tags: ['sku', 'alias', 'normalization', 'unresolved'],
-  }),
-  stub({
-    slug: 'marketplace-and-platform-mapping',
-    title: 'Marketplace & Platform Mapping',
-    section: 'Data Pipeline',
-    summary: 'Marketplace, platform, target_marketplace, ad_platform_code, what each dimension means and when to use which.',
-    tags: ['marketplace', 'platform', 'channel', 'dimension'],
-  }),
-  stub({
-    slug: 'canonical-data-model',
-    title: 'Canonical Data Model',
-    section: 'Data Pipeline',
-    summary: 'channel_sales, channel_ads, channel_inventory, the canonical period-aggregated layer engines read from.',
-    tags: ['canonical', 'channel_sales', 'channel_ads', 'schema'],
-  }),
+  // -- Upload Templates -----------------------------------------------
   stub({
     slug: 'upload-examples',
     title: 'Upload Examples',
-    section: 'Data Pipeline',
+    category: 'Upload Templates',
     summary: 'Sample rows for every template, including B2B splits, attribution windows, and remove-action lifecycle.',
     tags: ['example', 'sample', 'csv'],
   }),
   stub({
     slug: 'cogs-template',
     title: 'COGs Template',
-    section: 'Data Pipeline',
-    summary: 'Minimal sku + cogs feed for the future profitability engine, numeric-only formatting, backend handles normalization + currency.',
-    tags: ['cogs', 'cost', 'profitability', 'unit economics', 'template'],
+    category: 'Upload Templates',
+    summary: 'Minimal sku + cogs feed for the future profitability engine.',
+    tags: ['cogs', 'cost', 'profitability', 'template'],
   }),
   stub({
     slug: 'case-pack-template',
     title: 'Case Pack Template',
-    section: 'Data Pipeline',
-    summary: 'Box / pallet packaging constraints that let the replenishment engine round recommendations to operational units.',
+    category: 'Upload Templates',
+    summary: 'Box / pallet packaging constraints for replenishment rounding.',
     tags: ['case pack', 'pallet', 'box', 'replenishment', 'template'],
   }),
   stub({
     slug: 'sku-status-template',
     title: 'SKU Status Template',
-    section: 'Data Pipeline',
-    summary: 'Active / discontinued flag per SKU, preserves analytics history while excluding discontinued SKUs from replenishment, restock alerts, and forecasting paths.',
-    tags: ['sku', 'status', 'discontinued', 'lifecycle', 'replenishment', 'template'],
+    category: 'Upload Templates',
+    summary: 'Active / discontinued flag per SKU. Preserves analytics history while excluding discontinued SKUs from replenishment paths.',
+    tags: ['sku', 'status', 'discontinued', 'lifecycle', 'template'],
   }),
 
+  // -- Intelligence Concepts ------------------------------------------
   stub({
-    slug: 'advertising-intelligence',
-    title: 'Advertising Intelligence',
-    section: 'Intelligence Concepts',
-    summary: 'How spend, attributed sales, attribution windows, and channel_sales combine into ACOS / TACOS / ROAS / CTR / CPC / CVR.',
-    tags: ['advertising', 'ppc', 'acos', 'tacos', 'roas'],
-  }),
-  stub({
-    slug: 'inventory-intelligence',
-    title: 'Inventory Intelligence',
-    section: 'Intelligence Concepts',
-    summary: 'Stock cover, stockout risk, dead stock, engine derivations over latest-snapshot inventory + sales velocity.',
-    tags: ['inventory', 'stock cover', 'replenishment', 'dos'],
-  }),
-  stub({
-    slug: 'tacos-acos-roas',
-    title: 'TACOS / ACOS / ROAS Concepts',
-    section: 'Intelligence Concepts',
-    summary: 'What each metric measures, which denominator the engine uses, and how the attribution window pivots them.',
-    tags: ['tacos', 'acos', 'roas', 'metric definition'],
-  }),
-  stub({
-    slug: 'brand-management',
-    title: 'Brand Management',
-    section: 'Intelligence Concepts',
-    summary: 'Brand as a canonical dimension, normalization, cross-marketplace rollups, brand-level intelligence.',
-    tags: ['brand', 'aggregation', 'portfolio'],
-  }),
-  stub({
-    slug: 'omnichannel-reporting',
-    title: 'Omnichannel Reporting',
-    section: 'Intelligence Concepts',
-    summary: 'Cross-marketplace, cross-platform views, blended TACOS, channel comparison, marketplace drilldowns.',
-    tags: ['omnichannel', 'cross-channel', 'blended'],
+    slug: 'canonical-data-model',
+    title: 'Canonical Data Model',
+    category: 'Intelligence Concepts',
+    summary: 'channel_sales, channel_ads, channel_inventory: the canonical period-aggregated layer the engine reads from.',
+    tags: ['canonical', 'channel_sales', 'channel_ads', 'schema'],
   }),
   stub({
     slug: 'ai-intelligence-concepts',
     title: 'AI Intelligence Concepts',
-    section: 'Intelligence Concepts',
-    summary: 'How AI insights and recommendations layer on top of engine outputs (never raw uploads).',
+    category: 'Intelligence Concepts',
+    summary: 'How AI insights and recommendations layer on top of engine outputs.',
     tags: ['ai', 'insight', 'recommendation'],
   }),
+  stub({
+    slug: 'omnichannel-reporting',
+    title: 'Omnichannel Reporting',
+    category: 'Intelligence Concepts',
+    summary: 'Cross-marketplace, cross-platform views: blended TACOS, channel comparison, marketplace drilldowns.',
+    tags: ['omnichannel', 'cross-channel', 'blended'],
+  }),
+  stub({
+    slug: 'brand-management',
+    title: 'Brand Management',
+    category: 'Intelligence Concepts',
+    summary: 'Brand as a canonical dimension: normalization, rollups, brand-level intelligence.',
+    tags: ['brand', 'aggregation', 'portfolio'],
+  }),
 
+  // -- Inventory & Replenishment --------------------------------------
+  stub({
+    slug: 'inventory-intelligence',
+    title: 'Inventory Intelligence',
+    category: 'Inventory & Replenishment',
+    summary: 'Stock cover, stockout risk, dead stock: engine derivations over latest-snapshot inventory and sales velocity.',
+    tags: ['inventory', 'stock cover', 'replenishment', 'dos'],
+  }),
+
+  // -- Advertising Intelligence ---------------------------------------
+  stub({
+    slug: 'advertising-intelligence',
+    title: 'Advertising Intelligence',
+    category: 'Advertising Intelligence',
+    summary: 'Spend, attributed sales, attribution windows, and how they combine into ACOS / TACOS / ROAS / CTR / CPC / CVR.',
+    tags: ['advertising', 'ppc', 'acos', 'tacos', 'roas'],
+  }),
+  stub({
+    slug: 'tacos-acos-roas',
+    title: 'TACOS / ACOS / ROAS Concepts',
+    category: 'Advertising Intelligence',
+    summary: 'What each metric measures, which denominator the engine uses, and how attribution windows pivot them.',
+    tags: ['tacos', 'acos', 'roas', 'metric definition'],
+  }),
+
+  // -- SKU Normalization ----------------------------------------------
+  stub({
+    slug: 'sku-normalization',
+    title: 'SKU Normalization',
+    category: 'SKU Normalization',
+    summary: 'How platform-specific SKU codes resolve to one canonical sku_normalized, including the unresolved queue.',
+    tags: ['sku', 'alias', 'normalization', 'unresolved'],
+  }),
+  stub({
+    slug: 'marketplace-and-platform-mapping',
+    title: 'Marketplace & Platform Mapping',
+    category: 'SKU Normalization',
+    summary: 'Marketplace, platform, target_marketplace, ad_platform_code: what each dimension means.',
+    tags: ['marketplace', 'platform', 'channel', 'dimension'],
+  }),
+
+  // -- Support & Operations -------------------------------------------
   stub({
     slug: 'troubleshooting',
     title: 'Troubleshooting',
-    section: 'Operations',
-    summary: 'Validation failures, unresolved SKUs, missing engine readiness, diagnostic steps for common issues.',
+    category: 'Support & Operations',
+    summary: 'Validation failures, unresolved SKUs, missing engine readiness: diagnostic steps.',
     tags: ['troubleshooting', 'validation', 'error'],
   }),
   stub({
     slug: 'best-practices',
     title: 'Best Practices',
-    section: 'Operations',
-    summary: 'Upload cadence, alias hygiene, brand normalization, and reconciliation habits that keep intelligence trustworthy.',
+    category: 'Support & Operations',
+    summary: 'Upload cadence, alias hygiene, brand normalization, reconciliation habits.',
     tags: ['best practice', 'operations', 'hygiene'],
   }),
-
   stub({
     slug: 'faq',
     title: 'FAQ',
-    section: 'Reference',
+    category: 'Support & Operations',
     summary: 'Quick answers to the questions operators ask most often.',
     tags: ['faq'],
+  }),
+
+  // -- Permissions & Roles --------------------------------------------
+  stub({
+    slug: 'permissions-and-organization-setup',
+    title: 'Permissions & Organization Setup',
+    category: 'Permissions & Roles',
+    summary: 'Roles, workspace access levels, and how organizations + users + workspaces fit together.',
+    tags: ['permissions', 'roles', 'workspace', 'organization'],
   }),
 ];
 
@@ -174,7 +184,7 @@ export function searchArticles(query: string): ReadonlyArray<AcademyArticle> {
     const haystack = [
       a.meta.title,
       a.meta.summary,
-      a.meta.section,
+      a.meta.category,
       ...a.meta.tags,
     ]
       .join(' ')
@@ -183,5 +193,19 @@ export function searchArticles(query: string): ReadonlyArray<AcademyArticle> {
   });
 }
 
-export { ACADEMY_SECTIONS } from './types.js';
-export type { AcademyArticle, AcademyArticleMeta, AcademySection } from './types.js';
+/** Articles grouped by category, preserving canonical sidebar order. */
+export function articlesByCategory(): ReadonlyArray<{
+  category: AcademyCategory;
+  articles: ReadonlyArray<AcademyArticle>;
+}> {
+  const map = new Map<AcademyCategory, AcademyArticle[]>();
+  for (const a of ARTICLES) {
+    const cat = a.meta.category;
+    if (!map.has(cat)) map.set(cat, []);
+    map.get(cat)!.push(a);
+  }
+  return [...map.entries()].map(([category, articles]) => ({ category, articles }));
+}
+
+export { ACADEMY_CATEGORIES } from './types.js';
+export type { AcademyArticle, AcademyArticleMeta, AcademyCategory } from './types.js';
