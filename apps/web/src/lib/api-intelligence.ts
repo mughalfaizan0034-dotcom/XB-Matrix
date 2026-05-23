@@ -116,24 +116,50 @@ export interface AdvertisingKpis {
   readonly acos: string | null;
   readonly tacos: string | null;
   readonly roas: string | null;
+  readonly cvr: string | null;
+}
+
+export interface AdvertisingPlatformBreakdownEntry {
+  readonly adPlatformCode: string;
+  readonly impressions: number;
+  readonly clicks: number;
+  readonly attributedOrders: number;
+  readonly spend: string;
+  readonly attributedSales: string;
+  readonly acos: string | null;
+  readonly roas: string | null;
+  readonly spendShare: string;
 }
 
 export interface AdvertisingSummary {
   readonly workspaceId: string;
   readonly windowDays: number;
+  readonly attributionWindowDays: number;
+  readonly window: { readonly from: string; readonly to: string };
   readonly readiness: EngineReadiness;
   readonly kpis: AdvertisingKpis;
+  readonly byAdPlatform: ReadonlyArray<AdvertisingPlatformBreakdownEntry>;
   readonly provenance: EngineProvenance;
 }
 
-export function useAdvertisingSummary(workspaceId: string | null, windowDays = 30) {
+export function useAdvertisingSummary(
+  workspaceId: string | null,
+  windowDays = 30,
+  attributionWindowDays?: number,
+) {
   return useQuery({
     enabled: !!workspaceId,
-    queryKey: ['intelligence', 'advertising', workspaceId, windowDays],
-    queryFn: () =>
-      api.get<AdvertisingSummary>(
-        `/v1/intelligence/advertising?workspaceId=${workspaceId}&windowDays=${windowDays}`,
-      ),
+    queryKey: ['intelligence', 'advertising', workspaceId, windowDays, attributionWindowDays ?? null],
+    queryFn: () => {
+      const sp = new URLSearchParams({
+        workspaceId: workspaceId!,
+        windowDays: String(windowDays),
+      });
+      if (attributionWindowDays !== undefined) {
+        sp.set('attributionWindowDays', String(attributionWindowDays));
+      }
+      return api.get<AdvertisingSummary>(`/v1/intelligence/advertising?${sp.toString()}`);
+    },
     staleTime: 60_000,
   });
 }

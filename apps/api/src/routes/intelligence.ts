@@ -28,6 +28,10 @@ const ScopeQuery = z.object({
   windowDays: z.coerce.number().int().min(1).max(365).optional(),
 });
 
+const AdvertisingQuery = ScopeQuery.extend({
+  attributionWindowDays: z.coerce.number().int().min(1).max(90).optional(),
+});
+
 export const intelligenceRoutes: FastifyPluginAsync = async (app) => {
   app.get('/dashboard', async (req) => {
     const actor = req.requireActor();
@@ -41,10 +45,11 @@ export const intelligenceRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/advertising', async (req) => {
     const actor = req.requireActor();
-    const q = ScopeQuery.parse(req.query);
+    const q = AdvertisingQuery.parse(req.query);
     const result = await getAdvertisingSummary(app, actor, {
       workspaceId: q.workspaceId as WorkspaceId,
       windowDays: q.windowDays ?? 30,
+      attributionWindowDays: q.attributionWindowDays,
     });
     return ok(result, req.id);
   });

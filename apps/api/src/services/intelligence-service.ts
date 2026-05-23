@@ -461,86 +461,257 @@ export async function getDashboardKpis(
 
 // ----- Advertising engine --------------------------------------------
 
+/** Industry-standard attribution window default when none is requested. */
+const DEFAULT_ATTRIBUTION_WINDOW_DAYS = 14;
+
+export interface AdvertisingScope extends WorkspaceScope {
+  /**
+   * Attribution window the engine aggregates against. Defaults to 14
+   * (industry-standard reporting window). Engine matches the column
+   * value exactly; rows with NULL attribution_window_days are
+   * INCLUDED in every window's aggregate (operator's "best available"
+   * fallback for sources that don't carry the window). Pass a
+   * specific value to pivot — e.g. 7 for performance-marketing,
+   * 30 for portfolio rollups.
+   */
+  readonly attributionWindowDays?: number;
+}
+
+export interface AdvertisingPlatformBreakdownEntry {
+  readonly adPlatformCode: string;
+  readonly impressions: number;
+  readonly clicks: number;
+  readonly attributedOrders: number;
+  /** numeric(18,4) text. */
+  readonly spend: string;
+  readonly attributedSales: string;
+  /** Derived. null when divisor is 0. */
+  readonly acos: string | null;
+  readonly roas: string | null;
+  /** 0..1, 4dp text — share of total ad spend. */
+  readonly spendShare: string;
+}
+
+export interface AdvertisingKpis {
+  readonly spend: string | null;
+  readonly attributedSales: string | null;
+  readonly orders: number | null;
+  readonly impressions: number | null;
+  readonly clicks: number | null;
+  readonly ctr: string | null;   // clicks / impressions
+  readonly cpc: string | null;   // spend / clicks
+  readonly acos: string | null;  // spend / attributed_sales
+  readonly tacos: string | null; // spend / total marketplace revenue (channel_sales join)
+  readonly roas: string | null;  // attributed_sales / spend
+  readonly cvr: string | null;   // attributed_orders / clicks
+}
+
 export interface AdvertisingSummary {
   readonly workspaceId: string;
   readonly windowDays: number;
+  /** Attribution window the engine aggregated against. */
+  readonly attributionWindowDays: number;
+  /** Window date range, server-computed (avoids client timezone drift). */
+  readonly window: { readonly from: string; readonly to: string };
   readonly readiness: EngineReadiness;
-  /**
-   * Engine-computed KPIs. All numeric(18,4) text or null when the
-   * engine isn't ready. Populated by Slice A3 once the advertising
-   * canonical table ships; today every field is null and readiness
-   * carries the honest reason.
-   */
-  readonly kpis: {
-    readonly spend: string | null;
-    readonly attributedSales: string | null;
-    readonly orders: number | null;
-    readonly impressions: number | null;
-    readonly clicks: number | null;
-    readonly ctr: string | null;   // clicks / impressions
-    readonly cpc: string | null;   // spend / clicks
-    readonly acos: string | null;  // spend / attributed_sales
-    readonly tacos: string | null; // spend / total_revenue
-    readonly roas: string | null;  // attributed_sales / spend
-  };
+  readonly kpis: AdvertisingKpis;
+  /** Per-ad-platform breakdown, sorted by spend desc. Empty when not ready. */
+  readonly byAdPlatform: ReadonlyArray<AdvertisingPlatformBreakdownEntry>;
   readonly provenance: EngineProvenance;
 }
 
+/**
+ * Advertising intelligence engine. Reads xb_canonical.channel_ads
+ * (migration 0023) for additive primitives, joins xb_canonical.channel_sales
+ * for the TACOS denominator, and computes ACOS / ROAS / CPC / CTR / CVR /
+ * TACOS server-side. Frontend renders these verbatim; no derived
+ * metric ever crosses the wire as a primitive.
+ *
+ * Window semantics (attribution_window_days):
+ *   - Default 14 (industry-standard TACOS reporting).
+ *   - When passed explicitly, matches the column exactly.
+ *   - NULL rows are INCLUDED in every window's aggregate (operator's
+ *     "best available" fallback for sources that don't carry a window).
+ *     Once mappers reliably populate the window, this fallback
+ *     becomes a no-op.
+ *
+ * TACOS calculation:
+ *   - Numerator: SUM(spend) from channel_ads in the window.
+ *   - Denominator: SUM(sales_total) from channel_sales JOINed on
+ *     (workspace_id, period_grain, period_start, period_end,
+ *      target_marketplace_code ↔ marketplace_code). Marketplace
+ *     alignment is intentional — TACOS for off-Amazon spend driving
+ *     Amazon should be measured against Amazon revenue, not the
+ *     spender's home marketplace.
+ */
 export async function getAdvertisingSummary(
   app: FastifyInstance,
   actor: ActorContext,
-  scope: WorkspaceScope,
+  scope: AdvertisingScope,
 ): Promise<AdvertisingSummary> {
   await requireWorkspaceAccess(app, actor, scope.workspaceId, 'view');
   const windowDays = clampWindow(scope.windowDays);
-  // xb_canonical.channel_ads landed in migration 0023 but the validator
-  // → mapper → writer wire-up is the next atomic slice. Until then the
-  // engine reports a readiness probe over the empty table so provenance
-  // is honest (zero rows, no source uploads) and the UI flips populated
-  // the moment writes start landing.
+  const attributionWindowDays =
+    scope.attributionWindowDays && Number.isInteger(scope.attributionWindowDays)
+      ? Math.min(Math.max(scope.attributionWindowDays, 1), 90)
+      : DEFAULT_ATTRIBUTION_WINDOW_DAYS;
   const provenance = emptyCollector();
+
   return app.withConnection(actor, async (client) => {
-    const { rows } = await client.query<{
+    // ---------- Aggregate ad primitives + TACOS denominator -----------
+    // One round trip: CTEs for the period window, the filtered ad rows
+    // (matching window or NULL window), and the same-period channel_sales
+    // total revenue. All math here is additive; ACOS/ROAS/TACOS/CTR/CPC/CVR
+    // are computed in JS from these primitives.
+    const { rows: totalsRows } = await client.query<{
+      window_from: Date;
+      window_to: Date;
+      impressions: string;
+      clicks: string;
+      orders: string;
+      spend: string;
+      attributed_sales: string;
       row_count: string;
       upload_ids: string[] | null;
+      total_revenue: string;
     }>(
-      `SELECT count(*)::text AS row_count,
-              array_remove(array_agg(DISTINCT upload_id), NULL) AS upload_ids
-         FROM xb_canonical.channel_ads
-        WHERE workspace_id = $1`,
-      [scope.workspaceId],
+      `WITH win AS (
+         SELECT (CURRENT_DATE - ($2::int - 1)) AS f, CURRENT_DATE AS t
+       ),
+       ad_window AS (
+         SELECT a.*
+           FROM xb_canonical.channel_ads a, win
+          WHERE a.workspace_id = $1
+            AND a.period_start >= win.f
+            AND a.period_end   <= win.t
+            AND (a.attribution_window_days = $3::int OR a.attribution_window_days IS NULL)
+       ),
+       sales_window AS (
+         SELECT s.target_marketplace_code AS marketplace_code, s.sales_total
+           FROM (
+             SELECT cs.marketplace_code AS target_marketplace_code, cs.sales_total
+               FROM xb_canonical.channel_sales cs, win
+              WHERE cs.workspace_id = $1
+                AND cs.period_start >= win.f
+                AND cs.period_end   <= win.t
+           ) s
+       )
+       SELECT win.f AS window_from,
+              win.t AS window_to,
+              COALESCE(sum(a.impressions),       0)::text AS impressions,
+              COALESCE(sum(a.clicks),            0)::text AS clicks,
+              COALESCE(sum(a.attributed_orders), 0)::text AS orders,
+              COALESCE(sum(a.spend),             0)::text AS spend,
+              COALESCE(sum(a.attributed_sales),  0)::text AS attributed_sales,
+              COALESCE(count(a.id),              0)::text AS row_count,
+              array_remove(array_agg(DISTINCT a.upload_id), NULL) AS upload_ids,
+              (SELECT COALESCE(sum(sales_total), 0)::text FROM sales_window) AS total_revenue
+         FROM win
+         LEFT JOIN ad_window a ON true
+        GROUP BY win.f, win.t`,
+      [scope.workspaceId, windowDays, attributionWindowDays],
     );
-    recordCanonicalRead(provenance, rows[0]?.upload_ids ?? null, rows[0]?.row_count ?? 0);
+    const totals = totalsRows[0]!;
+    recordCanonicalRead(provenance, totals.upload_ids, totals.row_count);
 
-    const rowCount = Number(rows[0]?.row_count ?? 0);
+    const rowCount = Number(totals.row_count);
+    const impressions = Number(totals.impressions);
+    const clicks = Number(totals.clicks);
+    const orders = Number(totals.orders);
+    const spendNum = Number(totals.spend);
+    const attributedSalesNum = Number(totals.attributed_sales);
+    const totalRevenueNum = Number(totals.total_revenue);
+
     const readiness: EngineReadiness = rowCount > 0
-      ? {
-          ready: false,
-          reason:
-            'Advertising rows are present but the engine aggregation pipeline isn’t wired yet. Engine wiring lands as a separate atomic slice.',
-        }
+      ? { ready: true, reason: null }
       : {
           ready: false,
           reason:
             'No advertising data ingested yet. Upload an Ads Performance CSV to populate ACOS, TACOS, ROAS, and campaign health.',
           action: { label: 'Open Uploads', href: '/uploads' },
         };
+
+    const kpis: AdvertisingKpis = rowCount === 0
+      ? {
+          spend: null, attributedSales: null, orders: null,
+          impressions: null, clicks: null,
+          ctr: null, cpc: null, acos: null, tacos: null, roas: null, cvr: null,
+        }
+      : {
+          spend: totals.spend,
+          attributedSales: totals.attributed_sales,
+          orders,
+          impressions,
+          clicks,
+          ctr:   impressions > 0 ? (clicks / impressions).toFixed(4) : null,
+          cpc:   clicks      > 0 ? (spendNum / clicks).toFixed(4)    : null,
+          acos:  attributedSalesNum > 0 ? (spendNum / attributedSalesNum).toFixed(4) : null,
+          tacos: totalRevenueNum    > 0 ? (spendNum / totalRevenueNum).toFixed(4)    : null,
+          roas:  spendNum    > 0 ? (attributedSalesNum / spendNum).toFixed(4) : null,
+          cvr:   clicks      > 0 ? (orders / clicks).toFixed(4)               : null,
+        };
+
+    // ---------- Per-ad-platform breakdown -----------------------------
+    // Same window filter; aggregated by ad_platform_code. The frontend
+    // renders this verbatim so cross-platform comparison is engine-output
+    // (CLAUDE.md three-layer rule).
+    const byAdPlatform = rowCount === 0
+      ? []
+      : await (async () => {
+          const { rows } = await client.query<{
+            ad_platform_code: string;
+            impressions: string;
+            clicks: string;
+            orders: string;
+            spend: string;
+            attributed_sales: string;
+          }>(
+            `WITH win AS (
+               SELECT (CURRENT_DATE - ($2::int - 1)) AS f, CURRENT_DATE AS t
+             )
+             SELECT a.ad_platform_code,
+                    sum(a.impressions)::text       AS impressions,
+                    sum(a.clicks)::text            AS clicks,
+                    sum(a.attributed_orders)::text AS orders,
+                    sum(a.spend)::text             AS spend,
+                    sum(a.attributed_sales)::text  AS attributed_sales
+               FROM xb_canonical.channel_ads a, win
+              WHERE a.workspace_id = $1
+                AND a.period_start >= win.f
+                AND a.period_end   <= win.t
+                AND (a.attribution_window_days = $3::int OR a.attribution_window_days IS NULL)
+              GROUP BY a.ad_platform_code
+              ORDER BY sum(a.spend) DESC NULLS LAST`,
+            [scope.workspaceId, windowDays, attributionWindowDays],
+          );
+          return rows.map<AdvertisingPlatformBreakdownEntry>((p) => {
+            const pSpend = Number(p.spend);
+            const pSales = Number(p.attributed_sales);
+            return {
+              adPlatformCode: p.ad_platform_code,
+              impressions: Number(p.impressions),
+              clicks: Number(p.clicks),
+              attributedOrders: Number(p.orders),
+              spend: p.spend,
+              attributedSales: p.attributed_sales,
+              acos: pSales > 0 ? (pSpend / pSales).toFixed(4) : null,
+              roas: pSpend > 0 ? (pSales / pSpend).toFixed(4) : null,
+              spendShare: spendNum > 0 ? (pSpend / spendNum).toFixed(4) : '0.0000',
+            };
+          });
+        })();
+
     return {
       workspaceId: scope.workspaceId,
       windowDays,
-      readiness,
-      kpis: {
-        spend: null,
-        attributedSales: null,
-        orders: null,
-        impressions: null,
-        clicks: null,
-        ctr: null,
-        cpc: null,
-        acos: null,
-        tacos: null,
-        roas: null,
+      attributionWindowDays,
+      window: {
+        from: totals.window_from.toISOString().slice(0, 10),
+        to: totals.window_to.toISOString().slice(0, 10),
       },
+      readiness,
+      kpis,
+      byAdPlatform,
       provenance: finalizeProvenance(provenance),
     };
   });
