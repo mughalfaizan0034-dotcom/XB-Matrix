@@ -1,1 +1,76 @@
 @import '@xb/ui/styles/globals.css';
+
+/* ---------------------------------------------------------------- */
+/* Academy article body styling                                      */
+/* ---------------------------------------------------------------- */
+/* Long-form article content. Quicksand for headings (per design     */
+/* system), Inter for body. Restrained spacing so the article still  */
+/* feels enterprise-dense rather than blog-y.                        */
+
+.prose-academy {
+  max-width: 72ch;
+  font-size: 0.875rem;     /* 14px — matches operational density */
+  line-height: 1.65;
+  color: hsl(var(--foreground));
+}
+.prose-academy > * + * {
+  margin-top: 1rem;
+}
+.prose-academy .lead {
+  font-size: 1rem;
+  color: hsl(var(--muted-foreground));
+}
+.prose-academy h2 {
+  font-family: var(--font-heading, 'Quicksand', sans-serif);
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-top: 2rem;
+  color: hsl(var(--foreground));
+}
+.prose-academy h3 {
+  font-family: var(--font-heading, 'Quicksand', sans-serif);
+  font-size: 1rem;
+  font-weight: 700;
+  margin-top: 1.5rem;
+  color: hsl(var(--foreground));
+}
+.prose-academy code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+.prose-academy pre.academy-columns {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.prose-academy pre.academy-columns code {
+  background: transparent;
+  padding: 0;
+}
+.prose-academy ul,
+.prose-academy ol {
+  margin-left: 1.25rem;
+  list-style-position: outside;
+}
+.prose-academy ul {
+  list-style-type: disc;
+}
+.prose-academy ol {
+  list-style-type: decimal;
+}
+.prose-academy li + li {
+  margin-top: 0.5rem;
+}
+.prose-academy strong {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
