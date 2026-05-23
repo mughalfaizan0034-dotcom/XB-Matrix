@@ -23,7 +23,6 @@ export default function ShipmentsPage() {
   return (
     <EngineView
       title="Shipments"
-      subtitle="Replenishment proposals, coming soon."
       loading={q.isLoading || (!!ws && !data)}
       readiness={data?.readiness}
       emptyStateBody={

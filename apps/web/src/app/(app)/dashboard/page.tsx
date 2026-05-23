@@ -4,13 +4,9 @@ import Link from 'next/link';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowRight,
-  Building2,
-  Layers,
   Upload as UploadIcon,
 } from 'lucide-react';
 import {
-  Badge,
   Button,
   Card,
   CardContent,
@@ -22,7 +18,6 @@ import {
   useActiveWorkspace,
   type ActiveWorkspaceSummary,
 } from '@/lib/session';
-import { workspaceTypeLabel } from '@/lib/api-workspaces';
 import {
   useDashboardKpis,
   type DashboardKpiBundle,
@@ -61,16 +56,7 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6 lg:p-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Operational overview for{' '}
-          <span className="font-medium text-foreground">{activeWorkspace.workspaceName}</span>
-          <span className="mx-1.5 text-muted-foreground">·</span>
-          <span>{activeWorkspace.organizationName}</span>
-        </p>
-      </div>
-
+      <h1 className="font-heading text-2xl font-semibold tracking-tight">Dashboard</h1>
       <ActiveDashboard workspace={activeWorkspace} />
     </div>
   );
@@ -85,45 +71,6 @@ function ActiveDashboard({ workspace }: { workspace: ActiveWorkspaceSummary }) {
 
   return (
     <>
-      <Card>
-        <CardContent className="pt-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-md bg-navy-100 text-navy">
-                <Layers className="h-4 w-4" />
-              </span>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-foreground">{workspace.workspaceName}</span>
-                  <Badge tone="info">{prettyType(workspace.workspaceType)}</Badge>
-                  <Badge tone={workspace.workspaceStatus === 'active' ? 'success' : 'neutral'}>
-                    {workspace.workspaceStatus}
-                  </Badge>
-                </div>
-                <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Building2 className="h-3 w-3" />
-                  <span>{workspace.organizationName}</span>
-                  {bundle ? (
-                    <>
-                      <span aria-hidden="true">·</span>
-                      <span>
-                        {bundle.window.from} → {bundle.window.to}
-                      </span>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-            <Link
-              href="/settings"
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Manage workspace <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-
       <SalesTiles bundle={bundle} loading={loading} />
       <InventoryTiles bundle={bundle} loading={loading} />
       <CombinedTiles bundle={bundle} loading={loading} />
@@ -396,10 +343,5 @@ function formatPercent(share: string): string {
   const n = Number(share);
   if (!Number.isFinite(n)) return '-';
   return `${(n * 100).toFixed(0)}%`;
-}
-
-function prettyType(t: string | null): string {
-  const label = workspaceTypeLabel(t);
-  return label === '-' ? 'Workspace' : label;
 }
 

@@ -3,10 +3,8 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import {
-  Building2,
   Download,
   Globe2,
-  Layers,
   MoreHorizontal,
   Plus,
   RefreshCcw,
@@ -389,18 +387,15 @@ export default function UploadsPage() {
       : null,
   ].filter(Boolean) as Array<{ key: string; label: string; onRemove: () => void }>;
 
-  const subtitle = activeWorkspace ? (
-    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-      <Building2 className="h-3.5 w-3.5" />
-      <span>{activeWorkspace.organizationName}</span>
-      <span aria-hidden="true">·</span>
-      <Layers className="h-3.5 w-3.5" />
-      <span>{activeWorkspace.workspaceName}</span>
-    </span>
-  ) : (
+  // Per the header-chrome rule, no description when an active workspace
+  // is selected (topbar switcher is the authoritative indicator). The
+  // cross-workspace / read-only ingestion monitor IS one of the
+  // exceptions where workspace context inside the page is meaningful,
+  // so we keep that single description line for that mode only.
+  const subtitle = activeWorkspace ? undefined : (
     <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
       <Globe2 className="h-3.5 w-3.5" />
-      <span>All workspaces · read-only ingestion monitor</span>
+      <span>All workspaces, read-only ingestion monitor</span>
     </span>
   );
 
@@ -438,28 +433,11 @@ export default function UploadsPage() {
         }
       />
 
-      {/* Active write-context banner, operators need an unambiguous
-          signal of where ingested data lands. */}
-      {activeWorkspace ? (
-        <div className="flex items-center gap-3 rounded-md border border-navy/20 bg-navy/[0.04] px-4 py-2.5">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-navy text-white">
-            <Layers className="h-3.5 w-3.5" />
-          </span>
-          <div className="flex flex-col leading-tight">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Ingesting into
-            </span>
-            <span className="text-sm text-foreground">
-              <span className="font-medium">{activeWorkspace.workspaceName}</span>
-              <span className="mx-1.5 text-muted-foreground">·</span>
-              <span className="text-muted-foreground">{activeWorkspace.organizationName}</span>
-            </span>
-          </div>
-          <span className="ml-auto inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
-            workspace-scoped
-          </span>
-        </div>
-      ) : null}
+      {/* No "Ingesting into <workspace>" banner here. The topbar
+          workspace switcher is the single authoritative workspace
+          context indicator per feedback_no_onboarding_clutter
+          header-chrome rule. Cross-workspace mode is signalled via
+          the toolbar status and the table itself. */}
 
       {/* Single-view ingestion monitor, no tabs. Templates moved to
           the Download Template modal in the top action bar; concept
