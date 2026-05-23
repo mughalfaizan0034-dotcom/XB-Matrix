@@ -21,7 +21,7 @@ export default function ReportsPage() {
   const q = useReportRegistry(ws?.id ?? null);
 
   return (
-    <EngineView title="Reports" subtitle="Generated reports, engine outputs only." loading={q.isLoading || (!!ws && !q.data)}>
+    <EngineView title="Reports" loading={q.isLoading || (!!ws && !q.data)}>
       {q.data ? (
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

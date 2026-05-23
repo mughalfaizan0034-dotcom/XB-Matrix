@@ -30,7 +30,6 @@ export default function PpcPage() {
   return (
     <EngineView
       title="Advertisements"
-      subtitle="Spend, ACOS, TACOS, ROAS, engine-computed."
       loading={q.isLoading || (!!ws && !data)}
       readiness={data?.readiness}
       emptyStateBody={
