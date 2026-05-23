@@ -1,22 +1,40 @@
-'use client';
-
-import { notFound, useParams } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { Badge, Card, CardContent, PageHeader } from '@xb/ui';
 import { getArticle, listArticles } from '@/academy/index';
 
 /**
- * Academy article view. Resolves the slug against the typed article
- * registry; stub articles render with a "Coming soon" placeholder while
- * preserving the article shell so future content slots in cleanly.
+ * Academy article view, SERVER component.
  *
- * Marked as a client component so the slug routing + tagless body
- * component render together without a server round-trip. Articles are
- * static React modules — no network fetch needed.
+ * Resolves the slug against the typed article registry. Stub articles
+ * render with a "Coming soon" placeholder while preserving the article
+ * shell so future content slots in cleanly.
+ *
+ * SERVER-component requirement (not optional): the `deploy-web`
+ * workflow builds with `output: export` (GitHub Pages static export).
+ * Static export forbids client-component pages for dynamic routes;
+ * the route must be a server component AND export
+ * `generateStaticParams()` so every slug is pre-rendered at build
+ * time. Locally `pnpm build` does not set the export env, so the
+ * stricter constraint only shows in CI deploy.
+ *
+ * Nothing here needs client state. The article body components are
+ * pure JSX, Links are server-renderable, and the slug comes from the
+ * server-component `params` prop instead of the `useParams` hook.
  */
-export default function AcademyArticlePage() {
-  const params = useParams<{ slug: string }>();
+
+export function generateStaticParams(): Array<{ slug: string }> {
+  // One static path per registered article (including stubs, so deep
+  // links land instead of 404ing while the stub is on the roadmap).
+  return listArticles().map((a) => ({ slug: a.meta.slug }));
+}
+
+interface PageProps {
+  readonly params: { slug: string };
+}
+
+export default function AcademyArticlePage({ params }: PageProps) {
   const article = getArticle(params.slug);
   if (!article) notFound();
 
