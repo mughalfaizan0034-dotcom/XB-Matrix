@@ -189,6 +189,11 @@ export const advertisingPerformanceValidator: UploadValidator = {
 
     return {
       ok: true,
+      // Expose accepted rows so upload-service can hand them to the
+      // advertising mapper + channel_ads writer (same pattern as
+      // sales-performance). Typed loosely on the envelope; the
+      // mapper casts to AdvertisingPerformanceRow.
+      rows: accepted,
       summary: {
         rowsParsed: records.length,
         rowsAccepted: accepted.length,
