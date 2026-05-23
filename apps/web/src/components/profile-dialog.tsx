@@ -1,51 +1,74 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@xb/ui';
-import { Button, FormField, Input, useToast } from '@xb/ui';
+import {
+  Badge,
+  Button,
+  Dialog,
+  FormField,
+  Input,
+  useToast,
+} from '@xb/ui';
 import { describeError, useSession } from '@/lib/session';
 import { useChangePassword, useUpdateProfile } from '@/lib/api-users';
+import { roleLabel } from '@/lib/role-labels';
 
 /**
- * Self-service account section — display name + password change. The
- * only Settings surface a user with no organization or no workspace
- * access can still use. Username is intentionally not editable
- * (immutable identity; admins can recreate the user under a new
- * username if a change is needed).
+ * Profile dialog. The single place users update their personal account.
+ *
+ * Sections:
+ *   1. Profile Information (display name editable, username locked,
+ *      role, user ID, account details).
+ *   2. Security (change password, requires current + new + confirm).
+ *
+ * Settings no longer hosts these forms. The dialog is the only
+ * surface; lifted out of `profile-section.tsx` (which is removed in
+ * this refactor) to keep account management in one place.
  */
-export function ProfileSection() {
+interface Props {
+  readonly open: boolean;
+  readonly onClose: () => void;
+}
+
+export function ProfileDialog({ open, onClose }: Props) {
   const { data: user } = useSession();
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="font-heading text-lg font-semibold text-foreground">Your account</h2>
-        <p className="text-sm text-muted-foreground">
-          Update your display name and password. Username is fixed —
-          contact an administrator if it needs to change.
-        </p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Identity</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <ReadOnlyRow label="Username" value={user ? `@${user.username}` : '—'} mono />
-          {user?.email ? <ReadOnlyRow label="Email" value={user.email} /> : null}
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title="Profile"
+      description="Your display name, account details, and password."
+      footer={
+        <Button variant="outline" size="sm" onClick={onClose}>
+          Close
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-5">
+        <section className="flex flex-col gap-3">
+          <h3 className="font-heading text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Profile Information
+          </h3>
+          <ReadOnlyRow label="Username" value={user ? `@${user.username}` : ''} mono />
+          <ReadOnlyRow
+            label="Role"
+            value={user ? roleLabel(user.effectiveRole) : ''}
+          />
+          {user?.userId ? (
+            <ReadOnlyRow label="User ID" value={user.userId} mono />
+          ) : null}
           <DisplayNameForm initial={user?.displayName ?? ''} disabled={!user} />
-        </CardContent>
-      </Card>
+        </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Password</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <section className="flex flex-col gap-3 border-t border-border pt-5">
+          <h3 className="font-heading text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Security
+          </h3>
           <ChangePasswordForm disabled={!user} />
-        </CardContent>
-      </Card>
-    </div>
+        </section>
+      </div>
+    </Dialog>
   );
 }
 
@@ -56,7 +79,6 @@ function DisplayNameForm({ initial, disabled }: { initial: string; disabled: boo
   const update = useUpdateProfile();
   const [name, setName] = useState(initial);
 
-  // Sync local state when /me hydrates after mount.
   useEffect(() => {
     setName(initial);
   }, [initial]);
@@ -78,7 +100,7 @@ function DisplayNameForm({ initial, disabled }: { initial: string; disabled: boo
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3">
-      <FormField label="Display name" required hint="Shown across the app — 1–200 characters.">
+      <FormField label="Display name" required hint="Shown across the app, 1 to 200 characters.">
         {(p) => (
           <Input
             {...p}
@@ -206,7 +228,7 @@ function ReadOnlyRow({ label, value, mono }: { label: string; value: string; mon
     <div className="grid grid-cols-[140px_1fr] items-baseline gap-3 text-sm">
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className={mono ? 'font-mono text-sm text-foreground' : 'text-sm text-foreground'}>
-        {value}
+        {value || <Badge tone="neutral">—</Badge>}
       </span>
     </div>
   );
