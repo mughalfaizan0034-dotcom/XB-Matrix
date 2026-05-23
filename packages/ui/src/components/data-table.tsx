@@ -209,19 +209,39 @@ export function DataTable<T>({
     onSelectedRowKeysChange(allSelected ? [] : allRowKeys);
   }
 
+  // Sticky-header strategy:
+  // ------------------------------------------------------------------
+  // The page scroll container is <main> in AppShell (overflow-auto).
+  // For sticky thead to anchor against that container, NO intermediate
+  // ancestor between this table and <main> can establish a sticky-
+  // breaking containing block. `overflow: hidden` and `overflow: auto`
+  // both do; `overflow: clip` does NOT (and still clips visually so
+  // the rounded corner stays crisp).
+  //
+  // We apply position:sticky directly on each <th> rather than on the
+  // <thead>: Safari ignores `position: sticky` on thead/tr but honors
+  // it on td/th. Putting it on the cell is the cross-browser path.
+  //
+  // Z-index ordering (overlay/layers.ts):
+  //   topbar          = 30   (sits above everything in the layout)
+  //   in-page sticky chrome = 20  (Settings page header etc.)
+  //   table sticky thead    = 10  (this)
+  //   table body            = default
+  //   popovers / dropdowns  = 9040+ (portal layer, always above)
+  const stickyThClass = stickyHeader
+    ? 'sticky top-0 z-10 bg-muted/40 backdrop-blur'
+    : 'bg-muted/40';
   return (
-    <div className={cn('overflow-hidden rounded-lg border border-border bg-card', className)}>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead
-            className={cn(
-              'bg-muted/40',
-              stickyHeader && 'sticky top-0 z-[1]',
-            )}
-          >
+    <div className={cn('overflow-clip rounded-lg border border-border bg-card', className)}>
+      <div className="w-full">
+        <table className="w-full min-w-full text-sm">
+          <thead>
             <tr>
               {selectable ? (
-                <th className={cn('px-3 text-left', headerPadY)} style={{ width: '32px' }}>
+                <th
+                  className={cn('px-3 text-left', headerPadY, stickyThClass)}
+                  style={{ width: '32px' }}
+                >
                   <input
                     type="checkbox"
                     aria-label={allSelected ? 'Deselect all' : 'Select all'}
@@ -249,6 +269,7 @@ export function DataTable<T>({
                     className={cn(
                       'px-4 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground',
                       headerPadY,
+                      stickyThClass,
                       c.numeric && 'text-right tabular-nums',
                       c.sortKey && onSortChange && 'cursor-pointer select-none hover:text-foreground',
                       c.className,
