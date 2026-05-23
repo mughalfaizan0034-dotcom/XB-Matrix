@@ -1,17 +1,13 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Upload as UploadIcon,
-} from 'lucide-react';
-import {
-  Button,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
+  LoadingCard,
   Metric,
 } from '@xb/ui';
 import {
@@ -47,9 +43,16 @@ export default function DashboardPage() {
   }, [activeWorkspace, router]);
 
   if (!activeWorkspace) {
+    // Session is still hydrating, or redirect is in flight. Render the
+    // dashboard skeleton so the page does not visibly collapse before
+    // the redirect lands; matches the populated layout dimensions for
+    // a clean transition.
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-6 w-6 animate-pulse rounded-full bg-muted" />
+      <div className="flex flex-col gap-6 p-6 lg:p-8">
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <KpiSkeletonGrid />
+        <KpiSkeletonGrid />
+        <KpiSkeletonGrid />
       </div>
     );
   }
@@ -62,12 +65,21 @@ export default function DashboardPage() {
   );
 }
 
+function KpiSkeletonGrid() {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <LoadingCard />
+      <LoadingCard />
+      <LoadingCard />
+      <LoadingCard />
+    </div>
+  );
+}
+
 function ActiveDashboard({ workspace }: { workspace: ActiveWorkspaceSummary }) {
   const kpiQ = useDashboardKpis(workspace.id, 30);
   const bundle = kpiQ.data;
   const loading = kpiQ.isLoading;
-  const bothEmpty =
-    !!bundle && !bundle.salesReadiness.ready && !bundle.inventoryReadiness.ready;
 
   return (
     <>
@@ -75,25 +87,10 @@ function ActiveDashboard({ workspace }: { workspace: ActiveWorkspaceSummary }) {
       <InventoryTiles bundle={bundle} loading={loading} />
       <CombinedTiles bundle={bundle} loading={loading} />
       <MarketplaceBreakdown bundle={bundle} loading={loading} />
-
-      {bothEmpty ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Get started</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col items-start gap-3">
-            <p className="text-sm text-muted-foreground">
-              No data in this workspace yet. Upload a sales or inventory CSV to start populating the
-              dashboard.
-            </p>
-            <Link href="/uploads">
-              <Button size="sm" variant="outline">
-                <UploadIcon className="mr-1 h-3.5 w-3.5" /> Open Uploads
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      ) : null}
+      {/* No "Get started" CTA. Operational pages stay live-looking
+          even with no data; tiles render zero / N/A inline, and the
+          Uploads sidebar entry is the only nav into ingestion.
+          Per feedback_no_onboarding_clutter. */}
     </>
   );
 }
@@ -105,6 +102,7 @@ function SalesTiles({
   bundle: DashboardKpiBundle | undefined;
   loading: boolean;
 }) {
+  if (loading) return <KpiSkeletonGrid />;
   const s = bundle?.sales;
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -112,8 +110,8 @@ function SalesTiles({
         <CardContent className="pt-6">
           <Metric
             label={`Revenue (${s?.windowDays ?? 30}d)`}
-            value={loading ? '-' : s && s.orders > 0 ? formatMoney(s.revenue) : '0'}
-            hint={loading ? 'loading…' : 'sum of order totals'}
+            value={s && s.orders > 0 ? formatMoney(s.revenue) : 'N/A'}
+            hint="sum of order totals"
           />
         </CardContent>
       </Card>
@@ -121,7 +119,7 @@ function SalesTiles({
         <CardContent className="pt-6">
           <Metric
             label={`Orders (${s?.windowDays ?? 30}d)`}
-            value={loading ? '-' : (s?.orders ?? 0).toLocaleString()}
+            value={(s?.orders ?? 0).toLocaleString()}
             hint={bundle ? `since ${bundle.window.from}` : 'last 30 days'}
           />
         </CardContent>
@@ -130,7 +128,7 @@ function SalesTiles({
         <CardContent className="pt-6">
           <Metric
             label={`Units (${s?.windowDays ?? 30}d)`}
-            value={loading ? '-' : (s?.units ?? 0).toLocaleString()}
+            value={(s?.units ?? 0).toLocaleString()}
             hint="sum of order quantity"
           />
         </CardContent>
@@ -139,8 +137,8 @@ function SalesTiles({
         <CardContent className="pt-6">
           <Metric
             label="Avg. order value"
-            value={loading ? '-' : s?.averageOrderValue ? formatMoney(s.averageOrderValue) : '-'}
-            hint={loading ? 'loading…' : 'revenue ÷ orders'}
+            value={s?.averageOrderValue ? formatMoney(s.averageOrderValue) : 'N/A'}
+            hint="revenue / orders"
           />
         </CardContent>
       </Card>
@@ -155,14 +153,16 @@ function InventoryTiles({
   bundle: DashboardKpiBundle | undefined;
   loading: boolean;
 }) {
+  if (loading) return <KpiSkeletonGrid />;
   const i = bundle?.inventory;
+  const hasValuation = !!i && Number(i.totalValuation) > 0;
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <Card>
         <CardContent className="pt-6">
           <Metric
             label="On hand"
-            value={loading ? '-' : (i?.totalOnHand ?? 0).toLocaleString()}
+            value={(i?.totalOnHand ?? 0).toLocaleString()}
             hint={i?.snapshotDate ? `as of ${i.snapshotDate}` : 'latest snapshot per SKU'}
           />
         </CardContent>
@@ -171,7 +171,7 @@ function InventoryTiles({
         <CardContent className="pt-6">
           <Metric
             label="Distinct SKUs"
-            value={loading ? '-' : (i?.distinctSkus ?? 0).toLocaleString()}
+            value={(i?.distinctSkus ?? 0).toLocaleString()}
             hint="in latest inventory"
           />
         </CardContent>
@@ -180,7 +180,7 @@ function InventoryTiles({
         <CardContent className="pt-6">
           <Metric
             label="Warehouses"
-            value={loading ? '-' : (i?.distinctWarehouses ?? 0).toLocaleString()}
+            value={(i?.distinctWarehouses ?? 0).toLocaleString()}
             hint="locations covered"
           />
         </CardContent>
@@ -189,19 +189,11 @@ function InventoryTiles({
         <CardContent className="pt-6">
           <Metric
             label="Inventory valuation"
-            value={
-              loading
-                ? '-'
-                : i && Number(i.totalValuation) > 0
-                  ? formatMoney(i.totalValuation)
-                  : '-'
-            }
+            value={hasValuation ? formatMoney(i!.totalValuation) : 'N/A'}
             hint={
-              loading
-                ? 'loading…'
-                : i && Number(i.totalValuation) > 0
-                  ? `${formatPercent(i.costCoverage)} of SKUs costed`
-                  : 'add unit_cost to your inventory CSV'
+              hasValuation
+                ? `${formatPercent(i!.costCoverage)} of SKUs costed`
+                : 'awaiting unit_cost in inventory feed'
             }
           />
         </CardContent>
@@ -217,6 +209,7 @@ function CombinedTiles({
   bundle: DashboardKpiBundle | undefined;
   loading: boolean;
 }) {
+  if (loading) return <KpiSkeletonGrid />;
   const c = bundle?.combined;
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -224,14 +217,8 @@ function CombinedTiles({
         <CardContent className="pt-6">
           <Metric
             label="Stock cover"
-            value={loading ? '-' : c?.stockCoverDays ? `${c.stockCoverDays} d` : '-'}
-            hint={
-              loading
-                ? 'loading…'
-                : c?.stockCoverDays
-                  ? 'on-hand ÷ daily velocity'
-                  : 'needs sales + inventory'
-            }
+            value={c?.stockCoverDays ? `${c.stockCoverDays} d` : 'N/A'}
+            hint={c?.stockCoverDays ? 'on-hand / daily velocity' : 'awaiting sales + inventory'}
           />
         </CardContent>
       </Card>
@@ -239,7 +226,7 @@ function CombinedTiles({
         <CardContent className="pt-6">
           <Metric
             label="Stockout risk"
-            value={loading ? '-' : (c?.stockoutRiskSkus ?? 0).toLocaleString()}
+            value={(c?.stockoutRiskSkus ?? 0).toLocaleString()}
             hint={
               bundle
                 ? `SKUs under ${bundle.dosTargetDays}-day target`
@@ -252,7 +239,7 @@ function CombinedTiles({
         <CardContent className="pt-6">
           <Metric
             label="Dead stock"
-            value={loading ? '-' : (c?.deadStockSkus ?? 0).toLocaleString()}
+            value={(c?.deadStockSkus ?? 0).toLocaleString()}
             hint="on-hand with zero sales in window"
           />
         </CardContent>
@@ -262,13 +249,11 @@ function CombinedTiles({
           <Metric
             label="Daily velocity"
             value={
-              loading
-                ? '-'
-                : bundle?.sales.dailyVelocity
-                  ? Number(bundle.sales.dailyVelocity).toLocaleString(undefined, {
-                      maximumFractionDigits: 2,
-                    })
-                  : '-'
+              bundle?.sales.dailyVelocity
+                ? Number(bundle.sales.dailyVelocity).toLocaleString(undefined, {
+                    maximumFractionDigits: 2,
+                  })
+                : 'N/A'
             }
             hint="units sold per day (window)"
           />

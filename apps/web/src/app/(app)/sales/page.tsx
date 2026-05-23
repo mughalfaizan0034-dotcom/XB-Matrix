@@ -1,8 +1,6 @@
 'use client';
 
-import Link from 'next/link';
 import { useMemo } from 'react';
-import { Building2, Layers, Upload as UploadIcon } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -201,25 +199,7 @@ export default function SalesPage() {
 
   return (
     <div className="flex flex-col gap-5 p-6 lg:p-8">
-      <PageHeader
-        title="Sales"
-        description={
-          <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Building2 className="h-3.5 w-3.5" />
-            <span>{activeWorkspace.organizationName}</span>
-            <span aria-hidden="true">·</span>
-            <Layers className="h-3.5 w-3.5" />
-            <span>{activeWorkspace.workspaceName}</span>
-          </span>
-        }
-        actions={
-          <Link href="/uploads">
-            <Button size="sm" variant="outline">
-              <UploadIcon className="mr-1 h-3.5 w-3.5" /> Upload sales
-            </Button>
-          </Link>
-        }
-      />
+      <PageHeader title="Sales" />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Card>
@@ -303,19 +283,10 @@ export default function SalesPage() {
             onColumnVisibilityChange={tableActions.setColumnVisibility}
             className="rounded-none border-0"
             emptyState={
-              <div className="flex flex-col items-center gap-3 py-6">
-                <span className="text-sm">
-                  {chips.length > 0
-                    ? 'No orders match the current filters.'
-                    : 'No sales data yet for this workspace.'}
-                </span>
-                {chips.length === 0 ? (
-                  <Link href="/uploads">
-                    <Button size="sm" variant="outline">
-                      <UploadIcon className="mr-1 h-3.5 w-3.5" /> Upload your first sales CSV
-                    </Button>
-                  </Link>
-                ) : null}
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                {chips.length > 0
+                  ? 'No orders match the current filters.'
+                  : 'Awaiting sales data.'}
               </div>
             }
           />

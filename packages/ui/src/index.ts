@@ -10,6 +10,7 @@ export * from './components/form-field.js';
 export * from './components/data-table.js';
 export * from './components/data-table-toolbar.js';
 export * from './components/data-table-pagination.js';
+export * from './components/transitional.js';
 export * from './hooks/use-data-table-state.js';
 export * from './hooks/export-csv.js';
 export * from './components/dialog.js';
