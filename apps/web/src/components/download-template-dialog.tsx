@@ -102,6 +102,33 @@ const TEMPLATES: ReadonlyArray<TemplateRow> = [
     sampleRows: [],
     comingSoon: true,
   },
+  {
+    id: 'cogs',
+    title: 'COGs Report',
+    summary: 'SKU-level cost inputs for profitability + unit economics.',
+    filename: '',
+    headers: [],
+    sampleRows: [],
+    comingSoon: true,
+  },
+  {
+    id: 'case_pack_details',
+    title: 'Case Pack Details',
+    summary: 'Box / pallet packaging constraints for replenishment + shipment planning.',
+    filename: '',
+    headers: [],
+    sampleRows: [],
+    comingSoon: true,
+  },
+  {
+    id: 'sku_status',
+    title: 'SKU Status',
+    summary: 'Active / discontinued flag — keeps analytics intact while excluding from replenishment.',
+    filename: '',
+    headers: [],
+    sampleRows: [],
+    comingSoon: true,
+  },
 ];
 
 interface Props {

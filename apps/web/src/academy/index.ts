@@ -68,6 +68,27 @@ const ARTICLES: ReadonlyArray<AcademyArticle> = [
     summary: 'Sample rows for every template, including B2B splits, attribution windows, and remove-action lifecycle.',
     tags: ['example', 'sample', 'csv'],
   }),
+  stub({
+    slug: 'cogs-template',
+    title: 'COGs Template',
+    section: 'Data Pipeline',
+    summary: 'Minimal sku + cogs feed for the future profitability engine — numeric-only formatting, backend handles normalization + currency.',
+    tags: ['cogs', 'cost', 'profitability', 'unit economics', 'template'],
+  }),
+  stub({
+    slug: 'case-pack-template',
+    title: 'Case Pack Template',
+    section: 'Data Pipeline',
+    summary: 'Box / pallet packaging constraints that let the replenishment engine round recommendations to operational units.',
+    tags: ['case pack', 'pallet', 'box', 'replenishment', 'template'],
+  }),
+  stub({
+    slug: 'sku-status-template',
+    title: 'SKU Status Template',
+    section: 'Data Pipeline',
+    summary: 'Active / discontinued flag per SKU — preserves analytics history while excluding discontinued SKUs from replenishment, restock alerts, and forecasting paths.',
+    tags: ['sku', 'status', 'discontinued', 'lifecycle', 'replenishment', 'template'],
+  }),
 
   stub({
     slug: 'advertising-intelligence',
