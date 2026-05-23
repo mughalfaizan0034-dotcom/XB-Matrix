@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import {
   Building2,
+  Download,
   Globe2,
   Layers,
   MoreHorizontal,
@@ -21,15 +22,13 @@ import {
   DropdownMenu,
   exportRowsToCsv,
   PageHeader,
-  TabPanel,
-  Tabs,
   useDataTableState,
   useToast,
   type ColumnDef,
   type DropdownMenuItem,
 } from '@xb/ui';
-import { UploadTemplatesPanel } from '@/components/upload-templates-panel';
-import { useActiveWorkspace, useSession, describeError } from '@/lib/session';
+import { DownloadTemplateDialog } from '@/components/download-template-dialog';
+import { useActiveWorkspace, describeError } from '@/lib/session';
 import { useWorkspaces } from '@/lib/api-workspaces';
 import {
   useDeleteUpload,
@@ -98,7 +97,6 @@ const REPORT_TYPE_ORDER: ReadonlyArray<UploadCategory> = [
 ];
 
 export default function UploadsPage() {
-  const { data: user } = useSession();
   const { data: activeWorkspace } = useActiveWorkspace();
   const crossWorkspace = !activeWorkspace;
   // View-only workspaces hide every write surface. Backend enforces
@@ -138,6 +136,7 @@ export default function UploadsPage() {
   });
 
   const [showUpload, setShowUpload] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
   const [openUploadId, setOpenUploadId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UploadSummary | null>(null);
   const retry = useRetryUpload();
@@ -411,26 +410,31 @@ export default function UploadsPage() {
         title="Uploads"
         description={subtitle}
         actions={
-          crossWorkspace ? (
-            <Link
-              href="/select-workspace?next=/uploads"
-              className="inline-flex items-center gap-1.5 rounded-md bg-navy px-3 py-1.5 text-xs font-medium text-white hover:bg-navy/90"
-              title="Ingestion writes into one workspace — pick one to continue."
-            >
-              <Plus className="h-3.5 w-3.5" /> Pick a workspace to upload
-            </Link>
-          ) : canEdit ? (
-            <Button size="sm" onClick={() => setShowUpload(true)}>
-              <Plus className="mr-1 h-3.5 w-3.5" /> New upload
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setShowTemplates(true)}>
+              <Download className="mr-1 h-3.5 w-3.5" /> Download Template
             </Button>
-          ) : (
-            <span
-              className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground"
-              title="Your access to this workspace is view-only. Ask an admin for edit access."
-            >
-              View-only access
-            </span>
-          )
+            {crossWorkspace ? (
+              <Link
+                href="/select-workspace?next=/uploads"
+                className="inline-flex items-center gap-1.5 rounded-md bg-navy px-3 py-1.5 text-xs font-medium text-white hover:bg-navy/90"
+                title="Ingestion writes into one workspace — pick one to continue."
+              >
+                <Plus className="h-3.5 w-3.5" /> Pick a workspace to upload
+              </Link>
+            ) : canEdit ? (
+              <Button size="sm" onClick={() => setShowUpload(true)}>
+                <Plus className="mr-1 h-3.5 w-3.5" /> New upload
+              </Button>
+            ) : (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground"
+                title="Your access to this workspace is view-only. Ask an admin for edit access."
+              >
+                View-only access
+              </span>
+            )}
+          </div>
         }
       />
 
@@ -457,16 +461,10 @@ export default function UploadsPage() {
         </div>
       ) : null}
 
-      <Tabs<'history' | 'templates'>
-        defaultValue="history"
-        items={[
-          { key: 'history',   label: 'Upload History' },
-          { key: 'templates', label: 'Templates' },
-        ]}
-      >
-        {/* ---- Upload History — the ingestion monitor ---------------- */}
-        <TabPanel tabKey="history" className="pt-4">
-          <div className="flex flex-col gap-3">
+      {/* Single-view ingestion monitor — no tabs. Templates moved to
+          the Download Template modal in the top action bar; concept
+          docs live at /academy/upload-templates. */}
+      <div className="flex flex-col gap-3">
             <DataTableToolbar<UploadSummary>
               columns={COLUMNS}
               columnVisibility={tableState.columnVisibility}
@@ -590,19 +588,12 @@ export default function UploadsPage() {
                 className="rounded-none border-0"
                 onRowClick={(u) => setOpenUploadId(u.id)}
                 emptyState={
-                  <div className="flex flex-col items-center gap-3 py-8">
-                    <span className="text-sm">
-                      {chips.length > 0
-                        ? 'No ingestion events match the current filters.'
-                        : crossWorkspace
-                          ? 'No ingestion events across your accessible workspaces yet.'
-                          : 'No ingestion events in this workspace yet.'}
-                    </span>
-                    {chips.length === 0 && !crossWorkspace ? (
-                      <Button size="sm" variant="outline" onClick={() => setShowUpload(true)}>
-                        <Plus className="mr-1 h-3.5 w-3.5" /> New upload
-                      </Button>
-                    ) : null}
+                  <div className="py-6 text-center text-sm text-muted-foreground">
+                    {chips.length > 0
+                      ? 'No ingestion events match the current filters.'
+                      : crossWorkspace
+                        ? 'No ingestion events across accessible workspaces.'
+                        : 'No ingestion events in this workspace.'}
                   </div>
                 }
               />
@@ -617,24 +608,13 @@ export default function UploadsPage() {
               ) : null}
             </div>
 
-            <p className="text-xs text-muted-foreground">
-              Each row is one ingestion event: CSV → validation → mapping → unresolved-SKU
-              handling → normalization → canonical layer. Click a row to inspect validation
-              errors and processing detail. Status updates refresh automatically.
-              {crossWorkspace && user?.isInternalManager
-                ? ' Cross-org view — every workspace you can access.'
-                : ''}
-            </p>
-          </div>
-        </TabPanel>
-
-        {/* ---- Templates -------------------------------------------- */}
-        <TabPanel tabKey="templates" className="pt-4">
-          <UploadTemplatesPanel />
-        </TabPanel>
-      </Tabs>
+      </div>
 
       <UploadDialog open={showUpload} onClose={() => setShowUpload(false)} />
+      <DownloadTemplateDialog
+        open={showTemplates}
+        onClose={() => setShowTemplates(false)}
+      />
       <UploadDetailDrawer uploadId={openUploadId} onClose={() => setOpenUploadId(null)} />
 
       <ConfirmDialog
