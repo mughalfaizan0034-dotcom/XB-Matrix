@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 /**
  * Returns true once the user has scrolled past a sentinel element placed
  * just above a sticky bar. The sentinel pattern avoids attaching a scroll
- * listener to an arbitrary ancestor — IntersectionObserver detects the
+ * listener to an arbitrary ancestor, IntersectionObserver detects the
  * sticky-engaged state declaratively.
  *
  * Usage:

@@ -6,13 +6,13 @@ import { useShipmentsReadiness } from '@/lib/api-intelligence';
 import { EngineView } from '@/components/engine-view';
 
 /**
- * Shipments — replenishment engine view.
+ * Shipments, replenishment engine view.
  *
  * The replenishment engine consumes inventory + sales-velocity (the
  * shared cross-engine signals already computed for the dashboard) plus
  * supplier lead times and a shipments template that ship in a later
  * slice. Today the engine emits a readiness/preview block: counts of
- * at-risk and dead-stock SKUs, plus the workspace's DOS target —
+ * at-risk and dead-stock SKUs, plus the workspace's DOS target -
  * exactly the inputs the engine will operate on.
  */
 export default function ShipmentsPage() {
@@ -23,7 +23,7 @@ export default function ShipmentsPage() {
   return (
     <EngineView
       title="Shipments"
-      subtitle="Replenishment proposals — coming soon."
+      subtitle="Replenishment proposals, coming soon."
       loading={q.isLoading || (!!ws && !data)}
       readiness={data?.readiness}
       emptyStateBody={

@@ -14,7 +14,7 @@ interface Props {
  * Shared shell for modules whose data/engine layer hasn't been built yet.
  * Renders the page-level header, surfaces the active workspace context
  * when set, and falls back to a friendly "pick a workspace" nudge when
- * not — same UX as the data-backed module pages so the experience is
+ * not, same UX as the data-backed module pages so the experience is
  * consistent across modules in any state of build-out.
  */
 export function ModulePlaceholder({ title, description }: Props) {
@@ -62,7 +62,7 @@ export function ModulePlaceholder({ title, description }: Props) {
             </span>
             <p className="text-sm text-muted-foreground">{description}</p>
             <p className="text-xs text-muted-foreground">
-              Module shell only — data layer lands in a later phase.
+              Module shell only, data layer lands in a later phase.
             </p>
           </CardContent>
         </Card>

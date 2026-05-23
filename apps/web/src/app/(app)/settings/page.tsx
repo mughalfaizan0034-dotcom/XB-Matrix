@@ -58,7 +58,7 @@ const SECTIONS: ReadonlyArray<Section> = [
 export default function SettingsPage() {
   const { data: user } = useSession();
   const isInternal = user?.userKind === 'internal';
-  // organization_user — the customer end-user — has no business seeing
+  // organization_user, the customer end-user, has no business seeing
   // any organization, workspace, or other-user row in Settings. They
   // see ONLY their own profile (display name + password). All other
   // tenant data is gated server-side, but we also short-circuit here
@@ -161,7 +161,7 @@ export default function SettingsPage() {
             </TabPanel>
           </Tabs>
         ) : (
-          // organization_admin — sees their own org card to manage it.
+          // organization_admin, sees their own org card to manage it.
           <OrganizationsSection isManager={isManager} onCreate={() => setShowNewOrg(true)} />
         )}
       </div>
@@ -297,7 +297,7 @@ const SECTION_COPY: Record<Section, { title: string; body: string }> = {
   'internal-users': { title: 'Internal Users', body: '' },
   'platform-audit': {
     title: 'Platform Audit',
-    body: 'Cross-organization audit access — every tenant action, status transition, and security event in one platform-wide trail.',
+    body: 'Cross-organization audit access, every tenant action, status transition, and security event in one platform-wide trail.',
   },
   'feature-flags': {
     title: 'Feature Flags',
@@ -309,7 +309,7 @@ const SECTION_COPY: Record<Section, { title: string; body: string }> = {
   },
   'billing-ops': {
     title: 'Billing Ops',
-    body: 'Cross-organization billing oversight — agency billing status, invoices, and account standing. Distinct from per-org billing.',
+    body: 'Cross-organization billing oversight, agency billing status, invoices, and account standing. Distinct from per-org billing.',
   },
   'system-integrations': {
     title: 'System Integrations',

@@ -23,28 +23,28 @@ import {
 } from './csv-helpers.js';
 
 /**
- * Amazon ads validator — spec template (Part 1 §Uploads).
+ * Amazon ads validator, spec template (Part 1 §Uploads).
  *
  * Required columns:
- *   action          — 'upsert' | 'delete'
- *   uid             — unique row identifier
- *   start_date      — period start
- *   end_date        — period end (inclusive)
- *   campaign_name   — campaign display name
- *   campaign_type   — e.g., sponsored_products, sponsored_brands
- *   sku_name        — SKU display name (string; not necessarily the SKU id)
- *   impressions     — non-negative int
- *   clicks          — non-negative int, ≤ impressions
- *   orders          — non-negative int (attributed orders), default 0
- *   total_cost      — non-negative decimal (ad spend)
- *   sales           — non-negative decimal (attributed sales), default 0
- *   currency        — 3-letter ISO
- *   platform        — e.g., amazon
- *   target_platform — channel/marketplace targeted (e.g., amazon_us)
+ *   action         , 'upsert' | 'delete'
+ *   uid            , unique row identifier
+ *   start_date     , period start
+ *   end_date       , period end (inclusive)
+ *   campaign_name  , campaign display name
+ *   campaign_type  , e.g., sponsored_products, sponsored_brands
+ *   sku_name       , SKU display name (string; not necessarily the SKU id)
+ *   impressions    , non-negative int
+ *   clicks         , non-negative int, ≤ impressions
+ *   orders         , non-negative int (attributed orders), default 0
+ *   total_cost     , non-negative decimal (ad spend)
+ *   sales          , non-negative decimal (attributed sales), default 0
+ *   currency       , 3-letter ISO
+ *   platform       , e.g., amazon
+ *   target_platform, channel/marketplace targeted (e.g., amazon_us)
  *
  * Optional:
  *   attribution_window_days
- *                   — integer in [1, 90]. Amazon Advertising emits the
+ *                  , integer in [1, 90]. Amazon Advertising emits the
  *                     same campaign-period at multiple attribution
  *                     windows (1d / 7d / 14d / 30d); stored as a
  *                     first-class dimension on xb_canonical.channel_ads
@@ -136,7 +136,7 @@ export const amazonAdsValidator: UploadValidator = {
 
     const distinctCampaigns = new Set(accepted.map((r) => r.campaignName)).size;
     const distinctPlatforms = new Set(accepted.map((r) => r.platform)).size;
-    // Attribution-window coverage — additive counts only. Derived
+    // Attribution-window coverage, additive counts only. Derived
     // window-pivoted analysis lives in intelligence-service.
     const rowsWithWindow = accepted.reduce(
       (a, r) => a + (r.attributionWindowDays !== null ? 1 : 0),

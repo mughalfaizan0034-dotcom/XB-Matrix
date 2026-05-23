@@ -29,7 +29,7 @@ const ARTICLES: ReadonlyArray<AcademyArticle> = [
     slug: 'getting-started',
     title: 'Getting Started',
     section: 'Getting Started',
-    summary: 'Orientation tour of XB Matrix — workspace setup, your first upload, and the operational dashboard.',
+    summary: 'Orientation tour of XB Matrix, workspace setup, your first upload, and the operational dashboard.',
     tags: ['onboarding', 'workspace', 'first steps'],
   }),
   stub({
@@ -44,21 +44,21 @@ const ARTICLES: ReadonlyArray<AcademyArticle> = [
     slug: 'sku-normalization',
     title: 'SKU Normalization',
     section: 'Data Pipeline',
-    summary: 'How platform-specific SKU codes resolve to one canonical sku_normalized — alias maps, the unresolved queue, and resolution rules.',
+    summary: 'How platform-specific SKU codes resolve to one canonical sku_normalized, alias maps, the unresolved queue, and resolution rules.',
     tags: ['sku', 'alias', 'normalization', 'unresolved'],
   }),
   stub({
     slug: 'marketplace-and-platform-mapping',
     title: 'Marketplace & Platform Mapping',
     section: 'Data Pipeline',
-    summary: 'Marketplace, platform, target_marketplace, ad_platform_code — what each dimension means and when to use which.',
+    summary: 'Marketplace, platform, target_marketplace, ad_platform_code, what each dimension means and when to use which.',
     tags: ['marketplace', 'platform', 'channel', 'dimension'],
   }),
   stub({
     slug: 'canonical-data-model',
     title: 'Canonical Data Model',
     section: 'Data Pipeline',
-    summary: 'channel_sales, channel_ads, channel_inventory — the canonical period-aggregated layer engines read from.',
+    summary: 'channel_sales, channel_ads, channel_inventory, the canonical period-aggregated layer engines read from.',
     tags: ['canonical', 'channel_sales', 'channel_ads', 'schema'],
   }),
   stub({
@@ -72,7 +72,7 @@ const ARTICLES: ReadonlyArray<AcademyArticle> = [
     slug: 'cogs-template',
     title: 'COGs Template',
     section: 'Data Pipeline',
-    summary: 'Minimal sku + cogs feed for the future profitability engine — numeric-only formatting, backend handles normalization + currency.',
+    summary: 'Minimal sku + cogs feed for the future profitability engine, numeric-only formatting, backend handles normalization + currency.',
     tags: ['cogs', 'cost', 'profitability', 'unit economics', 'template'],
   }),
   stub({
@@ -86,7 +86,7 @@ const ARTICLES: ReadonlyArray<AcademyArticle> = [
     slug: 'sku-status-template',
     title: 'SKU Status Template',
     section: 'Data Pipeline',
-    summary: 'Active / discontinued flag per SKU — preserves analytics history while excluding discontinued SKUs from replenishment, restock alerts, and forecasting paths.',
+    summary: 'Active / discontinued flag per SKU, preserves analytics history while excluding discontinued SKUs from replenishment, restock alerts, and forecasting paths.',
     tags: ['sku', 'status', 'discontinued', 'lifecycle', 'replenishment', 'template'],
   }),
 
@@ -101,7 +101,7 @@ const ARTICLES: ReadonlyArray<AcademyArticle> = [
     slug: 'inventory-intelligence',
     title: 'Inventory Intelligence',
     section: 'Intelligence Concepts',
-    summary: 'Stock cover, stockout risk, dead stock — engine derivations over latest-snapshot inventory + sales velocity.',
+    summary: 'Stock cover, stockout risk, dead stock, engine derivations over latest-snapshot inventory + sales velocity.',
     tags: ['inventory', 'stock cover', 'replenishment', 'dos'],
   }),
   stub({
@@ -115,14 +115,14 @@ const ARTICLES: ReadonlyArray<AcademyArticle> = [
     slug: 'brand-management',
     title: 'Brand Management',
     section: 'Intelligence Concepts',
-    summary: 'Brand as a canonical dimension — normalization, cross-marketplace rollups, brand-level intelligence.',
+    summary: 'Brand as a canonical dimension, normalization, cross-marketplace rollups, brand-level intelligence.',
     tags: ['brand', 'aggregation', 'portfolio'],
   }),
   stub({
     slug: 'omnichannel-reporting',
     title: 'Omnichannel Reporting',
     section: 'Intelligence Concepts',
-    summary: 'Cross-marketplace, cross-platform views — blended TACOS, channel comparison, marketplace drilldowns.',
+    summary: 'Cross-marketplace, cross-platform views, blended TACOS, channel comparison, marketplace drilldowns.',
     tags: ['omnichannel', 'cross-channel', 'blended'],
   }),
   stub({
@@ -137,7 +137,7 @@ const ARTICLES: ReadonlyArray<AcademyArticle> = [
     slug: 'troubleshooting',
     title: 'Troubleshooting',
     section: 'Operations',
-    summary: 'Validation failures, unresolved SKUs, missing engine readiness — diagnostic steps for common issues.',
+    summary: 'Validation failures, unresolved SKUs, missing engine readiness, diagnostic steps for common issues.',
     tags: ['troubleshooting', 'validation', 'error'],
   }),
   stub({

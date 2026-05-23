@@ -29,7 +29,7 @@ import {
 } from '@/lib/api-intelligence';
 
 /**
- * The dashboard is the central engine's view layer — every figure on
+ * The dashboard is the central engine's view layer, every figure on
  * this page comes from /v1/intelligence/dashboard, where the bundle
  * is computed in SQL with workspace-scoped access checks. The page
  * itself does no math: it picks fields off the payload, formats them
@@ -165,7 +165,7 @@ function SalesTiles({
         <CardContent className="pt-6">
           <Metric
             label={`Revenue (${s?.windowDays ?? 30}d)`}
-            value={loading ? '—' : s && s.orders > 0 ? formatMoney(s.revenue) : '0'}
+            value={loading ? '-' : s && s.orders > 0 ? formatMoney(s.revenue) : '0'}
             hint={loading ? 'loading…' : 'sum of order totals'}
           />
         </CardContent>
@@ -174,7 +174,7 @@ function SalesTiles({
         <CardContent className="pt-6">
           <Metric
             label={`Orders (${s?.windowDays ?? 30}d)`}
-            value={loading ? '—' : (s?.orders ?? 0).toLocaleString()}
+            value={loading ? '-' : (s?.orders ?? 0).toLocaleString()}
             hint={bundle ? `since ${bundle.window.from}` : 'last 30 days'}
           />
         </CardContent>
@@ -183,7 +183,7 @@ function SalesTiles({
         <CardContent className="pt-6">
           <Metric
             label={`Units (${s?.windowDays ?? 30}d)`}
-            value={loading ? '—' : (s?.units ?? 0).toLocaleString()}
+            value={loading ? '-' : (s?.units ?? 0).toLocaleString()}
             hint="sum of order quantity"
           />
         </CardContent>
@@ -192,7 +192,7 @@ function SalesTiles({
         <CardContent className="pt-6">
           <Metric
             label="Avg. order value"
-            value={loading ? '—' : s?.averageOrderValue ? formatMoney(s.averageOrderValue) : '—'}
+            value={loading ? '-' : s?.averageOrderValue ? formatMoney(s.averageOrderValue) : '-'}
             hint={loading ? 'loading…' : 'revenue ÷ orders'}
           />
         </CardContent>
@@ -215,7 +215,7 @@ function InventoryTiles({
         <CardContent className="pt-6">
           <Metric
             label="On hand"
-            value={loading ? '—' : (i?.totalOnHand ?? 0).toLocaleString()}
+            value={loading ? '-' : (i?.totalOnHand ?? 0).toLocaleString()}
             hint={i?.snapshotDate ? `as of ${i.snapshotDate}` : 'latest snapshot per SKU'}
           />
         </CardContent>
@@ -224,7 +224,7 @@ function InventoryTiles({
         <CardContent className="pt-6">
           <Metric
             label="Distinct SKUs"
-            value={loading ? '—' : (i?.distinctSkus ?? 0).toLocaleString()}
+            value={loading ? '-' : (i?.distinctSkus ?? 0).toLocaleString()}
             hint="in latest inventory"
           />
         </CardContent>
@@ -233,7 +233,7 @@ function InventoryTiles({
         <CardContent className="pt-6">
           <Metric
             label="Warehouses"
-            value={loading ? '—' : (i?.distinctWarehouses ?? 0).toLocaleString()}
+            value={loading ? '-' : (i?.distinctWarehouses ?? 0).toLocaleString()}
             hint="locations covered"
           />
         </CardContent>
@@ -244,10 +244,10 @@ function InventoryTiles({
             label="Inventory valuation"
             value={
               loading
-                ? '—'
+                ? '-'
                 : i && Number(i.totalValuation) > 0
                   ? formatMoney(i.totalValuation)
-                  : '—'
+                  : '-'
             }
             hint={
               loading
@@ -277,7 +277,7 @@ function CombinedTiles({
         <CardContent className="pt-6">
           <Metric
             label="Stock cover"
-            value={loading ? '—' : c?.stockCoverDays ? `${c.stockCoverDays} d` : '—'}
+            value={loading ? '-' : c?.stockCoverDays ? `${c.stockCoverDays} d` : '-'}
             hint={
               loading
                 ? 'loading…'
@@ -292,7 +292,7 @@ function CombinedTiles({
         <CardContent className="pt-6">
           <Metric
             label="Stockout risk"
-            value={loading ? '—' : (c?.stockoutRiskSkus ?? 0).toLocaleString()}
+            value={loading ? '-' : (c?.stockoutRiskSkus ?? 0).toLocaleString()}
             hint={
               bundle
                 ? `SKUs under ${bundle.dosTargetDays}-day target`
@@ -305,7 +305,7 @@ function CombinedTiles({
         <CardContent className="pt-6">
           <Metric
             label="Dead stock"
-            value={loading ? '—' : (c?.deadStockSkus ?? 0).toLocaleString()}
+            value={loading ? '-' : (c?.deadStockSkus ?? 0).toLocaleString()}
             hint="on-hand with zero sales in window"
           />
         </CardContent>
@@ -316,12 +316,12 @@ function CombinedTiles({
             label="Daily velocity"
             value={
               loading
-                ? '—'
+                ? '-'
                 : bundle?.sales.dailyVelocity
                   ? Number(bundle.sales.dailyVelocity).toLocaleString(undefined, {
                       maximumFractionDigits: 2,
                     })
-                  : '—'
+                  : '-'
             }
             hint="units sold per day (window)"
           />
@@ -381,7 +381,7 @@ function MarketplaceBreakdown({
 }
 
 // Engine-output renderers ---------------------------------------------
-// These never compute — they format the bytes the engine emits.
+// These never compute, they format the bytes the engine emits.
 
 function formatMoney(amount: string): string {
   const n = Number(amount);
@@ -394,12 +394,12 @@ function formatMoney(amount: string): string {
 
 function formatPercent(share: string): string {
   const n = Number(share);
-  if (!Number.isFinite(n)) return '—';
+  if (!Number.isFinite(n)) return '-';
   return `${(n * 100).toFixed(0)}%`;
 }
 
 function prettyType(t: string | null): string {
   const label = workspaceTypeLabel(t);
-  return label === '—' ? 'Workspace' : label;
+  return label === '-' ? 'Workspace' : label;
 }
 

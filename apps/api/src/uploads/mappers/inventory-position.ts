@@ -27,7 +27,7 @@ export interface InventoryPositionRow {
 }
 
 /**
- * Inventory Position mapper — all-channel. Each input row carries the
+ * Inventory Position mapper, all-channel. Each input row carries the
  * pool's marketplace + channel + per-state quantities; the mapper
  * decomposes it into up-to-5 NormalizedInventoryPosition rows (one
  * per non-zero state: available / reserved / inbound / transfer /
@@ -35,7 +35,7 @@ export interface InventoryPositionRow {
  * replenishment, transfer planning, etc. by filtering on state.
  *
  * Inventory pools like 'warehouse', '3pl', 'retail' aren't tied to a
- * marketplace — the marketplace column on those rows IS the pool
+ * marketplace, the marketplace column on those rows IS the pool
  * identity. fulfillmentType is derived from channel + marketplace so
  * engines can answer "what's sellable on Amazon US specifically" vs
  * "what's in inventory globally."

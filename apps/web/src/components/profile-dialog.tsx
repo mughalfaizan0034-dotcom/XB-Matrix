@@ -228,7 +228,7 @@ function ReadOnlyRow({ label, value, mono }: { label: string; value: string; mon
     <div className="grid grid-cols-[140px_1fr] items-baseline gap-3 text-sm">
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className={mono ? 'font-mono text-sm text-foreground' : 'text-sm text-foreground'}>
-        {value || <Badge tone="neutral">—</Badge>}
+        {value || <Badge tone="neutral">-</Badge>}
       </span>
     </div>
   );

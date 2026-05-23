@@ -118,7 +118,7 @@ export default function SalesPage() {
           s.marketplace ? (
             <Badge tone="neutral">{s.marketplace}</Badge>
           ) : (
-            <span className="text-xs text-muted-foreground">—</span>
+            <span className="text-xs text-muted-foreground">-</span>
           ),
       },
       {
@@ -126,7 +126,7 @@ export default function SalesPage() {
         header: 'Channel',
         sortKey: 'channel',
         accessor: (s) => (
-          <span className="text-xs text-muted-foreground">{s.channel ?? '—'}</span>
+          <span className="text-xs text-muted-foreground">{s.channel ?? '-'}</span>
         ),
       },
     ],
@@ -226,7 +226,7 @@ export default function SalesPage() {
           <CardContent className="pt-5">
             <Metric
               label="Orders (filtered)"
-              value={agg ? agg.totalOrders.toLocaleString() : '—'}
+              value={agg ? agg.totalOrders.toLocaleString() : '-'}
               hint={salesQ.isLoading ? 'loading…' : `over current view`}
             />
           </CardContent>
@@ -235,7 +235,7 @@ export default function SalesPage() {
           <CardContent className="pt-5">
             <Metric
               label="Units"
-              value={agg ? agg.totalQuantity.toLocaleString() : '—'}
+              value={agg ? agg.totalQuantity.toLocaleString() : '-'}
               hint="sum of quantity"
             />
           </CardContent>
@@ -244,7 +244,7 @@ export default function SalesPage() {
           <CardContent className="pt-5">
             <Metric
               label="Gross"
-              value={agg ? formatMoneyTotal(agg.totalGross) : '—'}
+              value={agg ? formatMoneyTotal(agg.totalGross) : '-'}
               hint="sum of total_price (mixed currencies shown raw)"
             />
           </CardContent>
@@ -436,7 +436,7 @@ function formatMoney(amount: string, currency: string): string {
       maximumFractionDigits: 2,
     }).format(n);
   } catch {
-    // Unknown currency code — fall back to plain number with code suffix.
+    // Unknown currency code, fall back to plain number with code suffix.
     return `${n.toFixed(2)} ${currency}`;
   }
 }

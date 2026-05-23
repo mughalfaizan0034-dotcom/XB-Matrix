@@ -64,7 +64,7 @@ export function useUpdateProfile() {
     mutationFn: (displayName: string) =>
       api.patch<{ user: UserSummary }>('/v1/auth/me', { displayName }).then((r) => r.user),
     onSuccess: () => {
-      // /me drives the topbar avatar + session display name — refresh it.
+      // /me drives the topbar avatar + session display name, refresh it.
       qc.invalidateQueries({ queryKey: ['session', 'me'] });
     },
   });
@@ -81,7 +81,7 @@ export function useChangePassword() {
   });
 }
 
-/** Remove a user — soft delete. Idempotent, no row-version required. */
+/** Remove a user, soft delete. Idempotent, no row-version required. */
 export function useRemoveUser() {
   const qc = useQueryClient();
   return useMutation({
@@ -111,7 +111,7 @@ export function useUsers(opts: { organizationId?: string | null } = {}) {
 }
 
 /**
- * Internal XB Matrix staff — super_admin / internal_manager /
+ * Internal XB Matrix staff, super_admin / internal_manager /
  * internal_staff (organization_id IS NULL). The platform-administration
  * layer, kept separate from customer/tenant users. The API returns
  * internal users when /v1/users is called with no organizationId.

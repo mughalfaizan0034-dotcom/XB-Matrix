@@ -18,19 +18,19 @@ import {
 } from './csv-helpers.js';
 
 /**
- * Amazon inventory validator — spec template (Part 1 §Uploads).
+ * Amazon inventory validator, spec template (Part 1 §Uploads).
  *
  * Required columns:
- *   action      — 'upsert' | 'delete'
- *   uid         — unique row identifier (caller-managed)
- *   date        — snapshot date (YYYY-MM-DD or parseable)
- *   channel     — marketplace / channel name
- *   sku         — SKU identifier
- *   total       — total units (non-negative int)
- *   receiving   — units inbound to FC (non-negative int, default 0)
- *   fc_transfer — units in FC-to-FC transfer (non-negative int, default 0)
- *   reserved    — units reserved (non-negative int, default 0)
- *   damaged     — damaged units (non-negative int, default 0)
+ *   action     , 'upsert' | 'delete'
+ *   uid        , unique row identifier (caller-managed)
+ *   date       , snapshot date (YYYY-MM-DD or parseable)
+ *   channel    , marketplace / channel name
+ *   sku        , SKU identifier
+ *   total      , total units (non-negative int)
+ *   receiving  , units inbound to FC (non-negative int, default 0)
+ *   fc_transfer, units in FC-to-FC transfer (non-negative int, default 0)
+ *   reserved   , units reserved (non-negative int, default 0)
+ *   damaged    , damaged units (non-negative int, default 0)
  *
  * Sanity: receiving + fc_transfer + reserved + damaged ≤ total. (Total
  * is the position; the rest are partitions of it.)

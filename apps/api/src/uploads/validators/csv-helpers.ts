@@ -1,7 +1,7 @@
 /**
  * Connector-agnostic CSV parsing helpers used by every per-kind
  * validator (Amazon, Walmart, Shopify, …). The contents here are
- * intentionally not tied to any one marketplace — they handle the
+ * intentionally not tied to any one marketplace, they handle the
  * generic shape every template shares: an `action` column ('upsert' |
  * 'delete'), a `uid` column for composite-key idempotency, dates,
  * currencies, counts, decimals.
@@ -11,7 +11,7 @@
  * generic; the name was the only Amazon coupling and was corrected
  * when the Walmart connector landed.
  *
- * Validators don't insert canonical rows yet — they parse + validate
+ * Validators don't insert canonical rows yet, they parse + validate
  * + produce a summary. Canonical inserts land when Spec 3 §10.9+
  * DDL ships and a canonicalization worker reads from the GCS file
  * + upload row.
@@ -25,9 +25,9 @@ import type { ValidationError } from './types.js';
  * future API integrations, webhook syncs, ERP corrections, inventory
  * adjustments, reconciliation workflows, idempotent processing).
  *
- *   add    — create the row; reject if it already exists
- *   update — overwrite the row; reject if it doesn't exist yet
- *   remove — soft-delete the row
+ *   add   , create the row; reject if it already exists
+ *   update, overwrite the row; reject if it doesn't exist yet
+ *   remove, soft-delete the row
  *
  * Legacy values (`upsert`, `delete`) are accepted as aliases during
  * the transition so templates downloaded before the rename still
@@ -42,10 +42,10 @@ const ACTION_ALIASES: Record<string, Action> = {
   insert: 'add',           // some pipelines use SQL-style names
   create: 'add',
   update: 'update',
-  upsert: 'update',        // legacy templates — treat as update
+  upsert: 'update',        // legacy templates, treat as update
   modify: 'update',
   remove: 'remove',
-  delete: 'remove',        // legacy templates — treat as remove
+  delete: 'remove',        // legacy templates, treat as remove
   drop:   'remove',
 };
 
@@ -72,7 +72,7 @@ export interface ParseContext {
 }
 
 /**
- * Required field — adds a `<col> is required` error and returns ''.
+ * Required field, adds a `<col> is required` error and returns ''.
  * Returns the trimmed value if present.
  */
 export function requiredString(
@@ -150,7 +150,7 @@ export function optionalNonNegInt(
 
 /**
  * Optional integer that, when present, must be in `[min, max]` inclusive.
- * Returns `null` for missing/blank cells — semantically distinct from 0
+ * Returns `null` for missing/blank cells, semantically distinct from 0
  * because canonical columns this feeds (e.g. `attribution_window_days`)
  * treat null as "not supplied / not applicable" while 0 would be an
  * invalid window value. Pushes a row error when present but outside

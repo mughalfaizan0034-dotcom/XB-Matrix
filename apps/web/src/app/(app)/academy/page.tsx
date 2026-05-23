@@ -13,7 +13,7 @@ import {
 } from '@/academy/index';
 
 /**
- * Academy index — searchable topic catalogue. Every authenticated user
+ * Academy index, searchable topic catalogue. Every authenticated user
  * sees every article (platform-level knowledge). Stubs render with a
  * "Coming soon" badge but stay listed so the topic outline is visible
  * end-to-end.
@@ -36,7 +36,7 @@ export default function AcademyIndexPage() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search Academy — topics, terms, concepts"
+          placeholder="Search Academy, topics, terms, concepts"
           className="h-10 w-full rounded-md border border-border bg-background pl-10 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         />
       </div>

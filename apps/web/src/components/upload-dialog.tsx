@@ -17,7 +17,7 @@ const MAX_BYTES = 32 * 1024 * 1024; // matches server-side cap in routes/uploads
 
 // Only the operational datasets are offered. One normalized template
 // per dataset; marketplace is a column inside the file. No generic /
-// passthrough uploads — every upload must be a recognized dataset.
+// passthrough uploads, every upload must be a recognized dataset.
 const KIND_OPTIONS: ReadonlyArray<{ value: UploadKind; label: string }> = [
   { value: 'sales_performance',        label: 'Sales Report' },
   { value: 'inventory_position',       label: 'Inventory Report' },
@@ -85,7 +85,7 @@ export function UploadDialog({ open, onClose }: Props) {
   async function onSubmit() {
     if (!file || !activeWorkspace) return;
     try {
-      // No workspaceId — the server writes into the session's active
+      // No workspaceId, the server writes into the session's active
       // workspace. activeWorkspace is checked only to gate the UI.
       const upload = await create.mutateAsync({ kind, file });
       toast.push('success', `Uploaded ${upload.originalFilename}.`);
@@ -133,7 +133,7 @@ export function UploadDialog({ open, onClose }: Props) {
         <div className="flex flex-col gap-4">
           <FormField
             label="Operational dataset"
-            hint="One file per dataset type — put every marketplace's rows in the same file. The marketplace column inside the file is what the engine uses; there are no per-marketplace uploads."
+            hint="One file per dataset type, put every marketplace's rows in the same file. The marketplace column inside the file is what the engine uses; there are no per-marketplace uploads."
           >
             {(p) => (
               <Select {...p} value={kind} onChange={(e) => setKind(e.target.value as UploadKind)}>

@@ -149,7 +149,7 @@ export default function SkuAliasesPage() {
           a.sourcePlatform ? (
             <span className="text-sm text-foreground">{a.sourcePlatform}</span>
           ) : (
-            <span className="text-xs text-muted-foreground">—</span>
+            <span className="text-xs text-muted-foreground">-</span>
           ),
       },
       {
@@ -160,7 +160,7 @@ export default function SkuAliasesPage() {
           a.sourceMarketplace ? (
             <span className="text-sm text-foreground">{a.sourceMarketplace}</span>
           ) : (
-            <span className="text-xs text-muted-foreground">—</span>
+            <span className="text-xs text-muted-foreground">-</span>
           ),
       },
       {
@@ -276,7 +276,7 @@ export default function SkuAliasesPage() {
           <p className="text-sm text-muted-foreground">
             Every commerce metric in XB Matrix aggregates on the <span className="font-medium text-foreground">normalized SKU</span>.
             Aliases let one product carry many platform-specific codes (Amazon SKU, ASIN, Walmart item ID, UPC, supplier code, …) and resolve
-            to a single operational identity. Engines never see the platform-shaped value — they read <code className="font-mono">sku_normalized</code>.
+            to a single operational identity. Engines never see the platform-shaped value, they read <code className="font-mono">sku_normalized</code>.
           </p>
         </CardContent>
       </Card>
@@ -286,7 +286,7 @@ export default function SkuAliasesPage() {
           <CardContent className="pt-5">
             <Metric
               label="Aliases"
-              value={agg ? agg.totalAliases.toLocaleString() : '—'}
+              value={agg ? agg.totalAliases.toLocaleString() : '-'}
               hint="active + inactive in scope"
             />
           </CardContent>
@@ -295,7 +295,7 @@ export default function SkuAliasesPage() {
           <CardContent className="pt-5">
             <Metric
               label="Distinct SKUs"
-              value={agg ? agg.distinctSkus.toLocaleString() : '—'}
+              value={agg ? agg.distinctSkus.toLocaleString() : '-'}
               hint="normalized identities covered"
             />
           </CardContent>
@@ -304,7 +304,7 @@ export default function SkuAliasesPage() {
           <CardContent className="pt-5">
             <Metric
               label="Platforms"
-              value={agg ? agg.distinctPlatforms.toLocaleString() : '—'}
+              value={agg ? agg.distinctPlatforms.toLocaleString() : '-'}
               hint="distinct source_platform values"
             />
           </CardContent>
@@ -334,7 +334,7 @@ export default function SkuAliasesPage() {
                       <td className="px-3 py-2 font-mono text-foreground">{c.aliasValue}</td>
                       <td className="px-3 py-2">{ALIAS_TYPE_LABEL[c.aliasType]}</td>
                       <td className="px-3 py-2 text-muted-foreground">
-                        {[c.sourcePlatform, c.sourceMarketplace].filter(Boolean).join(' · ') || '—'}
+                        {[c.sourcePlatform, c.sourceMarketplace].filter(Boolean).join(' · ') || '-'}
                       </td>
                       <td className="px-3 py-2 font-mono text-foreground">{c.resolvedSkus.join(', ')}</td>
                     </tr>

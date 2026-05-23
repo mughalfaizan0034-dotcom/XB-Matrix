@@ -9,7 +9,7 @@
 
 .prose-academy {
   max-width: 72ch;
-  font-size: 0.875rem;     /* 14px — matches operational density */
+  font-size: 0.875rem;     /* 14px, matches operational density */
   line-height: 1.65;
   color: hsl(var(--foreground));
 }

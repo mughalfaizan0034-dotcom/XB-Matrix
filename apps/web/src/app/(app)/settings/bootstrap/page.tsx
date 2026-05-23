@@ -44,7 +44,7 @@ const ROLE_LABEL: Record<BootstrapRole, string> = {
 };
 
 /**
- * Temporary bootstrap / testing page — internal-manager only.
+ * Temporary bootstrap / testing page, internal-manager only.
  *
  * Lets a manager:
  *   - Manually create a fully-active user (skips invitation +
@@ -120,7 +120,7 @@ function ManagerBootstrap() {
             They bypass the production user-creation path and write directly to{' '}
             <code className="font-mono text-foreground">xb_core.users</code> with{' '}
             <code className="font-mono text-foreground">user_status='active'</code>.
-            Don&apos;t use them for real organization users — go through Invitations instead.
+            Don&apos;t use them for real organization users, go through Invitations instead.
           </div>
         </CardContent>
       </Card>
@@ -234,7 +234,7 @@ function CreateTestUserCard() {
             hint={
               password.length < 12
                 ? 'Minimum 12 characters.'
-                : 'Share this with the test user — they sign in directly, no invitation email.'
+                : 'Share this with the test user, they sign in directly, no invitation email.'
             }
           >
             {(p) => (
@@ -304,7 +304,7 @@ function CreateTestUserCard() {
                   disabled={!needsOrg}
                   required={needsOrg}
                 >
-                  <option value="">{needsOrg ? 'Pick an organization…' : '— not applicable —'}</option>
+                  <option value="">{needsOrg ? 'Pick an organization…' : '- not applicable -'}</option>
                   {orgOptions.map((o) => (
                     <option key={o.id} value={o.id}>
                       {o.displayName}
@@ -435,9 +435,9 @@ function DebugVisibilityCard() {
                 <Row k="actor_id" v={ctx.data.actor.actorId} mono />
                 <Row k="actor_kind" v={ctx.data.actor.actorKind} />
                 <Row k="effective_role" v={ctx.data.actor.effectiveRole} badge />
-                <Row k="organization_id" v={ctx.data.actor.organizationId ?? '—'} mono />
+                <Row k="organization_id" v={ctx.data.actor.organizationId ?? '-'} mono />
                 <Row k="is_internal_manager" v={String(ctx.data.actor.isInternalManager)} />
-                <Row k="session_id" v={ctx.data.actor.sessionId ?? '—'} mono />
+                <Row k="session_id" v={ctx.data.actor.sessionId ?? '-'} mono />
               </dl>
             </div>
 

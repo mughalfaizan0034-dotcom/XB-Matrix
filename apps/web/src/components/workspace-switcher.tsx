@@ -101,7 +101,7 @@ export function WorkspaceSwitcher() {
   if (!user) return null;
   // Note: we used to return null here when `accessible` was empty, but
   // that hid the entire switcher for a brand-new manager with no
-  // workspaces yet — leaving them stuck in "All workspaces · cross-org
+  // workspaces yet, leaving them stuck in "All workspaces · cross-org
   // view" with no obvious way out. We now always render the button and
   // surface an explicit empty state + management link inside the
   // dropdown so the user always has a next step.
@@ -200,17 +200,17 @@ export function WorkspaceSwitcher() {
               </div>
               <div className="h-px flex-shrink-0 bg-border" aria-hidden="true" />
 
-              {/* Scroll region — every org row lives here so the list
+              {/* Scroll region, every org row lives here so the list
                   caps at ~8 visible items with a scrollbar past that. */}
               <div className="min-h-0 flex-1 overflow-y-auto p-1">
                 {/* "All workspaces" clear is intentionally NOT in the
-                    flyout — the footer "View all workspaces" link
+                    flyout, the footer "View all workspaces" link
                     handles workspace navigation; we don't surface a
                     way to drop into the read-only cross-workspace mode
                     from the switcher itself. */}
 
                 {/* Empty + loading states. A fresh manager often lands
-                    here before any orgs/workspaces exist — give them a
+                    here before any orgs/workspaces exist, give them a
                     clear path to Settings instead of a silent void. */}
                 {isLoading && grouped.length === 0 ? (
                   <div className="px-2.5 py-3 text-center text-xs text-muted-foreground">
@@ -291,7 +291,7 @@ export function WorkspaceSwitcher() {
                 })}
               </div>
 
-              {/* Sticky footer — always visible, no matter how long the
+              {/* Sticky footer, always visible, no matter how long the
                   org list grows. "View all" routes to the dedicated
                   picker page with search + collapsible tree. */}
               <div className="h-px flex-shrink-0 bg-border" aria-hidden="true" />
@@ -401,5 +401,5 @@ function groupByOrganization(
 // to "General"; falls back to "Workspace" when no type is set.
 function prettyType(t: AccessibleWorkspace['workspaceType']): string {
   const label = workspaceTypeLabel(t);
-  return label === '—' ? 'Workspace' : label;
+  return label === '-' ? 'Workspace' : label;
 }

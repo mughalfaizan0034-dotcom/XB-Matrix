@@ -137,7 +137,7 @@ export default function InventoryPage() {
           r.unitCost && r.currencyCode ? (
             <span data-numeric="true">{formatMoney(r.unitCost, r.currencyCode)}</span>
           ) : (
-            <span className="text-xs text-muted-foreground">—</span>
+            <span className="text-xs text-muted-foreground">-</span>
           ),
       },
     ],
@@ -228,7 +228,7 @@ export default function InventoryPage() {
           <CardContent className="pt-5">
             <Metric
               label="SKUs"
-              value={agg ? agg.distinctSkus.toLocaleString() : '—'}
+              value={agg ? agg.distinctSkus.toLocaleString() : '-'}
               hint="distinct SKUs"
             />
           </CardContent>
@@ -237,7 +237,7 @@ export default function InventoryPage() {
           <CardContent className="pt-5">
             <Metric
               label="Warehouses"
-              value={agg ? agg.distinctWarehouses.toLocaleString() : '—'}
+              value={agg ? agg.distinctWarehouses.toLocaleString() : '-'}
               hint="locations covered"
             />
           </CardContent>
@@ -246,7 +246,7 @@ export default function InventoryPage() {
           <CardContent className="pt-5">
             <Metric
               label="On hand"
-              value={agg ? agg.totalOnHand.toLocaleString() : '—'}
+              value={agg ? agg.totalOnHand.toLocaleString() : '-'}
               hint="sum of quantity_on_hand"
             />
           </CardContent>
@@ -255,7 +255,7 @@ export default function InventoryPage() {
           <CardContent className="pt-5">
             <Metric
               label="Valuation"
-              value={agg && Number(agg.totalValuation) > 0 ? formatTotal(agg.totalValuation) : '—'}
+              value={agg && Number(agg.totalValuation) > 0 ? formatTotal(agg.totalValuation) : '-'}
               hint="sum where unit_cost set (mixed currencies)"
             />
           </CardContent>

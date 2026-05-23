@@ -15,7 +15,7 @@ import type { UploadKind } from '../../services/upload-service.js';
  *
  * On miss: returns `{ resolved: null, reason: 'no_match' }` and the
  * mapper appends an UnresolvedRecord. On hit: returns the
- * sku_normalized string. We don't attempt fuzzy or auto-create here —
+ * sku_normalized string. We don't attempt fuzzy or auto-create here -
  * those policies live in the alias service and are explicit operator
  * actions, not silent mapper side-effects.
  */
@@ -43,13 +43,13 @@ export async function tryResolve(
 
 /**
  * Marketplace / channel inference. Source uploads label the channel
- * in different ways ("Amazon US", "amazon_us", "ATVPDKIKX0DER" — the
+ * in different ways ("Amazon US", "amazon_us", "ATVPDKIKX0DER", the
  * Amazon US marketplace id). The mapper normalizes to the canonical
  * marketplace_code used across xb_canonical.* tables.
  *
  * Unknown values pass through normalized to snake_case so downstream
  * grouping still works; an operator can later add a proper mapping
- * rule. We never throw — translation is best-effort by design.
+ * rule. We never throw, translation is best-effort by design.
  */
 export function normalizeMarketplaceCode(raw: string): string {
   const k = raw.trim().toLowerCase().replace(/\s+/g, '_');
@@ -142,7 +142,7 @@ export function regionFromMarketplace(marketplaceCode: string): string {
   if (marketplaceCode.endsWith('_fr')) return 'FR';
   if (marketplaceCode.endsWith('_jp')) return 'JP';
   if (marketplaceCode.endsWith('_au')) return 'AU';
-  // Default — operator can override via channel mapping rules later.
+  // Default, operator can override via channel mapping rules later.
   return 'US';
 }
 

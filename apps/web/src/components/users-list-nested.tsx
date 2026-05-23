@@ -75,11 +75,11 @@ export function UsersListNested({ organization }: { organization: Organization }
   function buildMenu(u: UserSummary): DropdownMenuItem[] {
     // All row-level admin actions require admin capability. The list
     // itself only renders for actors who can reach it, but render-time
-    // gating is the security boundary — never assume "they wouldn't
+    // gating is the security boundary, never assume "they wouldn't
     // see this list otherwise."
     if (!canAdd) return [];
     const items: DropdownMenuItem[] = [];
-    // Workspace permissions matrix — only meaningful for org users
+    // Workspace permissions matrix, only meaningful for org users
     // (internal users bypass workspace permissions).
     if (u.userKind === 'organization') {
       items.push({
@@ -467,7 +467,7 @@ function prettyRole(u: UserSummary): string {
     if (u.internalRole === 'super_admin') return 'Super admin';
     return u.internalRole === 'manager' ? 'Internal manager' : 'Internal staff';
   }
-  // Inside an org context, "Organization" prefix is redundant — the
+  // Inside an org context, "Organization" prefix is redundant, the
   // user is already scoped to the org card they appear in.
   return u.orgRole === 'admin' ? 'Admin' : 'User';
 }

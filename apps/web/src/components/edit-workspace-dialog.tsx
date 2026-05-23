@@ -129,7 +129,7 @@ export function EditWorkspaceDialog({
           )}
         </FormField>
 
-        <FormField label="Workspace type" hint="Optional — how this workspace is used.">
+        <FormField label="Workspace type" hint="Optional, how this workspace is used.">
           {(p) => (
             <Select {...p} value={workspaceType} onChange={(e) => setType(e.target.value)}>
               <option value="">Not set</option>

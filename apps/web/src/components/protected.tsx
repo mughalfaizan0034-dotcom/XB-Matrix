@@ -8,7 +8,7 @@ import { useSession } from '@/lib/session';
  * Client-side guard for authenticated routes. Redirects to /sign-in if the
  * session query resolves to null. While loading, renders a subtle placeholder.
  *
- * Backend re-checks every request — this is UI shaping, not access control.
+ * Backend re-checks every request, this is UI shaping, not access control.
  */
 export function Protected({ children }: { children: React.ReactNode }) {
   const router = useRouter();

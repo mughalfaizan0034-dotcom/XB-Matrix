@@ -23,7 +23,7 @@ export interface SalesOrder {
 export interface SalesAggregates {
   readonly totalOrders: number;
   readonly totalQuantity: number;
-  readonly totalGross: string; // numeric as text — present as is
+  readonly totalGross: string; // numeric as text, present as is
 }
 
 export interface SalesQuery {

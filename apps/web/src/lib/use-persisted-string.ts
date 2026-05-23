@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 /**
- * useState<string> backed by localStorage. SSR-safe — reads from
+ * useState<string> backed by localStorage. SSR-safe, reads from
  * localStorage on mount; never throws if storage is unavailable.
  */
 export function usePersistedString(

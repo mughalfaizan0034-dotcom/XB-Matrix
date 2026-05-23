@@ -74,7 +74,7 @@ export function OrganizationCard({
       { key: 'audit', label: 'View audit history', icon: History, onSelect: () => setAudit(true), divider: true },
     ];
     // Lifecycle transitions (suspend / archive / reactivate / delete)
-    // are PLATFORM admin actions — only internal managers should see
+    // are PLATFORM admin actions, only internal managers should see
     // them. An org_admin can still edit the organization and manage
     // its workspaces + users via the tabs below; suspending or
     // archiving their own org from the UI would only ever be a footgun.

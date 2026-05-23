@@ -3,7 +3,7 @@ import { jsPDF } from 'jspdf';
 /**
  * Branded PDF generator for the upload templates guide.
  *
- * Produces a navy-branded multi-page document — NOT a plain text dump.
+ * Produces a navy-branded multi-page document, NOT a plain text dump.
  * Navy header band, xB badge, section headings in brand navy, a
  * "Powered by Xcelerate Brands" footer on every page.
  */
@@ -63,7 +63,7 @@ export function generateUploadGuidePdf(datasets: ReadonlyArray<GuideDataset>): v
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   const intro =
-    'Upload one file per operational dataset. A single file carries every marketplace — ' +
+    'Upload one file per operational dataset. A single file carries every marketplace, ' +
     'the marketplace column inside the file is what the engine uses for all calculations. ' +
     'There are no per-marketplace uploads. Fill the template, then upload it from the ' +
     'Upload Files tab.';

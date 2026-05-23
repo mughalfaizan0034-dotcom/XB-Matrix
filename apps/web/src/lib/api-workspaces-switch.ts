@@ -40,7 +40,7 @@ export function useSetActiveWorkspace() {
         .then((r) => r.active),
     // The backend reloads the active workspace from the database after
     // the UPDATE commits (see workspace-service.selectActiveWorkspace),
-    // so the response is the authoritative state — no need for a /me
+    // so the response is the authoritative state, no need for a /me
     // refetch race afterwards.
     //
     //   1) Cancel any in-flight /me to stop a stale response from

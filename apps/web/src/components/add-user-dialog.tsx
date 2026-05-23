@@ -17,7 +17,7 @@ import { describeError, useSession } from '@/lib/session';
 import { ApiError } from '@/lib/api-client';
 
 /**
- * Direct add-user dialog — the PRIMARY user-creation path while email
+ * Direct add-user dialog, the PRIMARY user-creation path while email
  * lifecycle is paused (see memory/feedback_auth_direction).
  *
  * Two scopes, two permission domains:
@@ -26,7 +26,7 @@ import { ApiError } from '@/lib/api-client';
  *   - 'internal'     → XB Matrix platform staff (internal_manager /
  *     internal_staff), no org. Used from the Internal Users section.
  *
- * super_admin is never offered — it is provisioned only via DB migration.
+ * super_admin is never offered, it is provisioned only via DB migration.
  */
 type AddUserScope = 'organization' | 'internal';
 
@@ -67,7 +67,7 @@ export function AddUserDialog({ open, onClose, scope = 'organization', organizat
   //   internal_manager  → can create internal_staff + org_*
   //   organization_admin→ can create org_* in own org only
   //
-  // super_admin role is LOCKED — provisioned only via DB migration.
+  // super_admin role is LOCKED, provisioned only via DB migration.
   const isSuperAdmin = session?.effectiveRole === 'super_admin';
   const isInternalManager = session?.effectiveRole === 'internal_manager';
   const canCreateManagers = isSuperAdmin;
@@ -207,7 +207,7 @@ export function AddUserDialog({ open, onClose, scope = 'organization', organizat
           <FormField
             label="Initial password"
             required
-            hint="Minimum 12 characters. Share with the user — they can change it after sign-in."
+            hint="Minimum 12 characters. Share with the user, they can change it after sign-in."
           >
             {(p) => (
               <div className="flex items-center gap-2">
@@ -252,7 +252,7 @@ export function AddUserDialog({ open, onClose, scope = 'organization', organizat
               <Select {...p} value={role} onChange={(e) => setRole(e.target.value as CreateUserRole)}>
                 {isInternal ? (
                   <>
-                    {/* Internal scope — platform staff only. */}
+                    {/* Internal scope, platform staff only. */}
                     {canCreateInternal ? (
                       <option value="internal_staff">Internal · Staff</option>
                     ) : null}
@@ -262,12 +262,12 @@ export function AddUserDialog({ open, onClose, scope = 'organization', organizat
                   </>
                 ) : (
                   <>
-                    {/* Organization scope — customer/tenant users only. */}
+                    {/* Organization scope, customer/tenant users only. */}
                     <option value="organization_user">User</option>
                     <option value="organization_admin">Admin</option>
                   </>
                 )}
-                {/* Super admin is intentionally NOT offered — provisioned only via DB migration */}
+                {/* Super admin is intentionally NOT offered, provisioned only via DB migration */}
               </Select>
             )}
           </FormField>

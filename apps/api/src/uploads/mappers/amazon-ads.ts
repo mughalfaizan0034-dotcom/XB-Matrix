@@ -106,7 +106,7 @@ export const amazonAdsMapper: UploadMapper<AmazonAdsRow, NormalizedAdPerformance
         spend: r.totalCost,
         attributedSales: r.sales,
         currencyCode: r.currency.toUpperCase(),
-        // Carried through verbatim — null round-trips to canonical.
+        // Carried through verbatim, null round-trips to canonical.
         attributionWindowDays: r.attributionWindowDays,
         action: r.action,
         source: {

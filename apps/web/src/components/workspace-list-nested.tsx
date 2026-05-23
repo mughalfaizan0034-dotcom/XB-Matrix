@@ -60,7 +60,7 @@ export function WorkspaceListNested({ organization }: { organization: Organizati
   // useDataTableState: search/sort persist to URL via a per-org prefix,
   // density + column visibility persist to localStorage. Filtering and
   // sorting are client-side here because /v1/workspaces doesn't paginate
-  // server-side yet (low row count per org) — when it does, this is the
+  // server-side yet (low row count per org), when it does, this is the
   // only thing that needs to change.
   const [tableState, tableActions] = useDataTableState({
     storageKey: 'workspaces-table',

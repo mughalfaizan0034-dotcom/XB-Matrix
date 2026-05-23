@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
  * useState<Set<string>> backed by localStorage. Used for expand/collapse
  * state that should survive refresh + cross-tab navigation within the SPA.
  *
- * Safe under Next.js SSR — reads from localStorage only on mount.
+ * Safe under Next.js SSR, reads from localStorage only on mount.
  */
 export function usePersistedStringSet(
   storageKey: string,
