@@ -9,6 +9,7 @@ import { useSession, useSignOut, describeError } from '@/lib/session';
 import { roleLabel } from '@/lib/role-labels';
 import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import { ProfileDialog } from '@/components/profile-dialog';
+import { NotificationCenter } from '@/components/notification-center';
 
 export function Topbar() {
   const { data: user } = useSession();
@@ -67,7 +68,8 @@ export function Topbar() {
         </div>
         {user ? <WorkspaceSwitcher /> : null}
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        {user ? <NotificationCenter /> : null}
         {user ? (
           <DropdownMenu
             align="end"
