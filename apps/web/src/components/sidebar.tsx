@@ -68,8 +68,13 @@ export function Sidebar() {
 
   const isOrgUserWithNoWorkspaces =
     user?.userKind === 'organization' && (accessible?.length ?? 0) === 0;
+  // Org users awaiting workspace assignment still see Academy +
+  // Settings: Settings hosts the self-service profile + password
+  // change, and Academy is platform-level learning content that
+  // doesn't depend on workspace context (project_academy_surface).
+  // Operational pages still gate on workspace access server-side.
   const visibleNav = isOrgUserWithNoWorkspaces
-    ? NAV.filter((item) => item.href === '/settings')
+    ? NAV.filter((item) => item.href === '/settings' || item.href === '/academy')
     : NAV;
 
   return (
