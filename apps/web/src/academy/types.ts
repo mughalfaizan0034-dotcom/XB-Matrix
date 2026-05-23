@@ -1,26 +1,30 @@
 import type { ComponentType } from 'react';
 
 /**
- * Academy article shape. Each article is a typed module: meta + a
- * React component that renders the long-form body. Storing articles
- * as components (rather than MDX or markdown) keeps the surface
- * type-safe and avoids a new build-time dependency for the first
- * slice; MDX can replace this when the article count grows beyond
- * what's pleasant to write in JSX.
+ * Academy article shape.
  *
- * Articles are platform-level knowledge, every authenticated user
- * sees every article (per project_academy_surface visibility model).
+ * Each article is a typed module: meta + a React component that renders
+ * the long-form body. Section primitives (Overview, WhyItMatters,
+ * HowItWorks, ExampleWorkflow, CommonMistakes, QA, Related) compose
+ * into the standardized article skeleton.
+ *
+ * Visibility: every authenticated user sees every article
+ * (project_academy_surface universal-access rule).
+ *
+ * Categories below are the doc-style restructure (PR #34). They
+ * replace the prior 5-section grouping. Order is the canonical
+ * sidebar order.
  */
 export interface AcademyArticleMeta {
-  /** URL slug, must match the route segment under /academy/[slug]. */
+  /** URL slug. Must match the route segment under /academy/[slug]. */
   readonly slug: string;
-  /** Short title shown in the index, sidebar, and article header. */
+  /** Short title shown in the sidebar and article header. */
   readonly title: string;
-  /** Section grouping in the index page. */
-  readonly section: AcademySection;
-  /** One-line summary for index cards + search results. */
+  /** Top-level category grouping in the sidebar. */
+  readonly category: AcademyCategory;
+  /** One-line summary for search results + article header. */
   readonly summary: string;
-  /** Search tags, supplements the title/headings in client-side search. */
+  /** Search tags. Supplement the title / category in client-side search. */
   readonly tags: ReadonlyArray<string>;
   /** When `true`, the article renders as a "Coming soon" placeholder. */
   readonly stub?: boolean;
@@ -32,12 +36,17 @@ export interface AcademyArticle {
   readonly Body: ComponentType;
 }
 
-export const ACADEMY_SECTIONS = [
+export const ACADEMY_CATEGORIES = [
   'Getting Started',
-  'Data Pipeline',
+  'Upload Templates',
   'Intelligence Concepts',
-  'Operations',
-  'Reference',
+  'Inventory & Replenishment',
+  'Advertising Intelligence',
+  'SKU Normalization',
+  'Forecasting',
+  'Support & Operations',
+  'Permissions & Roles',
+  'WMS & Logistics',
 ] as const;
 
-export type AcademySection = (typeof ACADEMY_SECTIONS)[number];
+export type AcademyCategory = (typeof ACADEMY_CATEGORIES)[number];
