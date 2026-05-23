@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3,
+  BookOpen,
   Boxes,
   FileSpreadsheet,
   LayoutDashboard,
@@ -34,6 +35,7 @@ const NAV: ReadonlyArray<NavItem> = [
   { label: 'Reports',       href: '/reports'        , icon: FileSpreadsheet },
   { label: 'Unit Economics', href: '/unit-economics', icon: BarChart3 },
   { label: 'SKU Aliases',   href: '/sku-aliases'    , icon: Package },
+  { label: 'Academy',       href: '/academy'        , icon: BookOpen },
   { label: 'Settings',      href: '/settings'       , icon: Settings },
 ];
 
