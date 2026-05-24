@@ -2,11 +2,20 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, LifeBuoy, LogOut, Search, UserCircle } from 'lucide-react';
+import {
+  BookOpen,
+  ChevronDown,
+  FileText,
+  LifeBuoy,
+  LogOut,
+  MessageCircle,
+  Search,
+  Ticket,
+  UserCircle,
+} from 'lucide-react';
 import { DropdownMenu, useToast, type DropdownMenuItem } from '@xb/ui';
 import { cn } from '@xb/ui/lib/cn';
 import { useSession, useSignOut, describeError } from '@/lib/session';
-import { roleLabel } from '@/lib/role-labels';
 import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import { ProfileDialog } from '@/components/profile-dialog';
 import { NotificationCenter } from '@/components/notification-center';
@@ -33,18 +42,48 @@ export function Topbar() {
     .join('')
     .toUpperCase();
 
-  const menuItems: DropdownMenuItem[] = [
+  // Help menu groups all learning + support entry points together so
+  // the topbar stays a clean [Bell] [Help] [Avatar] triad. Documentation
+  // and Contact Support are placeholder slots — they'll wire up to real
+  // routes when those surfaces ship. They render disabled today so the
+  // mental model is visible without false-affordance navigation.
+  const helpItems: DropdownMenuItem[] = [
     {
-      key: 'profile',
-      label: 'Profile',
-      icon: UserCircle,
-      onSelect: () => setShowProfile(true),
+      key: 'academy',
+      label: 'Academy',
+      icon: BookOpen,
+      onSelect: () => router.push('/academy'),
     },
     {
-      key: 'support',
-      label: 'Manage Support Tickets',
-      icon: LifeBuoy,
+      key: 'tickets',
+      label: 'Support Tickets',
+      icon: Ticket,
       onSelect: () => router.push('/support'),
+      divider: true,
+    },
+    {
+      key: 'docs',
+      label: 'Documentation',
+      icon: FileText,
+      disabled: true,
+      onSelect: () => undefined,
+    },
+    {
+      key: 'contact',
+      label: 'Contact Support',
+      icon: MessageCircle,
+      disabled: true,
+      onSelect: () => undefined,
+    },
+  ];
+
+  // Profile dropdown holds only account-level actions now.
+  const profileItems: DropdownMenuItem[] = [
+    {
+      key: 'profile',
+      label: 'Edit Profile',
+      icon: UserCircle,
+      onSelect: () => setShowProfile(true),
       divider: true,
     },
     {
@@ -68,38 +107,47 @@ export function Topbar() {
         </div>
         {user ? <WorkspaceSwitcher /> : null}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         {user ? <NotificationCenter /> : null}
         {user ? (
           <DropdownMenu
             align="end"
-            width="w-64"
+            width="w-56"
             trigger={
               <span
+                aria-label="Help and resources"
+                title="Help and resources"
                 className={cn(
-                  'flex items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-sm transition-colors',
+                  'inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent text-muted-foreground transition-colors',
+                  'hover:bg-muted hover:text-foreground',
+                )}
+              >
+                <LifeBuoy className="h-4 w-4" />
+              </span>
+            }
+            items={helpItems}
+          />
+        ) : null}
+        {user ? (
+          <DropdownMenu
+            align="end"
+            width="w-56"
+            trigger={
+              <span
+                aria-label="Account menu"
+                title="Account menu"
+                className={cn(
+                  'ml-1 flex items-center gap-1.5 rounded-md border border-transparent px-1.5 py-1.5 text-sm transition-colors',
                   'hover:bg-muted',
                 )}
               >
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-navy text-[11px] font-semibold text-white">
                   {initials}
                 </span>
-                <span className="hidden text-left leading-tight md:block">
-                  <span className="block text-xs font-medium text-foreground">{user.displayName}</span>
-                  <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {roleLabel(user.effectiveRole)}
-                  </span>
-                </span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
               </span>
             }
-            header={
-              <div>
-                <div className="text-sm font-medium text-foreground">{user.displayName}</div>
-                <div className="truncate text-xs text-muted-foreground">{user.email}</div>
-              </div>
-            }
-            items={menuItems}
+            items={profileItems}
           />
         ) : null}
       </div>
