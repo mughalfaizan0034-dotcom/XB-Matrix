@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3,
-  BookOpen,
   Boxes,
   FileSpreadsheet,
   LayoutDashboard,
@@ -43,7 +42,6 @@ const NAV: ReadonlyArray<NavItem> = [
   { label: 'Reports',       href: '/reports'        , icon: FileSpreadsheet },
   { label: 'Unit Economics', href: '/unit-economics', icon: BarChart3, comingSoon: true },
   { label: 'SKU Aliases',   href: '/sku-aliases'    , icon: Package },
-  { label: 'Academy',       href: '/academy'        , icon: BookOpen },
   { label: 'Settings',      href: '/settings'       , icon: Settings },
 ];
 
@@ -51,11 +49,13 @@ const NAV: ReadonlyArray<NavItem> = [
  * Nav rows always navigate, every workspace-scoped page handles its
  * own "pick a workspace" empty state.
  *
- * Visibility: organization users with NO accessible workspaces collapse
- * the nav to Settings only. There's nothing useful for them on Dashboard
- * / Sales / Uploads / etc. without a workspace, and Settings still
- * hosts the self-service profile (display name + password change). The
- * full nav returns the moment an admin grants them workspace access.
+ * Visibility: organization users with NO accessible workspaces get an
+ * empty nav. There's nothing useful for them on Dashboard / Sales /
+ * Uploads / etc. without a workspace; the topbar Help dropdown still
+ * carries Academy access universally, and the dashboard route guard
+ * bounces them to /academy. Personal account actions live in the
+ * topbar Profile dialog. The full nav returns the moment an admin
+ * grants them workspace access.
  *
  * Internal users (super_admin / internal_manager / internal_staff) keep
  * the full nav regardless, they always have platform context to work
@@ -68,13 +68,7 @@ export function Sidebar() {
 
   const isOrgUserWithNoWorkspaces =
     user?.userKind === 'organization' && (accessible?.length ?? 0) === 0;
-  // Org users awaiting workspace assignment land on Academy only.
-  // Personal account actions moved to the topbar Profile dialog, so
-  // Settings is no longer required for these users. Operational
-  // pages still gate on workspace access server-side.
-  const visibleNav = isOrgUserWithNoWorkspaces
-    ? NAV.filter((item) => item.href === '/academy')
-    : NAV;
+  const visibleNav = isOrgUserWithNoWorkspaces ? [] : NAV;
 
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-white lg:flex">
