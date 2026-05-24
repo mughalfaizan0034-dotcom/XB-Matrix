@@ -36,6 +36,8 @@ export interface RecycleBinEntry {
   readonly organizationId: string | null;
   readonly organizationName: string | null;
   readonly deletedAt: string;
+  /** Display name of the actor who soft-deleted the row, or null if the actor is gone or unknown (legacy rows, system). */
+  readonly deletedBy: string | null;
   /** UTC ISO timestamp when this row will be hard-purged. */
   readonly purgeAt: string;
   /** Whole days remaining in the grace window, floored. 0 = today. */
@@ -49,6 +51,11 @@ export async function listRecycleBin(
 ): Promise<ReadonlyArray<RecycleBinEntry>> {
   requirePlatformAdmin(actor);
   return app.withConnection(actor, async (client) => {
+    // deleted_by display name is resolved via the actor's owning
+    // user row (deleted_by_actor_id -> users.actor_id -> display_name).
+    // Works for both internal + org-user actors since both live in
+    // xb_core.users. System / API-key / cron actors have no users row
+    // so the join returns null and the UI renders "System".
     if (kind === 'user') {
       const { rows } = await client.query<{
         id: string;
@@ -57,13 +64,16 @@ export async function listRecycleBin(
         organization_id: string | null;
         organization_name: string | null;
         deleted_at: Date;
+        deleted_by_name: string | null;
       }>(
         `SELECT u.id, u.display_name, u.username,
                 u.organization_id,
                 o.display_name AS organization_name,
-                u.deleted_at
+                u.deleted_at,
+                du.display_name AS deleted_by_name
            FROM xb_core.users u
            LEFT JOIN xb_core.organizations o ON o.id = u.organization_id
+           LEFT JOIN xb_core.users du ON du.actor_id = u.deleted_by_actor_id
           WHERE u.deleted_at IS NOT NULL
             AND u.deleted_at > now() - ($1 || ' days')::interval
           ORDER BY u.deleted_at DESC`,
@@ -77,6 +87,7 @@ export async function listRecycleBin(
           organizationId: r.organization_id,
           organizationName: r.organization_name,
           deletedAt: r.deleted_at,
+          deletedBy: r.deleted_by_name,
         }),
       );
     }
@@ -85,12 +96,15 @@ export async function listRecycleBin(
         id: string;
         display_name: string;
         deleted_at: Date;
+        deleted_by_name: string | null;
       }>(
-        `SELECT id, display_name, deleted_at
-           FROM xb_core.organizations
-          WHERE deleted_at IS NOT NULL
-            AND deleted_at > now() - ($1 || ' days')::interval
-          ORDER BY deleted_at DESC`,
+        `SELECT o.id, o.display_name, o.deleted_at,
+                du.display_name AS deleted_by_name
+           FROM xb_core.organizations o
+           LEFT JOIN xb_core.users du ON du.actor_id = o.deleted_by_actor_id
+          WHERE o.deleted_at IS NOT NULL
+            AND o.deleted_at > now() - ($1 || ' days')::interval
+          ORDER BY o.deleted_at DESC`,
         [String(GRACE_WINDOW_DAYS)],
       );
       return rows.map((r) =>
@@ -101,6 +115,7 @@ export async function listRecycleBin(
           organizationId: null,
           organizationName: null,
           deletedAt: r.deleted_at,
+          deletedBy: r.deleted_by_name,
         }),
       );
     }
@@ -111,13 +126,16 @@ export async function listRecycleBin(
       organization_id: string;
       organization_name: string;
       deleted_at: Date;
+      deleted_by_name: string | null;
     }>(
       `SELECT w.id, w.workspace_name,
               w.organization_id,
               o.display_name AS organization_name,
-              w.deleted_at
+              w.deleted_at,
+              du.display_name AS deleted_by_name
          FROM xb_core.workspaces w
          JOIN xb_core.organizations o ON o.id = w.organization_id
+         LEFT JOIN xb_core.users du ON du.actor_id = w.deleted_by_actor_id
         WHERE w.deleted_at IS NOT NULL
           AND w.deleted_at > now() - ($1 || ' days')::interval
         ORDER BY w.deleted_at DESC`,
@@ -131,6 +149,7 @@ export async function listRecycleBin(
         organizationId: r.organization_id,
         organizationName: r.organization_name,
         deletedAt: r.deleted_at,
+        deletedBy: r.deleted_by_name,
       }),
     );
   });
@@ -200,6 +219,7 @@ interface ToEntryInput {
   organizationId: string | null;
   organizationName: string | null;
   deletedAt: Date;
+  deletedBy: string | null;
 }
 
 function toEntry(input: ToEntryInput): RecycleBinEntry {
@@ -216,6 +236,7 @@ function toEntry(input: ToEntryInput): RecycleBinEntry {
     organizationId: input.organizationId,
     organizationName: input.organizationName,
     deletedAt: input.deletedAt.toISOString(),
+    deletedBy: input.deletedBy,
     purgeAt: new Date(purgeMs).toISOString(),
     daysRemaining,
   };
