@@ -63,27 +63,11 @@ module.exports = {
     },
     extend: {
       colors: {
-        // Structural brand palette
+        // Structural brand palette. Navy is the only brand color;
+        // every emphasis surface reads through semantic tokens
+        // (accent / active / attention / construction) below so a
+        // future palette pivot touches one file.
         navy,
-        // Orange palette retained for backward-compat during the
-        // orange-removal sweep. Consumers in apps/web/src still
-        // reference `bg-orange-*` / `text-orange-*` utility classes
-        // and migrate to semantic tokens in the follow-up PR. The
-        // palette is dropped (and a CI guard added) in PR-C.
-        orange: {
-          DEFAULT: '#F0691E',
-          50: '#FFF4ED',
-          100: '#FFE4D2',
-          200: '#FFC59E',
-          300: '#FFA169',
-          400: '#FA8345',
-          500: '#F0691E',
-          600: '#D1500A',
-          700: '#A93F08',
-          800: '#7F3206',
-          900: '#582203',
-          950: '#321301',
-        },
         // Foundation tokens (chrome / typography / surfaces)
         background: '#F8FAFC',
         foreground: '#0F172A',
