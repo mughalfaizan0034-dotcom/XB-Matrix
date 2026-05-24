@@ -3,7 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/cn.js';
 
 // Brand-aligned button variants. Per project_design_system 2026-05-24
-// the platform is navy-only — the orange-forward era is retired.
+// the platform is navy-only.
 //
 //   primary      brand emphasis CTA. The default. Navy fill.
 //   secondary    softer navy variant (lighter hover). Use when the

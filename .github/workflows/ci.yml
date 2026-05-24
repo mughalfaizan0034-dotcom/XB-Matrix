@@ -44,6 +44,24 @@ jobs:
             exit 1
           fi
 
+      - name: Semantic-token guard (no raw orange/amber)
+        # Components MUST consume semantic tokens (bg-accent, text-warning,
+        # ring-accent, etc.) from packages/ui/tailwind-preset.js — NOT raw
+        # `orange-*` or `amber-*` utilities. Catches future regressions
+        # before they re-introduce the orange-emphasis era or fragment
+        # the warning vocabulary across raw amber. Scoped to component
+        # code under apps/web/src + packages/ui/src/components; the
+        # tailwind preset and tokens.ts are the only legitimate places
+        # the literal color names live.
+        run: |
+          set -e
+          MATCHES=$(grep -rnE '\b(bg|text|border|ring|from|to|via|decoration|fill|stroke|placeholder|outline|shadow|divide|caret)-(orange|amber)(-[0-9]+)?\b' apps/web/src packages/ui/src/components 2>/dev/null || true)
+          if [ -n "$MATCHES" ]; then
+            echo "::error::Raw orange-* / amber-* utility classes are banned. Use semantic tokens (bg-accent, text-warning, etc.) from tailwind-preset.js."
+            echo "$MATCHES"
+            exit 1
+          fi
+
       - name: Typecheck
         run: pnpm typecheck
 

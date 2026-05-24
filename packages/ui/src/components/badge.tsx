@@ -13,7 +13,7 @@ export type BadgeTone = 'neutral' | 'success' | 'warning' | 'danger' | 'info';
 const TONE_CLASSES: Record<BadgeTone, string> = {
   neutral: 'bg-muted text-muted-foreground',
   success: 'bg-emerald-100 text-emerald-800',
-  warning: 'bg-amber-100 text-amber-800',
+  warning: 'bg-warning-100 text-warning-800',
   danger:  'bg-red-100 text-red-800',
   info:    'bg-accent-100 text-accent-800',
 };

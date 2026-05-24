@@ -314,7 +314,7 @@ export default function SkuAliasesPage() {
       {conflicts.length > 0 ? (
         <Card>
           <CardHeader className="flex flex-row items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <AlertTriangle className="h-4 w-4 text-warning-600" />
             <CardTitle>Conflicts ({conflicts.length})</CardTitle>
           </CardHeader>
           <CardContent className="overflow-hidden p-0">

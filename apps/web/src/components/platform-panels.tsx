@@ -310,7 +310,7 @@ function StatusTile({
       : tone === 'danger'
         ? 'border-red-200 bg-red-50'
         : tone === 'warning'
-          ? 'border-amber-200 bg-amber-50'
+          ? 'border-warning-200 bg-warning-50'
           : 'border-border bg-card';
   return (
     <div className={`rounded-md border px-3 py-2 ${toneClass}`}>

@@ -156,7 +156,7 @@ function AcademySidebar({ tree, query, onQueryChange, activeSlug }: SidebarProps
                             className={cn(
                               'relative flex items-center gap-2 rounded-md px-5 py-1.5 text-sm transition-colors',
                               active
-                                ? 'bg-orange/10 font-medium text-orange before:absolute before:left-2 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-orange'
+                                ? 'bg-accent/10 font-medium text-accent before:absolute before:left-2 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-accent'
                                 : 'text-foreground/80 hover:bg-muted hover:text-foreground',
                             )}
                           >
@@ -180,7 +180,7 @@ function AcademySidebar({ tree, query, onQueryChange, activeSlug }: SidebarProps
 
       <div className="border-t border-border px-3 py-3 text-[10px] text-muted-foreground">
         <div className="inline-flex items-center gap-1.5">
-          <BookOpen className="h-3 w-3 text-orange" />
+          <BookOpen className="h-3 w-3 text-accent" />
           <span>Academy</span>
         </div>
       </div>

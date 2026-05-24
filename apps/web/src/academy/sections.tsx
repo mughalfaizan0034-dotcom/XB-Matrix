@@ -33,13 +33,12 @@ interface SectionShellProps {
 }
 
 function SectionShell({ label, children }: SectionShellProps) {
-  // Sections share the same shell: orange left-border accent, Quicksand
-  // label, content beneath. The accent ties to the brand identity
-  // (project_design_system) and gives the doc area a recognizable
-  // rhythm without competing with the body copy.
+  // Sections share the same shell: accent left-border, Quicksand label,
+  // content beneath. The accent reads through the semantic token so a
+  // future palette pivot only touches tailwind-preset.js.
   return (
-    <section className="border-l-2 border-orange/70 pl-4">
-      <h2 className="font-heading text-xs font-semibold uppercase tracking-[0.12em] text-orange">
+    <section className="border-l-2 border-accent/70 pl-4">
+      <h2 className="font-heading text-xs font-semibold uppercase tracking-[0.12em] text-accent">
         {label}
       </h2>
       <div className="mt-2 space-y-3 text-sm leading-7 text-foreground">
@@ -121,7 +120,7 @@ export function Related({ links }: { links: ReadonlyArray<RelatedLinkSpec> }) {
           <li key={l.slug}>
             <Link
               href={`/academy/${l.slug}`}
-              className="flex items-start justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm transition-colors hover:border-orange-300"
+              className="flex items-start justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm transition-colors hover:border-accent-300"
             >
               <span>
                 <span className="font-medium text-foreground">{l.title}</span>
@@ -144,8 +143,8 @@ export function Related({ links }: { links: ReadonlyArray<RelatedLinkSpec> }) {
 
 export function Note({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-sm leading-6 text-foreground">
-      <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-orange" />
+    <div className="flex gap-2 rounded-md border border-accent-200 bg-accent-50 px-3 py-2 text-sm leading-6 text-foreground">
+      <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-accent" />
       <div>{children}</div>
     </div>
   );
@@ -153,8 +152,8 @@ export function Note({ children }: { children: React.ReactNode }) {
 
 export function Warning({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-foreground">
-      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-700" />
+    <div className="flex gap-2 rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm leading-6 text-foreground">
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-warning-700" />
       <div>{children}</div>
     </div>
   );
@@ -213,7 +212,7 @@ export function ArticleLink({
   return (
     <Link
       href={`/academy/${slug}`}
-      className="inline-flex items-center gap-1 text-orange underline-offset-2 hover:underline"
+      className="inline-flex items-center gap-1 text-accent underline-offset-2 hover:underline"
     >
       <BookOpen className="h-3 w-3" />
       {children}
