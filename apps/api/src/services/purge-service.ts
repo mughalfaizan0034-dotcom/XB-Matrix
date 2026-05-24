@@ -98,73 +98,71 @@ export async function purgeEntity(
 ): Promise<PurgedEntity> {
   requirePlatformAdmin(actor);
   const table = TABLE_BY_KIND[kind];
+  // app.withConnection already runs BEGIN / COMMIT / ROLLBACK around
+  // the callback (audit-context plugin). Do NOT nest another BEGIN
+  // here: Postgres treats it as a no-op with a warning, the inner
+  // COMMIT then closes the OUTER transaction prematurely, and the
+  // SET LOCAL connection-context settings (actor id, is_internal_manager)
+  // get dropped before audit triggers fire. The 500s observed in
+  // 2026-05-25 came from exactly this layering bug.
   return app.withConnection(actor, async (client) => {
-    await client.query('BEGIN');
-    try {
-      const { rows } = await client.query<{
-        deleted_at: Date | null;
-        purged_at: Date | null;
-      }>(
-        `SELECT deleted_at, purged_at FROM ${table} WHERE id = $1 FOR UPDATE`,
-        [id],
+    const { rows } = await client.query<{
+      deleted_at: Date | null;
+      purged_at: Date | null;
+    }>(
+      `SELECT deleted_at, purged_at FROM ${table} WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    const head = rows[0];
+    if (!head) throw new NotFoundError(kind, id);
+    if (head.purged_at !== null) {
+      throw new ConflictError(
+        'This record is already purged.',
+        'purge_already_completed',
       );
-      const head = rows[0];
-      if (!head) throw new NotFoundError(kind, id);
-      if (head.purged_at !== null) {
-        throw new ConflictError(
-          'This record is already purged.',
-          'purge_already_completed',
-        );
-      }
-      if (head.deleted_at === null) {
-        throw new ConflictError(
-          'Cannot purge an active record. Soft-delete first.',
-          'purge_not_soft_deleted',
-        );
-      }
-      // For 'manual' (force-delete-now), any grace state is valid.
-      // For 'expired' (cron sweep), refuse to purge if the row hasn't
-      // actually crossed the grace window — defense in depth against
-      // a misconfigured cron that runs early.
-      if (reason === 'expired') {
-        const ageMs = Date.now() - head.deleted_at.getTime();
-        if (ageMs < GRACE_WINDOW_DAYS * 24 * 60 * 60 * 1000) {
-          throw new ConflictError(
-            'Grace window has not elapsed yet.',
-            'purge_within_grace_window',
-          );
-        }
-      }
-
-      // Walk dependents in correct order. Each kind has its own
-      // graph — keep them explicit so a future change to one branch
-      // doesn't cascade unexpected behavior to the others.
-      if (kind === 'user') {
-        await deleteUserDependents(client, id);
-      } else if (kind === 'workspace') {
-        await deleteWorkspaceDependents(client, id);
-      } else {
-        // organization
-        await deleteOrganizationDependents(client, id);
-      }
-
-      // Stamp purged_at, then DELETE in the same transaction. The
-      // stamp survives in the audit_log entry the caller emits via
-      // app.withConnection's actor context; the row itself is gone
-      // after commit.
-      const purgedAt = new Date().toISOString();
-      await client.query(
-        `UPDATE ${table} SET purged_at = $2 WHERE id = $1`,
-        [id, purgedAt],
-      );
-      await client.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
-
-      await client.query('COMMIT');
-      return { kind, id, reason, purgedAt };
-    } catch (err) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw err;
     }
+    if (head.deleted_at === null) {
+      throw new ConflictError(
+        'Cannot purge an active record. Soft-delete first.',
+        'purge_not_soft_deleted',
+      );
+    }
+    // For 'manual' (force-delete-now), any grace state is valid.
+    // For 'expired' (cron sweep), refuse to purge if the row has not
+    // actually crossed the grace window: defense in depth against
+    // a misconfigured cron that runs early.
+    if (reason === 'expired') {
+      const ageMs = Date.now() - head.deleted_at.getTime();
+      if (ageMs < GRACE_WINDOW_DAYS * 24 * 60 * 60 * 1000) {
+        throw new ConflictError(
+          'Grace window has not elapsed yet.',
+          'purge_within_grace_window',
+        );
+      }
+    }
+
+    // Walk dependents in correct order. Each kind has its own graph;
+    // keep the per-kind branches explicit so a future change to one
+    // does not cascade unexpected behavior to the others.
+    if (kind === 'user') {
+      await deleteUserDependents(client, id);
+    } else if (kind === 'workspace') {
+      await deleteWorkspaceDependents(client, id);
+    } else {
+      // organization
+      await deleteOrganizationDependents(client, id);
+    }
+
+    // Stamp purged_at, then DELETE in the same transaction. The
+    // stamp is captured by the AFTER UPDATE audit trigger before the
+    // row itself disappears on the subsequent DELETE.
+    const purgedAt = new Date().toISOString();
+    await client.query(
+      `UPDATE ${table} SET purged_at = $2 WHERE id = $1`,
+      [id, purgedAt],
+    );
+    await client.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+    return { kind, id, reason, purgedAt };
   });
 }
 
@@ -261,7 +259,30 @@ const TABLE_BY_KIND: Record<RecycleBinKind, string> = {
 type Client = import('pg').PoolClient;
 
 /**
- * Deleting a user. Identity-only entity — sessions, tokens, and
+ * Run a DELETE that may target a table not present in every env
+ * (legacy / not-yet-migrated). Swallows ONLY 'undefined_table'
+ * (Postgres error code 42P01); every other error (FK violation,
+ * permission denied, etc.) propagates so the wrapping transaction
+ * rolls back and the API returns the real failure. Without this,
+ * silent .catch() handlers hide FK constraint failures as if the
+ * table never existed, producing baffling 500s in the outer DELETE.
+ */
+async function maybeDelete(
+  client: Client,
+  sql: string,
+  params: ReadonlyArray<unknown>,
+): Promise<void> {
+  try {
+    await client.query(sql, params as unknown[]);
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === '42P01') return; // undefined_table
+    throw err;
+  }
+}
+
+/**
+ * Deleting a user. Identity-only entity; sessions, tokens, and
  * permission grants are all that point at the row. Audit references
  * are column-only (no FK) so historical actor_id values survive.
  */
@@ -271,9 +292,9 @@ async function deleteUserDependents(client: Client, userId: string): Promise<voi
   await client.query(`DELETE FROM xb_core.page_permissions      WHERE user_id = $1`, [userId]);
   await client.query(`DELETE FROM xb_core.internal_permissions  WHERE internal_user_id = $1`, [userId]);
 
-  // sessions + tokens (table existence guarded — auth_tokens may not be present in every env)
+  // sessions + tokens (auth_tokens may not exist in every env post auth-pivot)
   await client.query(`DELETE FROM xb_core.sessions     WHERE user_id = $1`, [userId]);
-  await client.query(`DELETE FROM xb_core.auth_tokens  WHERE user_id = $1`, [userId]).catch(() => undefined);
+  await maybeDelete(client, `DELETE FROM xb_core.auth_tokens WHERE user_id = $1`, [userId]);
 }
 
 /**
@@ -284,23 +305,23 @@ async function deleteUserDependents(client: Client, userId: string): Promise<voi
  */
 async function deleteWorkspaceDependents(client: Client, workspaceId: string): Promise<void> {
   // permission scopes
-  await client.query(`DELETE FROM xb_core.workspace_permissions          WHERE workspace_id = $1`, [workspaceId]);
-  await client.query(`DELETE FROM xb_core.page_permissions               WHERE workspace_id = $1`, [workspaceId]);
-  await client.query(`DELETE FROM xb_core.workspace_permission_snapshots WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
+  await client.query(`DELETE FROM xb_core.workspace_permissions WHERE workspace_id = $1`, [workspaceId]);
+  await client.query(`DELETE FROM xb_core.page_permissions      WHERE workspace_id = $1`, [workspaceId]);
+  await maybeDelete(client, `DELETE FROM xb_core.workspace_permission_snapshots WHERE workspace_id = $1`, [workspaceId]);
 
-  // canonical data — workspace-scoped rows are meaningless without
+  // canonical data; workspace-scoped rows are meaningless without
   // the workspace. Future: archive to a tombstone table instead.
-  await client.query(`DELETE FROM xb_canonical.channel_sales  WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
-  await client.query(`DELETE FROM xb_canonical.channel_ads    WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
-  await client.query(`DELETE FROM xb_canonical.sales_orders   WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
-  await client.query(`DELETE FROM xb_canonical.inventory_snapshots WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
+  await maybeDelete(client, `DELETE FROM xb_canonical.channel_sales  WHERE workspace_id = $1`, [workspaceId]);
+  await maybeDelete(client, `DELETE FROM xb_canonical.channel_ads    WHERE workspace_id = $1`, [workspaceId]);
+  await maybeDelete(client, `DELETE FROM xb_canonical.sales_orders   WHERE workspace_id = $1`, [workspaceId]);
+  await maybeDelete(client, `DELETE FROM xb_canonical.inventory_snapshots WHERE workspace_id = $1`, [workspaceId]);
 
-  // identity layer
-  await client.query(`DELETE FROM xb_core.sku_aliases         WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
-  await client.query(`DELETE FROM xb_core.unresolved_sku_rows WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
+  // identity layer (sku_aliases + unresolved_sku_rows live in xb_master, not xb_core)
+  await maybeDelete(client, `DELETE FROM xb_master.sku_aliases         WHERE workspace_id = $1`, [workspaceId]);
+  await maybeDelete(client, `DELETE FROM xb_master.unresolved_sku_rows WHERE workspace_id = $1`, [workspaceId]);
 
   // ingestion records
-  await client.query(`DELETE FROM xb_core.uploads             WHERE workspace_id = $1`, [workspaceId]).catch(() => undefined);
+  await maybeDelete(client, `DELETE FROM xb_core.uploads WHERE workspace_id = $1`, [workspaceId]);
 
   // sessions keep living, just lose their active workspace pointer
   await client.query(
@@ -337,8 +358,9 @@ async function deleteOrganizationDependents(client: Client, orgId: string): Prom
     await client.query(`DELETE FROM xb_core.users WHERE id = $1`, [u.id]);
   }
 
-  // org-scoped leftovers
-  await client.query(`DELETE FROM xb_core.sessions          WHERE organization_id = $1`, [orgId]);
-  await client.query(`DELETE FROM xb_core.idempotency_keys  WHERE organization_id = $1`, [orgId]).catch(() => undefined);
-  await client.query(`DELETE FROM xb_core.actors            WHERE organization_id = $1`, [orgId]);
+  // org-scoped leftovers. idempotency_keys may not exist in every
+  // env; the others are core schema and must exist.
+  await client.query(`DELETE FROM xb_core.sessions WHERE organization_id = $1`, [orgId]);
+  await maybeDelete(client, `DELETE FROM xb_core.idempotency_keys WHERE organization_id = $1`, [orgId]);
+  await client.query(`DELETE FROM xb_core.actors   WHERE organization_id = $1`, [orgId]);
 }
