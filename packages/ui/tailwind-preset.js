@@ -22,14 +22,35 @@ const navy = {
 //   active       — selected / live indicator (sidebar row, unread badge)
 //   attention    — "look here" highlight (new pill, fresh-row marker)
 //   construction — unfinished module accent (ComingSoonState pieces)
-//   warning      — non-blocking caution (amber, semantic — preserved)
+//   warning      — non-blocking caution (amber-mapped, status signal)
 //
-// All four brand-emphasis tokens map to navy today. A future palette
-// pivot changes the mapping here; consumers do not change.
+// The four brand-emphasis tokens (accent/active/attention/construction)
+// all map to navy today; a future palette pivot changes the mapping
+// here and consumers do not change. Warning is its own semantic and
+// keeps amber values since it's a status signal, not brand.
 const semantic = (foregroundColor = '#FFFFFF') => ({
   ...navy,
   foreground: foregroundColor,
 });
+
+// Warning scale (amber, status semantic). Lifted as a const so the
+// CI guard can ban raw `amber-*` utility usage in app code while the
+// semantic `warning` token still resolves to amber values.
+const warningScale = {
+  DEFAULT: '#D97706',
+  foreground: '#FFFFFF',
+  50: '#FFFBEB',
+  100: '#FEF3C7',
+  200: '#FDE68A',
+  300: '#FCD34D',
+  400: '#FBBF24',
+  500: '#F59E0B',
+  600: '#D97706',
+  700: '#B45309',
+  800: '#92400E',
+  900: '#78350F',
+  950: '#451A03',
+};
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
@@ -79,6 +100,9 @@ module.exports = {
         active: semantic(),
         attention: semantic(),
         construction: semantic(),
+        // Warning is its own semantic (amber). Consumers use
+        // bg-warning-100 / text-warning-700 etc. instead of raw amber.
+        warning: warningScale,
         primary: { DEFAULT: navy.DEFAULT, foreground: '#FFFFFF' },
         secondary: { DEFAULT: '#E2E8F0', foreground: '#0F172A' },
         destructive: { DEFAULT: '#DC2626', foreground: '#FFFFFF' },

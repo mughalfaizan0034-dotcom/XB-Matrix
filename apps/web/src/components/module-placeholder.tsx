@@ -57,7 +57,7 @@ export function ModulePlaceholder({ title, description }: Props) {
       ) : (
         <Card>
           <CardContent className="flex h-48 flex-col items-center justify-center gap-2 pt-6 text-center">
-            <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-medium uppercase tracking-wide text-orange-700">
+            <span className="rounded-full bg-accent-50 px-3 py-1 text-xs font-medium uppercase tracking-wide text-accent-700">
               Foundation
             </span>
             <p className="text-sm text-muted-foreground">{description}</p>

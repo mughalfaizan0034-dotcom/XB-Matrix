@@ -113,7 +113,7 @@ function ManagerBootstrap() {
 
       <Card>
         <CardContent className="flex items-start gap-3 pt-5">
-          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-warning-600" />
           <div className="text-sm text-muted-foreground">
             These tools exist to accelerate multi-user testing while the full invitation +
             email-verification + permissions-matrix lifecycle is still under construction.

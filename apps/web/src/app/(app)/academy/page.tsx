@@ -18,7 +18,7 @@ export default function AcademyIndexPage() {
   return (
     <article className="flex flex-col gap-8">
       <header className="flex flex-col gap-2">
-        <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700">
+        <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-accent-200 bg-accent-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-700">
           <BookOpen className="h-3 w-3" />
           xB Matrix Academy
         </div>
@@ -33,7 +33,7 @@ export default function AcademyIndexPage() {
       </header>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-heading text-xs font-semibold uppercase tracking-[0.12em] text-orange">
+        <h2 className="font-heading text-xs font-semibold uppercase tracking-[0.12em] text-accent">
           Start here
         </h2>
         <ul className="flex flex-col gap-2">
@@ -41,7 +41,7 @@ export default function AcademyIndexPage() {
             <li key={a.meta.slug}>
               <Link
                 href={`/academy/${a.meta.slug}`}
-                className="group flex items-start justify-between gap-3 rounded-md border border-border bg-card px-4 py-3 transition-colors hover:border-orange-300"
+                className="group flex items-start justify-between gap-3 rounded-md border border-border bg-card px-4 py-3 transition-colors hover:border-accent-300"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -54,7 +54,7 @@ export default function AcademyIndexPage() {
                     {a.meta.summary}
                   </p>
                 </div>
-                <ArrowRight className="mt-1 h-4 w-4 flex-shrink-0 text-muted-foreground group-hover:text-orange" />
+                <ArrowRight className="mt-1 h-4 w-4 flex-shrink-0 text-muted-foreground group-hover:text-accent" />
               </Link>
             </li>
           ))}
@@ -62,7 +62,7 @@ export default function AcademyIndexPage() {
       </section>
 
       <section className="flex flex-col gap-3 border-t border-border pt-6">
-        <h2 className="font-heading text-xs font-semibold uppercase tracking-[0.12em] text-orange">
+        <h2 className="font-heading text-xs font-semibold uppercase tracking-[0.12em] text-accent">
           What lives here
         </h2>
         <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
