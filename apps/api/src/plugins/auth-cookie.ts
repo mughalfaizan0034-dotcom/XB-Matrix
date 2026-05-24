@@ -63,6 +63,16 @@ export const authCookiePlugin = fp(async (app) => {
     // Fire-and-forget touch — throttled to 60s per session via Redis.
     void touchSession(app, payload.ses);
 
+    // isInternalManager is derived from BOTH the JWT bit AND the role.
+    // The role alone is authoritative for bypass — super_admin and
+    // internal_manager always carry the RLS bypass per CLAUDE.md, no
+    // matter what the JWT bit says. The bit stays for older JWTs that
+    // pre-date the field; the role fallback covers any case where the
+    // bit drifted out of sync (stale cookie, manual seeding, etc.).
+    const isInternalManager =
+      payload.mgr === true ||
+      payload.role === 'super_admin' ||
+      payload.role === 'internal_manager';
     req.actor = {
       actorId: payload.act as ActorId,
       actorKind: payload.kind,
@@ -70,7 +80,7 @@ export const authCookiePlugin = fp(async (app) => {
       organizationId: (payload.org ?? null) as OrganizationId | null,
       sessionId: payload.ses as SessionId,
       requestId: req.id as RequestId,
-      isInternalManager: payload.mgr,
+      isInternalManager,
     };
   });
 });
