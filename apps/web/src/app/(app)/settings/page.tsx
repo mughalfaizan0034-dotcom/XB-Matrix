@@ -17,6 +17,7 @@ import {
   PlatformFeatureFlagsPanel,
   PlatformIntegrationsPanel,
 } from '@/components/platform-panels';
+import { RecycleBinPanel } from '@/components/recycle-bin-panel';
 import { usePersistedStringSet } from '@/lib/use-persisted-set';
 import { usePersistedString } from '@/lib/use-persisted-string';
 import { useScrolledPast } from '@/lib/use-scrolled';
@@ -39,6 +40,7 @@ const SECTION_STORAGE_KEY = 'xb.settings.section';
 type Section =
   | 'organizations'
   | 'internal-users'
+  | 'recycle-bin'
   | 'platform-audit'
   | 'feature-flags'
   | 'diagnostics'
@@ -48,6 +50,7 @@ type Section =
 const SECTIONS: ReadonlyArray<Section> = [
   'organizations',
   'internal-users',
+  'recycle-bin',
   'platform-audit',
   'feature-flags',
   'diagnostics',
@@ -131,6 +134,16 @@ export default function SettingsPage() {
             items={[
               { key: 'organizations',      label: 'Organizations' },
               { key: 'internal-users',     label: 'Internal Users' },
+              // Recycle Bin lives between user management and audit
+              // because operationally it's a user-management surface,
+              // not a platform diagnostic. Restricted to internal
+              // managers + super_admin (backend enforces via
+              // requirePlatformAdmin; the tab is omitted entirely
+              // for internal_staff so they do not see a tab that
+              // always 403s on click).
+              ...(isManager
+                ? [{ key: 'recycle-bin' as const, label: 'Recycle Bin' }]
+                : []),
               { key: 'platform-audit',     label: 'Platform Audit' },
               { key: 'feature-flags',      label: 'Feature Flags' },
               { key: 'diagnostics',        label: 'Diagnostics' },
@@ -144,6 +157,11 @@ export default function SettingsPage() {
             <TabPanel tabKey="internal-users" className="pt-4">
               <InternalUsersPanel />
             </TabPanel>
+            {isManager ? (
+              <TabPanel tabKey="recycle-bin" className="pt-4">
+                <RecycleBinPanel />
+              </TabPanel>
+            ) : null}
             <TabPanel tabKey="platform-audit" className="pt-4">
               <PlatformAuditPanel />
             </TabPanel>
@@ -295,6 +313,7 @@ function OrganizationsSection({
 const SECTION_COPY: Record<Section, { title: string; body: string }> = {
   organizations: { title: 'Organizations', body: '' },
   'internal-users': { title: 'Internal Users', body: '' },
+  'recycle-bin': { title: 'Recycle Bin', body: '' },
   'platform-audit': {
     title: 'Platform Audit',
     body: 'Cross-organization audit access, every tenant action, status transition, and security event in one platform-wide trail.',
