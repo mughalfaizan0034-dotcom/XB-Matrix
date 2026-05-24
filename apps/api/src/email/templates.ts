@@ -16,7 +16,6 @@ interface RenderedEmail {
 const BRAND = {
   name: 'xB Matrix',
   navy: '#0F2D4B',
-  orange: '#F0691E',
   bg: '#F8FAFC',
 };
 
