@@ -10,7 +10,6 @@ import {
   ChevronRight,
   Search,
   BookOpen,
-  ArrowLeft,
 } from 'lucide-react';
 import {
   ACADEMY_CATEGORIES,
@@ -62,7 +61,7 @@ export function AcademyShell({ children }: { children: React.ReactNode }) {
         activeSlug={extractSlug(pathname)}
       />
       <main className="min-w-0 flex-1">
-        <div className="mx-auto w-full max-w-3xl px-6 py-8 lg:px-10 lg:py-10">
+        <div className="mx-auto w-full max-w-4xl px-6 py-8 lg:px-8 lg:py-10">
           {children}
         </div>
       </main>
@@ -104,13 +103,23 @@ function AcademySidebar({ tree, query, onQueryChange, activeSlug }: SidebarProps
 
   return (
     <aside className="sticky top-0 hidden h-[calc(100vh-3.5rem)] w-64 shrink-0 flex-col border-r border-border bg-card lg:flex">
-      {/* Sticky search header. Stays visible while the sidebar scrolls. */}
+      {/* Sticky search header. Stays visible while the sidebar scrolls.
+          The XB Matrix logo doubles as the "back to app" affordance:
+          clicking it routes to /dashboard. Users with no workspace
+          access get redirected back to /academy by the dashboard
+          route's existing guards, so the link is safe for every role. */}
       <div className="sticky top-0 z-10 border-b border-border bg-card px-3 py-3">
         <Link
           href="/dashboard"
-          className="mb-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          aria-label="XB Matrix home"
+          className="mb-3 inline-flex items-center gap-2 rounded-md px-1 py-1 -mx-1 transition-colors hover:bg-muted"
         >
-          <ArrowLeft className="h-3 w-3" /> Back to app
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-navy text-white">
+            <span className="font-heading text-sm font-bold">xB</span>
+          </span>
+          <span className="font-heading text-base font-semibold text-foreground">
+            Matrix
+          </span>
         </Link>
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
