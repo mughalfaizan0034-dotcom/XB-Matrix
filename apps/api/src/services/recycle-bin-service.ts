@@ -28,6 +28,13 @@ export type RecycleBinKind = 'user' | 'organization' | 'workspace';
 
 const GRACE_WINDOW_DAYS = 30;
 
+/**
+ * Why a row is forbidden from Permanently delete. Null = no protection.
+ * The UI uses this to disable the action + surface the reason; the
+ * service layer enforces the same rules via purgeEntity guards.
+ */
+export type RecycleBinProtectedReason = 'self' | 'super_admin' | null;
+
 export interface RecycleBinEntry {
   readonly id: string;
   readonly kind: RecycleBinKind;
@@ -42,6 +49,8 @@ export interface RecycleBinEntry {
   readonly purgeAt: string;
   /** Whole days remaining in the grace window, floored. 0 = today. */
   readonly daysRemaining: number;
+  /** Set when the row is protected from manual purge (self / super_admin). */
+  readonly protectedReason: RecycleBinProtectedReason;
 }
 
 export async function listRecycleBin(
@@ -57,20 +66,27 @@ export async function listRecycleBin(
     // xb_core.users. System / API-key / cron actors have no users row
     // so the join returns null and the UI renders "System".
     if (kind === 'user') {
+      // Pull actor_id + internal_user_role so the entry's
+      // protectedReason mirrors the purgeEntity guard exactly.
+      // Org-user / workspace queries return null for protectedReason
+      // today (no protected-org / system-workspace concept yet).
       const { rows } = await client.query<{
         id: string;
+        actor_id: string;
         display_name: string;
         username: string;
         organization_id: string | null;
         organization_name: string | null;
         deleted_at: Date;
         deleted_by_name: string | null;
+        internal_user_role: string | null;
       }>(
-        `SELECT u.id, u.display_name, u.username,
+        `SELECT u.id, u.actor_id, u.display_name, u.username,
                 u.organization_id,
                 o.display_name AS organization_name,
                 u.deleted_at,
-                du.display_name AS deleted_by_name
+                du.display_name AS deleted_by_name,
+                u.internal_user_role
            FROM xb_core.users u
            LEFT JOIN xb_core.organizations o ON o.id = u.organization_id
            LEFT JOIN xb_core.users du ON du.actor_id = u.deleted_by_actor_id
@@ -88,6 +104,12 @@ export async function listRecycleBin(
           organizationName: r.organization_name,
           deletedAt: r.deleted_at,
           deletedBy: r.deleted_by_name,
+          protectedReason:
+            r.actor_id === actor.actorId
+              ? 'self'
+              : r.internal_user_role === 'super_admin'
+              ? 'super_admin'
+              : null,
         }),
       );
     }
@@ -116,6 +138,7 @@ export async function listRecycleBin(
           organizationName: null,
           deletedAt: r.deleted_at,
           deletedBy: r.deleted_by_name,
+          protectedReason: null,
         }),
       );
     }
@@ -150,6 +173,7 @@ export async function listRecycleBin(
         organizationName: r.organization_name,
         deletedAt: r.deleted_at,
         deletedBy: r.deleted_by_name,
+        protectedReason: null,
       }),
     );
   });
@@ -220,6 +244,7 @@ interface ToEntryInput {
   organizationName: string | null;
   deletedAt: Date;
   deletedBy: string | null;
+  protectedReason: RecycleBinProtectedReason;
 }
 
 function toEntry(input: ToEntryInput): RecycleBinEntry {
@@ -239,5 +264,6 @@ function toEntry(input: ToEntryInput): RecycleBinEntry {
     deletedBy: input.deletedBy,
     purgeAt: new Date(purgeMs).toISOString(),
     daysRemaining,
+    protectedReason: input.protectedReason,
   };
 }

@@ -106,11 +106,19 @@ export async function purgeEntity(
   // get dropped before audit triggers fire. The 500s observed in
   // 2026-05-25 came from exactly this layering bug.
   return app.withConnection(actor, async (client) => {
+    // Pull the protection-relevant columns inline with the lock so the
+    // self-row and super_admin guards run before any dependent walk
+    // touches data. For non-user kinds the extra columns are NULL
+    // and the guards are no-ops.
+    const protectedCols =
+      kind === 'user' ? ', actor_id, internal_user_role' : '';
     const { rows } = await client.query<{
       deleted_at: Date | null;
       purged_at: Date | null;
+      actor_id?: string | null;
+      internal_user_role?: string | null;
     }>(
-      `SELECT deleted_at, purged_at FROM ${table} WHERE id = $1 FOR UPDATE`,
+      `SELECT deleted_at, purged_at${protectedCols} FROM ${table} WHERE id = $1 FOR UPDATE`,
       [id],
     );
     const head = rows[0];
@@ -126,6 +134,31 @@ export async function purgeEntity(
         'Cannot purge an active record. Soft-delete first.',
         'purge_not_soft_deleted',
       );
+    }
+
+    // Protected-entity guards. NEVER purge:
+    //   - the current actor's own user row (would orphan the request
+    //     mid-transaction and lock the user out)
+    //   - the super_admin row (exactly one exists per the auth model;
+    //     purging it leaves the platform with no full-bypass account)
+    // Defense in depth: the soft-delete code paths already refuse
+    // these (users-service.removeUser checks isSelf + super_admin),
+    // so these rows should never appear in the recycle bin. The
+    // backstop catches manual DB inserts, migration drift, and any
+    // future code path that forgets the upstream check.
+    if (kind === 'user') {
+      if (head.actor_id && head.actor_id === actor.actorId) {
+        throw new ConflictError(
+          'You cannot permanently delete your own account.',
+          'purge_self_forbidden',
+        );
+      }
+      if (head.internal_user_role === 'super_admin') {
+        throw new ConflictError(
+          'The super admin account is protected from permanent deletion.',
+          'purge_super_admin_forbidden',
+        );
+      }
     }
     // For 'manual' (force-delete-now), any grace state is valid.
     // For 'expired' (cron sweep), refuse to purge if the row has not
