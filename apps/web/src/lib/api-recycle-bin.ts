@@ -24,6 +24,7 @@ import { api } from './api-client';
  */
 
 export type RecycleBinKind = 'user' | 'organization' | 'workspace';
+export type RecycleBinProtectedReason = 'self' | 'super_admin' | null;
 
 export interface RecycleBinEntry {
   readonly id: string;
@@ -35,6 +36,8 @@ export interface RecycleBinEntry {
   readonly deletedBy: string | null;
   readonly purgeAt: string;
   readonly daysRemaining: number;
+  /** When set, Permanently delete is disabled and the row carries a Protected badge. */
+  readonly protectedReason: RecycleBinProtectedReason;
 }
 
 interface ListResponse {

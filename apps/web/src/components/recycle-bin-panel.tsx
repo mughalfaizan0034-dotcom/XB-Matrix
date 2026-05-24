@@ -155,7 +155,14 @@ function RecycleBinRow({ entry }: { entry: RecycleBinEntry }) {
         </div>
       </td>
       <td className="px-4 py-2.5">
-        <Badge tone="neutral">{TYPE_LABEL[entry.kind]}</Badge>
+        <div className="flex items-center gap-1.5">
+          <Badge tone="neutral">{TYPE_LABEL[entry.kind]}</Badge>
+          {entry.protectedReason ? (
+            <Badge tone="info" className="text-[9px] uppercase tracking-wide">
+              Protected
+            </Badge>
+          ) : null}
+        </div>
       </td>
       <td className="px-4 py-2.5 text-muted-foreground">
         {entry.deletedBy ?? 'System'}
@@ -180,7 +187,14 @@ function RecycleBinRow({ entry }: { entry: RecycleBinEntry }) {
             size="sm"
             variant="destructive"
             onClick={() => setConfirmPurge(true)}
-            disabled={busy}
+            disabled={busy || entry.protectedReason !== null}
+            title={
+              entry.protectedReason === 'self'
+                ? 'You cannot permanently delete your own account.'
+                : entry.protectedReason === 'super_admin'
+                ? 'The super admin account is protected from permanent deletion.'
+                : undefined
+            }
           >
             <Trash2 className="mr-1 h-3.5 w-3.5" /> Permanently delete
           </Button>
