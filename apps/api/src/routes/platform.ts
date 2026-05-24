@@ -11,6 +11,10 @@ import {
   restoreEntity,
   type RecycleBinKind,
 } from '../services/recycle-bin-service.js';
+import {
+  purgeEntity,
+  runGracePurgeSweep,
+} from '../services/purge-service.js';
 import { ok } from '../lib/http-helpers.js';
 
 const RecycleBinKindSchema = z.enum(['user', 'organization', 'workspace']);
@@ -74,6 +78,40 @@ export const platformRoutes: FastifyPluginAsync = async (app) => {
       kind as RecycleBinKind,
       id,
     );
+    return ok(result, req.id);
+  });
+
+  // Force-delete-now. Platform admin (super_admin + internal_manager)
+  // pulls the trigger before the 30-day grace window elapses. Same
+  // orchestrator the cron uses, just with reason='manual' which
+  // skips the grace-window precondition. The entity must still be
+  // soft-deleted first; restoring then purging takes two clicks.
+  app.post('/recycle-bin/:kind/:id/purge', async (req) => {
+    const actor = req.requireActor();
+    const { kind, id } = z
+      .object({
+        kind: RecycleBinKindSchema,
+        id: z.string().length(26),
+      })
+      .parse(req.params);
+    const result = await purgeEntity(
+      app,
+      actor,
+      kind as RecycleBinKind,
+      id,
+      'manual',
+    );
+    return ok(result, req.id);
+  });
+
+  // Daily grace-purge sweep. Triggered by an external scheduler
+  // (Cloud Scheduler hitting this endpoint) so the cron concern
+  // stays in IaC, not application code. Idempotent; safe to call
+  // off-schedule for retry or manual catch-up. Returns the full
+  // PurgeResult so the scheduler's log captures it for ops visibility.
+  app.post('/recycle-bin/sweep', async (req) => {
+    const actor = req.requireActor();
+    const result = await runGracePurgeSweep(app, actor);
     return ok(result, req.id);
   });
 };
