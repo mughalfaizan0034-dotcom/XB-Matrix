@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSession } from './session';
 
 /**
  * Notification feed client.
@@ -56,7 +57,14 @@ export interface NotificationsResult {
   readonly hasMore: boolean;
 }
 
-const NOTIFICATIONS_KEY = ['notifications'] as const;
+// Actor-scoped query key. The notification feed is per-actor; a flat
+// key risks cross-tenant leakage if a future refactor drops the
+// sign-in/out `qc.clear()` that mitigates it today. Including the
+// actor id makes the cache key naturally invalidate on actor switch
+// and prevents a stale feed from ever reaching the wrong session.
+function notificationsKey(actorId: string | null) {
+  return ['notifications', actorId] as const;
+}
 
 const EMPTY_RESULT: NotificationsResult = {
   items: [],
@@ -70,19 +78,25 @@ const EMPTY_RESULT: NotificationsResult = {
  * backend ships. Keep the same key + shape so consumers do not change.
  */
 export function useNotifications() {
+  const { data: user } = useSession();
   return useQuery({
-    queryKey: NOTIFICATIONS_KEY,
+    queryKey: notificationsKey(user?.actorId ?? null),
     queryFn: async (): Promise<NotificationsResult> => EMPTY_RESULT,
     staleTime: 30_000,
+    enabled: user !== null,
   });
 }
 
 /**
  * Mark a single notification as read. Optimistically updates the
  * cache, then re-queries on settle so the backend's read_at wins.
+ * Rolls back to the snapshot on error so a failed mutation does not
+ * leave the UI in a falsely-read state.
  */
 export function useMarkNotificationRead() {
   const qc = useQueryClient();
+  const { data: user } = useSession();
+  const key = notificationsKey(user?.actorId ?? null);
   return useMutation({
     mutationFn: async (_id: string) => {
       // No-op until backend ships. The cache update below still runs
@@ -90,10 +104,10 @@ export function useMarkNotificationRead() {
       return;
     },
     onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: NOTIFICATIONS_KEY });
-      const prev = qc.getQueryData<NotificationsResult>(NOTIFICATIONS_KEY);
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<NotificationsResult>(key);
       if (prev) {
-        qc.setQueryData<NotificationsResult>(NOTIFICATIONS_KEY, {
+        qc.setQueryData<NotificationsResult>(key, {
           ...prev,
           unreadCount: Math.max(0, prev.unreadCount - 1),
           items: prev.items.map((n) =>
@@ -103,23 +117,28 @@ export function useMarkNotificationRead() {
       }
       return { prev };
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
+    onError: (_err, _id, context) => {
+      if (context?.prev) qc.setQueryData<NotificationsResult>(key, context.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: key }),
   });
 }
 
-/** Bulk mark-all-read. Same optimistic pattern. */
+/** Bulk mark-all-read. Same optimistic pattern with rollback. */
 export function useMarkAllNotificationsRead() {
   const qc = useQueryClient();
+  const { data: user } = useSession();
+  const key = notificationsKey(user?.actorId ?? null);
   return useMutation({
     mutationFn: async () => {
       return;
     },
     onMutate: async () => {
-      await qc.cancelQueries({ queryKey: NOTIFICATIONS_KEY });
-      const prev = qc.getQueryData<NotificationsResult>(NOTIFICATIONS_KEY);
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<NotificationsResult>(key);
       if (prev) {
         const now = new Date().toISOString();
-        qc.setQueryData<NotificationsResult>(NOTIFICATIONS_KEY, {
+        qc.setQueryData<NotificationsResult>(key, {
           ...prev,
           unreadCount: 0,
           items: prev.items.map((n) => (n.readAt ? n : { ...n, readAt: now })),
@@ -127,7 +146,10 @@ export function useMarkAllNotificationsRead() {
       }
       return { prev };
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY }),
+    onError: (_err, _vars, context) => {
+      if (context?.prev) qc.setQueryData<NotificationsResult>(key, context.prev);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: key }),
   });
 }
 

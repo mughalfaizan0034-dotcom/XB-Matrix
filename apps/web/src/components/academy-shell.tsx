@@ -17,6 +17,8 @@ import {
   searchArticles,
   type AcademyCategory,
 } from '@/academy/index';
+import { useSession } from '@/lib/session';
+import { useAccessibleWorkspaces } from '@/lib/api-workspaces-switch';
 
 /**
  * Academy shell. Renders on every /academy/* route, replacing the
@@ -37,6 +39,18 @@ import {
 export function AcademyShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '';
   const [query, setQuery] = useState('');
+  const { data: user } = useSession();
+  const { data: accessible } = useAccessibleWorkspaces();
+
+  // Home-link destination depends on the actor. Internal users + org
+  // users with at least one workspace get /dashboard. Org users with
+  // zero accessible workspaces would otherwise bounce off /dashboard
+  // to /select-workspace (which then strands them with no rows), so
+  // we keep them on /academy by linking the logo back to itself.
+  // This matches the sign-in flow's no-workspace branch.
+  const isOrgUserWithNoWorkspaces =
+    user?.userKind === 'organization' && (accessible?.length ?? 0) === 0;
+  const homeHref = isOrgUserWithNoWorkspaces ? '/academy' : '/dashboard';
 
   // Build the visible-tree from the registry, optionally filtered by
   // the search query. Empty query renders every category; non-empty
@@ -59,6 +73,7 @@ export function AcademyShell({ children }: { children: React.ReactNode }) {
         query={query}
         onQueryChange={setQuery}
         activeSlug={extractSlug(pathname)}
+        homeHref={homeHref}
       />
       <main className="min-w-0 flex-1">
         <div className="mx-auto w-full max-w-4xl px-6 py-8 lg:px-8 lg:py-10">
@@ -77,9 +92,10 @@ interface SidebarProps {
   readonly query: string;
   readonly onQueryChange: (q: string) => void;
   readonly activeSlug: string | null;
+  readonly homeHref: string;
 }
 
-function AcademySidebar({ tree, query, onQueryChange, activeSlug }: SidebarProps) {
+function AcademySidebar({ tree, query, onQueryChange, activeSlug, homeHref }: SidebarProps) {
   // Categories collapsed-by-default-when-inactive. The active
   // article's parent category stays expanded. Search auto-expands
   // every category that has matches.
@@ -104,13 +120,14 @@ function AcademySidebar({ tree, query, onQueryChange, activeSlug }: SidebarProps
   return (
     <aside className="sticky top-0 hidden h-[calc(100vh-3.5rem)] w-64 shrink-0 flex-col border-r border-border bg-card lg:flex">
       {/* Sticky search header. Stays visible while the sidebar scrolls.
-          The XB Matrix logo doubles as the "back to app" affordance:
-          clicking it routes to /dashboard. Users with no workspace
-          access get redirected back to /academy by the dashboard
-          route's existing guards, so the link is safe for every role. */}
+          The XB Matrix logo doubles as the "back to app" affordance.
+          Destination is computed in the parent: org users with no
+          accessible workspaces stay on /academy (the dashboard route
+          would otherwise bounce them to /select-workspace and strand
+          them on an empty picker); everyone else gets /dashboard. */}
       <div className="sticky top-0 z-10 border-b border-border bg-card px-3 py-3">
         <Link
-          href="/dashboard"
+          href={homeHref}
           aria-label="XB Matrix home"
           className="mb-3 inline-flex items-center gap-2 rounded-md px-1 py-1 -mx-1 transition-colors hover:bg-muted"
         >
