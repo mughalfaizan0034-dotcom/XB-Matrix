@@ -1,3 +1,36 @@
+// xB Matrix navy scale, lifted to a const so semantic tokens can
+// alias the same shades without restating them. Single source of
+// truth for the brand structural color.
+const navy = {
+  DEFAULT: '#0F2D4B',
+  50: '#F1F5FA',
+  100: '#DCE6F0',
+  200: '#B6CADC',
+  300: '#86A7C2',
+  400: '#5683A6',
+  500: '#33648A',
+  600: '#1F4A6C',
+  700: '#163A56',
+  800: '#0F2D4B',
+  900: '#0A2038',
+  950: '#061425',
+};
+
+// Semantic tokens (project_design_system 2026-05-24).
+// Components MUST consume these by meaning, not by raw color name.
+//   accent       — brand emphasis (primary CTAs, headline chart series)
+//   active       — selected / live indicator (sidebar row, unread badge)
+//   attention    — "look here" highlight (new pill, fresh-row marker)
+//   construction — unfinished module accent (ComingSoonState pieces)
+//   warning      — non-blocking caution (amber, semantic — preserved)
+//
+// All four brand-emphasis tokens map to navy today. A future palette
+// pivot changes the mapping here; consumers do not change.
+const semantic = (foregroundColor = '#FFFFFF') => ({
+  ...navy,
+  foreground: foregroundColor,
+});
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: ['class'],
@@ -9,21 +42,13 @@ module.exports = {
     },
     extend: {
       colors: {
-        // xB Matrix brand
-        navy: {
-          DEFAULT: '#0F2D4B',
-          50: '#F1F5FA',
-          100: '#DCE6F0',
-          200: '#B6CADC',
-          300: '#86A7C2',
-          400: '#5683A6',
-          500: '#33648A',
-          600: '#1F4A6C',
-          700: '#163A56',
-          800: '#0F2D4B',
-          900: '#0A2038',
-          950: '#061425',
-        },
+        // Structural brand palette
+        navy,
+        // Orange palette retained for backward-compat during the
+        // orange-removal sweep. Consumers in apps/web/src still
+        // reference `bg-orange-*` / `text-orange-*` utility classes
+        // and migrate to semantic tokens in the follow-up PR. The
+        // palette is dropped (and a CI guard added) in PR-C.
         orange: {
           DEFAULT: '#F0691E',
           50: '#FFF4ED',
@@ -38,18 +63,23 @@ module.exports = {
           900: '#582203',
           950: '#321301',
         },
-        // semantic
+        // Foundation tokens (chrome / typography / surfaces)
         background: '#F8FAFC',
         foreground: '#0F172A',
         border: '#E2E8F0',
         input: '#E2E8F0',
-        // Focus ring uses brand orange for energetic interaction feedback
-        // per project_design_system orange-emphasis rule. Navy stays the
-        // structural color (sidebar logo, topbar avatar, page chrome).
-        ring: '#F0691E',
+        // Focus ring is the brand emphasis color (navy). Every
+        // focusable element inherits this without restating it.
+        ring: navy.DEFAULT,
         muted: { DEFAULT: '#F1F5F9', foreground: '#475569' },
-        accent: { DEFAULT: '#F0691E', foreground: '#FFFFFF' },
-        primary: { DEFAULT: '#0F2D4B', foreground: '#FFFFFF' },
+        // Semantic brand-emphasis tokens — all map to navy today.
+        // The orange-emphasis era is over (per user direction
+        // 2026-05-24 — felt forced against operational data).
+        accent: semantic(),
+        active: semantic(),
+        attention: semantic(),
+        construction: semantic(),
+        primary: { DEFAULT: navy.DEFAULT, foreground: '#FFFFFF' },
         secondary: { DEFAULT: '#E2E8F0', foreground: '#0F172A' },
         destructive: { DEFAULT: '#DC2626', foreground: '#FFFFFF' },
         card: { DEFAULT: '#FFFFFF', foreground: '#0F172A' },

@@ -242,7 +242,7 @@ export function ProcessingState({ phase, className }: ProcessingStateProps) {
       aria-live="polite"
     >
       <span
-        className="h-1.5 w-1.5 animate-pulse rounded-full bg-orange"
+        className="h-1.5 w-1.5 animate-pulse rounded-full bg-active"
         aria-hidden="true"
       />
       {PHASE_LABEL[phase]}
