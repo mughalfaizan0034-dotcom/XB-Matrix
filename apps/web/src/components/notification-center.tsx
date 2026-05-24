@@ -110,6 +110,7 @@ export function NotificationCenter() {
             }}
             className="fixed flex w-[22rem] flex-col overflow-hidden rounded-lg border border-border bg-card shadow-xb-lg"
             role="dialog"
+            aria-modal="false"
             aria-label="Notifications"
           >
             <NotificationPanel

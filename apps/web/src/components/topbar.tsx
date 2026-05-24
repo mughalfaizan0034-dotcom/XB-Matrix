@@ -116,7 +116,6 @@ export function Topbar() {
             trigger={
               <span
                 aria-label="Help and resources"
-                title="Help and resources"
                 className={cn(
                   'inline-flex h-9 w-9 items-center justify-center rounded-md border border-transparent text-muted-foreground transition-colors',
                   'hover:bg-muted hover:text-foreground',
@@ -135,7 +134,6 @@ export function Topbar() {
             trigger={
               <span
                 aria-label="Account menu"
-                title="Account menu"
                 className={cn(
                   'ml-1 flex items-center gap-1.5 rounded-md border border-transparent px-1.5 py-1.5 text-sm transition-colors',
                   'hover:bg-muted',

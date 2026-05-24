@@ -86,6 +86,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={active ? 'page' : undefined}
               className={cn(
                 // Brand-aligned active state per project_design_system
                 // (navy-only as of 2026-05-24): navy structural fill +
