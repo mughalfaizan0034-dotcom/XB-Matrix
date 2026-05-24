@@ -89,7 +89,7 @@ export function NotificationCenter() {
         <Bell className="h-4 w-4" />
         {unreadCount > 0 ? (
           <span
-            className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-orange px-1 text-[10px] font-semibold text-white tabular-nums ring-2 ring-white"
+            className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-active px-1 text-[10px] font-semibold text-white tabular-nums ring-2 ring-white"
             aria-hidden="true"
           >
             {unreadCount > 99 ? '99+' : unreadCount}
@@ -150,7 +150,7 @@ function NotificationPanel({
             Notifications
           </span>
           {unreadCount > 0 ? (
-            <span className="rounded-full bg-orange/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange tabular-nums">
+            <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent tabular-nums">
               {unreadCount}
             </span>
           ) : null}
@@ -247,13 +247,13 @@ function NotificationRow({
         onClick={activate}
         className={cn(
           'flex w-full items-start gap-2.5 border-b border-border px-4 py-2.5 text-left transition-colors hover:bg-muted/40',
-          unread && 'bg-orange/[0.03]',
+          unread && 'bg-accent/[0.03]',
         )}
       >
         <span
           className={cn(
             'mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full',
-            unread ? 'bg-orange' : 'bg-transparent',
+            unread ? 'bg-active' : 'bg-transparent',
           )}
           aria-hidden="true"
         />
