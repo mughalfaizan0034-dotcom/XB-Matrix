@@ -1,33 +1,38 @@
-import Link from 'next/link';
+'use client';
 
-export default function HomePage() {
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSession } from '@/lib/session';
+
+/**
+ * Landing route. The platform has no public marketing surface, the
+ * root URL is an authentication-aware redirect:
+ *
+ *   - session resolves to a user  -> /dashboard
+ *     (the dashboard route handles its own no-workspace bounce via
+ *      the existing /select-workspace guard; the academy-shell logo
+ *      handles the no-workspace case independently)
+ *   - session resolves to null    -> /sign-in
+ *
+ * While the session query is in flight we render a minimal skeleton
+ * instead of bouncing eagerly, otherwise a transient hiccup would
+ * eject a signed-in user back to the sign-in screen.
+ */
+export default function RootPage() {
+  const router = useRouter();
+  const { data: user, isLoading } = useSession();
+
+  useEffect(() => {
+    if (isLoading) return;
+    router.replace(user ? '/dashboard' : '/sign-in');
+  }, [user, isLoading, router]);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-8 p-8">
-      <div className="flex flex-col items-center gap-3 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-md bg-navy text-white">
-          <span className="font-heading text-xl font-bold">xB</span>
-        </div>
-        <h1 className="font-heading text-5xl font-semibold tracking-tight text-navy">
-          xB Matrix
-        </h1>
-        <p className="max-w-xl text-base text-muted-foreground">
-          Enterprise-grade AI-powered commerce intelligence platform.
-        </p>
-      </div>
-      <div className="flex gap-3">
-        <Link
-          href="/dashboard"
-          className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-navy-700"
-        >
-          Open dashboard
-        </Link>
-        <Link
-          href="/sign-in"
-          className="inline-flex h-10 items-center justify-center rounded-md border border-border bg-background px-6 text-sm font-medium transition-colors hover:bg-muted"
-        >
-          Sign in
-        </Link>
-      </div>
+    <main className="flex min-h-screen items-center justify-center bg-background">
+      <div
+        className="h-9 w-9 animate-pulse rounded-md bg-navy"
+        aria-label="Loading"
+      />
     </main>
   );
 }
