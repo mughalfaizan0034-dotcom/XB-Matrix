@@ -13,7 +13,7 @@ import type { ActorContext } from '@xb/types';
  * Same actor-context + RLS rules apply to every query.
  */
 
-function requirePlatformAdmin(actor: ActorContext): void {
+export function requirePlatformAdmin(actor: ActorContext): void {
   if (!actor.isInternalManager) {
     throw new ForbiddenError(
       'Platform administration is restricted to internal managers.',
