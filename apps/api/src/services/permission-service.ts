@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import { ForbiddenError } from '@xb/auth';
 import type { ActorContext, UserId } from '@xb/types';
+import { hasOrgScope } from '../lib/permissions.js';
 import { NotFoundError, SemanticError } from '../lib/errors.js';
 
 /**
@@ -40,12 +41,10 @@ export interface UserPermissionsResponse {
 }
 
 async function requirePermissionsAdmin(actor: ActorContext, targetOrgId: string): Promise<void> {
-  const allowed =
-    actor.isInternalManager ||
-    (actor.effectiveRole === 'organization_admin' &&
-      actor.organizationId !== null &&
-      (actor.organizationId as string) === targetOrgId);
-  if (!allowed) {
+  // hasOrgScope covers the full rule: super_admin + internal_manager
+  // (any org) and organization_admin (own org). internal_staff is
+  // read-only and correctly excluded.
+  if (!hasOrgScope(actor, targetOrgId)) {
     throw new ForbiddenError(
       'Cannot manage permissions for this organization.',
       'not_permissions_admin',

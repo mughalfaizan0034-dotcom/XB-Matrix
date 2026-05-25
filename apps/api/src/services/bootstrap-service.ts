@@ -2,6 +2,14 @@ import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import type { ActorContext, OrganizationId } from '@xb/types';
 import { ForbiddenError } from '@xb/auth';
+import {
+  actorKindFor,
+  internalRoleColumnFor,
+  isInternalCreatableRole,
+  orgRoleColumnFor,
+  userKindFor,
+  type CreatableRole,
+} from '../lib/permissions.js';
 import { hashPassword } from '../lib/password.js';
 import {
   ConflictError,
@@ -27,11 +35,7 @@ import {
  * cannot use this — they still go through invitations.
  */
 
-export type BootstrapRole =
-  | 'internal_manager'
-  | 'internal_staff'
-  | 'organization_admin'
-  | 'organization_user';
+export type BootstrapRole = CreatableRole;
 
 export interface BootstrapUserInput {
   readonly email: string;
@@ -53,10 +57,6 @@ export interface BootstrappedUser {
   readonly organizationId: string | null;
   readonly organizationName: string | null;
   readonly emailVerified: boolean;
-}
-
-function isInternal(role: BootstrapRole): boolean {
-  return role === 'internal_manager' || role === 'internal_staff';
 }
 
 /**
@@ -88,10 +88,10 @@ export async function bootstrapUser(
     );
   }
 
-  const orgId = isInternal(input.role)
+  const orgId = isInternalCreatableRole(input.role)
     ? null
     : input.organizationId ?? null;
-  if (!isInternal(input.role) && !orgId) {
+  if (!isInternalCreatableRole(input.role) && !orgId) {
     throw new SemanticError(
       'organization_admin and organization_user require an organizationId.',
       'invalid_input',
@@ -136,7 +136,7 @@ export async function bootstrapUser(
         [
           newActorId,
           orgId,
-          isInternal(input.role) ? 'internal_user' : 'organization_user',
+          actorKindFor(input.role),
           displayName,
           actor.actorId,
         ],
@@ -154,22 +154,14 @@ export async function bootstrapUser(
         [
           userId,
           newActorId,
-          isInternal(input.role) ? 'internal' : 'organization',
+          userKindFor(input.role),
           orgId,
           username,
           displayName,
           email,
           hash,
-          isInternal(input.role)
-            ? input.role === 'internal_manager'
-              ? 'manager'
-              : 'staff'
-            : null,
-          isInternal(input.role)
-            ? null
-            : input.role === 'organization_admin'
-              ? 'admin'
-              : 'user',
+          internalRoleColumnFor(input.role),
+          orgRoleColumnFor(input.role),
           markVerified,
           actor.actorId,
         ],

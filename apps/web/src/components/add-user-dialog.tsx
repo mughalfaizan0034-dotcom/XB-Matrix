@@ -13,7 +13,8 @@ import {
 } from '@xb/ui';
 import { useCreateUser, type CreateUserRole, type UserSummary } from '@/lib/api-users';
 import type { Organization } from '@/lib/api-orgs';
-import { describeError, useSession } from '@/lib/session';
+import { describeError } from '@/lib/session';
+import { useCan } from '@/lib/use-can';
 import { ApiError } from '@/lib/api-client';
 
 /**
@@ -48,7 +49,6 @@ const ROLE_LABEL: Record<CreateUserRole, string> = {
 };
 
 export function AddUserDialog({ open, onClose, scope = 'organization', organization = null }: Props) {
-  const { data: session } = useSession();
   const toast = useToast();
   const create = useCreateUser();
   const isInternal = scope === 'internal';
@@ -62,16 +62,14 @@ export function AddUserDialog({ open, onClose, scope = 'organization', organizat
   const [usernameSuggestions, setUsernameSuggestions] = useState<ReadonlyArray<string>>([]);
   const [created, setCreated] = useState<UserSummary | null>(null);
 
-  // Tiered create permissions (mirrors users-service.createUser):
-  //   super_admin       → can create internal_manager + internal_staff + org_*
-  //   internal_manager  → can create internal_staff + org_*
-  //   organization_admin→ can create org_* in own org only
+  // Tiered create permissions mirror the backend canCreateUserWithRole
+  // guard (apps/api/src/lib/permissions.ts). Capability checks only —
+  // inline `effectiveRole ===` would drift from the canonical rule.
   //
-  // super_admin role is LOCKED, provisioned only via DB migration.
-  const isSuperAdmin = session?.effectiveRole === 'super_admin';
-  const isInternalManager = session?.effectiveRole === 'internal_manager';
-  const canCreateManagers = isSuperAdmin;
-  const canCreateInternal = isSuperAdmin || isInternalManager;
+  // super_admin role is intentionally not offered: provisioned only via
+  // DB migration.
+  const canCreateManagers = useCan('create-internal-manager');
+  const canCreateInternal = useCan('create-internal-staff');
 
   useEffect(() => {
     if (open) {

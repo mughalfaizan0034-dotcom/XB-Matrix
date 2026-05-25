@@ -2,6 +2,22 @@ import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import type { ActorContext, OrganizationId, UserId } from '@xb/types';
 import { ForbiddenError } from '@xb/auth';
+import {
+  actorKindFor,
+  canAccessPlatformAdmin,
+  canCreateUserWithRole,
+  canDeleteActor,
+  canManageInternalUsers,
+  canReadPlatformUsers,
+  hasOrgScope,
+  internalRoleColumnFor,
+  isCreatableRole,
+  isInternalCreatableRole,
+  orgRoleColumnFor,
+  userKindFor,
+  type CreatableRole,
+  type CreateUserRole,
+} from '../lib/permissions.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import {
   ConcurrencyError,
@@ -80,9 +96,15 @@ export interface ListUsersOptions {
 
 /**
  * List users. Visibility rules:
- *   - internal_manager  → any users (org or internal), any org
- *   - internal_staff    → any users, read-only
- *   - organization_admin / organization_user → only org users in their own org
+ *   - super_admin / internal_manager / internal_staff → any users
+ *     (any org), staff is read-only at the service-action layer
+ *   - organization_admin / organization_user → only users in their
+ *     own org, forced server-side
+ *
+ * Authorization composes canReadPlatformUsers (platform-wide read)
+ * and canManageInternalUsers (default scope when listing without an
+ * orgId filter). Inline role-string checks would drift from the
+ * frontend useCan() mirror.
  */
 export async function listUsers(
   app: FastifyInstance,
@@ -91,9 +113,10 @@ export async function listUsers(
 ): Promise<ReadonlyArray<UserSummary>> {
   const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
 
-  // For org-scoped callers, force the filter to their org.
+  // Org-scoped callers cannot read across orgs; force the filter to
+  // their own org regardless of what they asked for.
   let orgFilter: string | null | undefined = opts.organizationId ?? null;
-  if (!actor.isInternalManager && actor.effectiveRole !== 'internal_staff') {
+  if (!canReadPlatformUsers(actor)) {
     if (!actor.organizationId) {
       throw new ForbiddenError('no organization context', 'no_org');
     }
@@ -112,8 +135,11 @@ export async function listUsers(
   if (orgFilter !== null && orgFilter !== undefined) {
     params.push(orgFilter);
     where.push(`organization_id = $${params.length}`);
-  } else if (orgFilter === null && actor.isInternalManager) {
-    // Manager listing without ?organizationId — show internal users only.
+  } else if (orgFilter === null && canManageInternalUsers(actor)) {
+    // Manager-tier listing without ?organizationId — default to
+    // internal users only. Read-only staff land here too via
+    // canReadPlatformUsers above, but assertPermission will already
+    // have surfaced any staff-write attempt downstream.
     where.push(`organization_id IS NULL`);
   }
   if (opts.status) {
@@ -123,11 +149,13 @@ export async function listUsers(
   const whereSql = where.length ? `AND ${where.join(' AND ')}` : '';
   params.push(limit);
 
-  const { rows } = await app.pg.query<UserRow>(
-    `${SELECT_USER} ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
-    params,
-  );
-  return rows.map(rowToSummary);
+  return app.withConnection(actor, async (client) => {
+    const { rows } = await client.query<UserRow>(
+      `${SELECT_USER} ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
+      params,
+    );
+    return rows.map(rowToSummary);
+  });
 }
 
 export async function getUser(
@@ -135,16 +163,18 @@ export async function getUser(
   actor: ActorContext,
   id: UserId,
 ): Promise<UserSummary | null> {
-  const { rows } = await app.pg.query<UserRow>(`${SELECT_USER} AND id = $1`, [id]);
-  const row = rows[0];
-  if (!row) return null;
-  // Scope check
-  if (!actor.isInternalManager && actor.effectiveRole !== 'internal_staff') {
-    if (row.organization_id !== actor.organizationId) {
-      throw new ForbiddenError('cannot view users outside your organization', 'org_scope');
+  return app.withConnection(actor, async (client) => {
+    const { rows } = await client.query<UserRow>(`${SELECT_USER} AND id = $1`, [id]);
+    const row = rows[0];
+    if (!row) return null;
+    // Org-scoped callers cannot read across orgs.
+    if (!canReadPlatformUsers(actor)) {
+      if (row.organization_id !== actor.organizationId) {
+        throw new ForbiddenError('cannot view users outside your organization', 'org_scope');
+      }
     }
-  }
-  return rowToSummary(row);
+    return rowToSummary(row);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -156,18 +186,12 @@ export async function getUser(
 // infrastructure (resend.com) is set up; at that point the email-based
 // invite flow can re-activate as an optional path.
 //
-// Authorization:
-//   - internal_manager: create any role, any org
-//   - organization_admin: create organization_admin / organization_user
-//     within their own org
-//   - others: rejected
-
-export type CreateUserRole =
-  | 'super_admin'
-  | 'internal_manager'
-  | 'internal_staff'
-  | 'organization_admin'
-  | 'organization_user';
+// Authorization composes canonical guards:
+//   - isCreatableRole          : super_admin payload rejected before
+//                                 any DB work (D-006)
+//   - canCreateUserWithRole    : who-can-make-what role-tier matrix
+//   - hasOrgScope              : org-admin scoped to own org; internal
+//                                 manager-tier any org
 
 export interface CreateUserInput {
   readonly username: string;
@@ -176,10 +200,6 @@ export interface CreateUserInput {
   readonly role: CreateUserRole;
   /** Required for organization_* roles; ignored for internal_* */
   readonly organizationId?: OrganizationId | null;
-}
-
-function isInternalRole(role: CreateUserRole): boolean {
-  return role === 'super_admin' || role === 'internal_manager' || role === 'internal_staff';
 }
 
 export async function createUser(
@@ -202,56 +222,49 @@ export async function createUser(
     throw new SemanticError('Password must be at least 12 characters.', 'weak_password');
   }
 
-  const orgId = isInternalRole(input.role) ? null : input.organizationId ?? null;
-  if (!isInternalRole(input.role) && !orgId) {
+  // Super admin is locked — provisioned only via DB migration. No API
+  // path (not even from another super admin) can create one. Operator
+  // direction 2026-05-20: there is exactly one super admin (D-006).
+  if (!isCreatableRole(input.role)) {
+    throw new ForbiddenError(
+      'Super admin is provisioned only via database migration. Not creatable from the API.',
+      'super_admin_locked',
+    );
+  }
+  const targetRole: CreatableRole = input.role;
+
+  const orgId = isInternalCreatableRole(targetRole)
+    ? null
+    : input.organizationId ?? null;
+  if (!isInternalCreatableRole(targetRole) && !orgId) {
     throw new SemanticError(
       'organization_admin and organization_user require an organizationId.',
       'invalid_input',
     );
   }
 
-  // Super admin is locked — provisioned only via DB migration. No API
-  // path (not even from another super admin) can create one. Operator
-  // direction 2026-05-20: there is exactly one super admin.
-  if (input.role === 'super_admin') {
-    throw new ForbiddenError(
-      'Super admin is provisioned only via database migration. Not creatable from the API.',
-      'super_admin_locked',
-    );
-  }
-
-  // Tiered authorization for the remaining roles:
-  //   super_admin       → can create internal_manager / internal_staff / organization_*
-  //   internal_manager  → can create internal_staff + organization_*
-  //                       (NOT another internal_manager)
-  //   organization_admin→ can create organization_* in OWN org
-  //   others            → no user creation
-  if (actor.effectiveRole === 'super_admin') {
-    // can create anyone except super_admin (gated above)
-  } else if (actor.effectiveRole === 'internal_manager') {
-    if (input.role === 'internal_manager') {
+  if (!canCreateUserWithRole(actor, targetRole)) {
+    if (targetRole === 'internal_manager') {
       throw new ForbiddenError(
         'Only super admins can create other internal managers.',
         'role_scope',
       );
     }
-  } else if (actor.effectiveRole === 'organization_admin') {
-    if (isInternalRole(input.role)) {
+    if (isInternalCreatableRole(targetRole)) {
       throw new ForbiddenError(
-        'Organization admins cannot create internal users.',
+        'You cannot create internal users.',
         'role_scope',
       );
     }
-    if (orgId !== actor.organizationId) {
-      throw new ForbiddenError(
-        'Cannot create users outside your organization.',
-        'org_scope',
-      );
-    }
-  } else {
     throw new ForbiddenError(
       'Only super admins, internal managers, and organization admins can create users.',
       'not_authorized',
+    );
+  }
+  if (orgId && !hasOrgScope(actor, orgId)) {
+    throw new ForbiddenError(
+      'Cannot create users outside your organization.',
+      'org_scope',
     );
   }
 
@@ -288,7 +301,7 @@ export async function createUser(
         [
           newActorId,
           orgId,
-          isInternalRole(input.role) ? 'internal_user' : 'organization_user',
+          actorKindFor(targetRole),
           displayName,
           actor.actorId,
         ],
@@ -306,23 +319,13 @@ export async function createUser(
         [
           userId,
           newActorId,
-          isInternalRole(input.role) ? 'internal' : 'organization',
+          userKindFor(targetRole),
           orgId,
           username,
           displayName,
           hash,
-          isInternalRole(input.role)
-            ? input.role === 'super_admin'
-              ? 'super_admin'
-              : input.role === 'internal_manager'
-                ? 'manager'
-                : 'staff'
-            : null,
-          isInternalRole(input.role)
-            ? null
-            : input.role === 'organization_admin'
-              ? 'admin'
-              : 'user',
+          internalRoleColumnFor(targetRole),
+          orgRoleColumnFor(targetRole),
           actor.actorId,
         ],
       );
@@ -383,6 +386,10 @@ export async function updateOwnProfile(
  * is the admin-resets-someone-else flow. Does NOT revoke sibling
  * sessions; a deliberate password change shouldn't kick the user out
  * on other devices.
+ *
+ * Runs inside withConnection so the audit trigger captures the actor
+ * context on the UPDATE — direct app.pg.query would leave a NULL
+ * actor in audit_log (D-009).
  */
 export async function changeOwnPassword(
   app: FastifyInstance,
@@ -393,27 +400,27 @@ export async function changeOwnPassword(
   if (newPassword.length < 12 || newPassword.length > 200) {
     throw new SemanticError('New password must be 12–200 characters.', 'weak_password');
   }
-  // Read the current hash directly — users-by-actor lookup, not RLS-
-  // sensitive since it scopes to a single row keyed by actor_id.
-  const { rows } = await app.pg.query<{ password_hash: string }>(
-    `SELECT password_hash FROM xb_core.users
-      WHERE actor_id = $1 AND deleted_at IS NULL`,
-    [actor.actorId],
-  );
-  if (rows.length === 0) throw new NotFoundError('user', actor.actorId);
-  const ok = await verifyPassword(currentPassword, rows[0]!.password_hash);
-  if (!ok) {
-    throw new SemanticError('Current password is incorrect.', 'wrong_current_password');
-  }
-  const hash = await hashPassword(newPassword);
-  await app.pg.query(
-    `UPDATE xb_core.users
-        SET password_hash = $2,
-            password_changed_at = now(),
-            updated_by_actor_id = $3
-      WHERE actor_id = $1`,
-    [actor.actorId, hash, actor.actorId],
-  );
+  await app.withConnection(actor, async (client) => {
+    const { rows } = await client.query<{ password_hash: string }>(
+      `SELECT password_hash FROM xb_core.users
+        WHERE actor_id = $1 AND deleted_at IS NULL`,
+      [actor.actorId],
+    );
+    if (rows.length === 0) throw new NotFoundError('user', actor.actorId);
+    const ok = await verifyPassword(currentPassword, rows[0]!.password_hash);
+    if (!ok) {
+      throw new SemanticError('Current password is incorrect.', 'wrong_current_password');
+    }
+    const hash = await hashPassword(newPassword);
+    await client.query(
+      `UPDATE xb_core.users
+          SET password_hash = $2,
+              password_changed_at = now(),
+              updated_by_actor_id = $3
+        WHERE actor_id = $1`,
+      [actor.actorId, hash, actor.actorId],
+    );
+  });
 }
 
 export async function adminResetPassword(
@@ -425,31 +432,36 @@ export async function adminResetPassword(
   if (newPassword.length < 12) {
     throw new SemanticError('Password must be at least 12 characters.', 'weak_password');
   }
-  const { rows: existing } = await app.pg.query<{
-    organization_id: string | null;
-    user_status: string;
-  }>(
-    `SELECT organization_id, user_status FROM xb_core.users WHERE id = $1 AND deleted_at IS NULL`,
-    [userId],
-  );
-  const cur = existing[0];
-  if (!cur) throw new NotFoundError('user', userId);
-  if (!actor.isInternalManager) {
-    if (actor.effectiveRole !== 'organization_admin') {
-      throw new ForbiddenError(
-        'Only managers and org admins can reset passwords.',
-        'not_authorized',
-      );
-    }
-    if (cur.organization_id !== actor.organizationId) {
+  const hash = await hashPassword(newPassword);
+  await app.withConnection(actor, async (client) => {
+    const { rows: existing } = await client.query<{
+      organization_id: string | null;
+      user_status: string;
+    }>(
+      `SELECT organization_id, user_status FROM xb_core.users WHERE id = $1 AND deleted_at IS NULL`,
+      [userId],
+    );
+    const cur = existing[0];
+    if (!cur) throw new NotFoundError('user', userId);
+
+    // Authorization composes hasOrgScope (for org-user targets) and
+    // canManageInternalUsers (for internal-user targets). Org_admin
+    // can only reset passwords of users in their own org; internal
+    // managers + super_admin can reset anyone.
+    if (cur.organization_id === null) {
+      if (!canManageInternalUsers(actor)) {
+        throw new ForbiddenError(
+          'Only managers can reset internal user passwords.',
+          'not_authorized',
+        );
+      }
+    } else if (!hasOrgScope(actor, cur.organization_id)) {
       throw new ForbiddenError(
         'Cannot reset passwords outside your organization.',
         'org_scope',
       );
     }
-  }
-  const hash = await hashPassword(newPassword);
-  await app.withConnection(actor, async (client) => {
+
     await client.query(
       `UPDATE xb_core.users
           SET password_hash = $1,
@@ -475,30 +487,32 @@ export async function removeUser(
   await app.withConnection(actor, async (client) => {
     const { rows } = await client.query<{
       id: string;
+      actor_id: string;
       organization_id: string | null;
       internal_user_role: 'super_admin' | 'manager' | 'staff' | null;
     }>(
-      `SELECT id, organization_id, internal_user_role
+      `SELECT id, actor_id, organization_id, internal_user_role
          FROM xb_core.users WHERE id = $1 AND deleted_at IS NULL`,
       [userId],
     );
     const cur = rows[0];
     if (!cur) throw new NotFoundError('user', userId);
 
-    if (cur.id === actor.actorId) {
-      throw new SemanticError('You cannot remove your own account.', 'self_remove');
-    }
-    // The single super admin cannot be removed via the API.
-    if (cur.internal_user_role === 'super_admin') {
-      throw new ForbiddenError('The super admin account cannot be removed.', 'super_admin_locked');
-    }
-    if (!actor.isInternalManager) {
-      if (actor.effectiveRole !== 'organization_admin') {
-        throw new ForbiddenError('Not authorized to remove users.', 'not_authorized');
-      }
-      if (cur.organization_id !== actor.organizationId) {
-        throw new ForbiddenError('Cannot remove users outside your organization.', 'org_scope');
-      }
+    // Authorization composes the canonical capability guard in one
+    // call: self-lockout, super_admin protection, manager-cannot-
+    // remove-manager, org-scope checks all live in canDeleteActor
+    // (apps/api/src/lib/permissions.ts). Inline role checks would
+    // drift; this single call mirrors the same rule applied by the
+    // recycle-bin purge orchestrator and the frontend useCan() hook.
+    if (
+      !canDeleteActor(actor, {
+        id: cur.id,
+        actorId: cur.actor_id,
+        internalRole: cur.internal_user_role,
+        organizationId: cur.organization_id,
+      })
+    ) {
+      throw new ForbiddenError('Not authorized to remove this user.', 'not_authorized');
     }
 
     await client.query(
@@ -547,10 +561,16 @@ export async function deactivateUser(
       module: 'settings',
       action: 'admin',
     });
-    if (!actor.isInternalManager && cur.organization_id !== actor.organizationId) {
+    // Same set as actor.isInternalManager (super_admin + internal_manager).
+    // Org-scoped callers cannot deactivate across orgs.
+    if (!canAccessPlatformAdmin(actor) && cur.organization_id !== actor.organizationId) {
       throw new ForbiddenError('cannot deactivate users outside your organization', 'org_scope');
     }
-    if (cur.id === actor.actorId) {
+    // Self-protection guard: compare actor IDs (actors.id), not user
+    // IDs (users.id). The two are distinct ULIDs — the previous code
+    // compared `cur.id` (user row id) to `actor.actorId` (actor row
+    // id) and would have silently allowed self-deactivation.
+    if (cur.actor_id === actor.actorId) {
       throw new SemanticError('You cannot deactivate yourself.', 'self_deactivate');
     }
     if (cur.user_status === 'deactivated') return rowToSummary(cur);
@@ -588,7 +608,7 @@ export async function reactivateUser(
       module: 'settings',
       action: 'admin',
     });
-    if (!actor.isInternalManager && cur.organization_id !== actor.organizationId) {
+    if (!canAccessPlatformAdmin(actor) && cur.organization_id !== actor.organizationId) {
       throw new ForbiddenError('cannot reactivate users outside your organization', 'org_scope');
     }
     if (cur.user_status === 'active') return rowToSummary(cur);

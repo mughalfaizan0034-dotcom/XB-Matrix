@@ -121,7 +121,7 @@ export function Sidebar() {
       <div className="border-t border-border p-3 text-xs text-muted-foreground">
         {/* Stays below V1.0.0 until the final launch. Bump on every push -
             patch most of the time, minor for bigger slices. */}
-        V0.18.7
+        V0.19.0
       </div>
     </aside>
   );

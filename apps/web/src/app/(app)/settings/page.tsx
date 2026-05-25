@@ -6,6 +6,7 @@ import { Button, PageHeader, TabPanel, Tabs } from '@xb/ui';
 import { cn } from '@xb/ui/lib/cn';
 import { FlaskConical, Plus, Search } from 'lucide-react';
 import { useActiveWorkspace, useSession } from '@/lib/session';
+import { useCan } from '@/lib/use-can';
 import { useOrganizations, type Organization } from '@/lib/api-orgs';
 import { OrganizationCard } from '@/components/organization-card';
 import { NewOrganizationDialog } from '@/components/new-organization-dialog';
@@ -73,10 +74,28 @@ export default function SettingsPage() {
     ? (sectionRaw as Section)
     : 'organizations';
   // Organization users never have access to platform-admin sections.
-  const activeSection: Section = isInternal ? section : 'organizations';
+  // Internal staff sees every read-only platform tab but NOT
+  // Internal Users / Recycle Bin (write-authority surfaces). If their
+  // persisted section happens to be one of the hidden tabs (carried
+  // over from a previous role assignment, say), normalize back to
+  // Organizations so the page does not render an empty panel.
+  const sectionAllowed = (s: Section): boolean => {
+    if (s === 'internal-users' || s === 'recycle-bin') {
+      return user?.isInternalManager === true;
+    }
+    return true;
+  };
+  const activeSection: Section = isInternal && sectionAllowed(section)
+    ? section
+    : 'organizations';
 
   const [showNewOrg, setShowNewOrg] = useState(false);
   const isManager = user?.isInternalManager ?? false;
+  // Internal Users tab is invisible to internal_staff (read-only role
+  // that cannot manage other internal users). Same gate the backend
+  // enforces via canManageInternalUsers, mirrored here so the UI does
+  // not advertise a surface that always 403s on click.
+  const canManageInternal = useCan('manage-internal-users');
 
   const [sentinelRef, scrolled] = useScrolledPast();
 
@@ -133,15 +152,16 @@ export default function SettingsPage() {
             onChange={(s) => setSection(s)}
             items={[
               { key: 'organizations',      label: 'Organizations' },
-              { key: 'internal-users',     label: 'Internal Users' },
-              // Recycle Bin lives between user management and audit
-              // because operationally it's a user-management surface,
-              // not a platform diagnostic. Restricted to internal
-              // managers + super_admin (backend enforces via
-              // requirePlatformAdmin; the tab is omitted entirely
-              // for internal_staff so they do not see a tab that
-              // always 403s on click).
-              ...(isManager
+              // Internal Users + Recycle Bin both require platform-admin
+              // (super_admin + internal_manager). internal_staff is
+              // platform-wide READ but cannot manage internal users or
+              // hard-purge entities. Hide the tab + omit the TabPanel
+              // entirely for staff so they never see a surface that
+              // always 403s.
+              ...(canManageInternal
+                ? [{ key: 'internal-users' as const, label: 'Internal Users' }]
+                : []),
+              ...(canManageInternal
                 ? [{ key: 'recycle-bin' as const, label: 'Recycle Bin' }]
                 : []),
               { key: 'platform-audit',     label: 'Platform Audit' },
@@ -154,10 +174,12 @@ export default function SettingsPage() {
             <TabPanel tabKey="organizations" className="pt-4">
               <OrganizationsSection isManager={isManager} onCreate={() => setShowNewOrg(true)} />
             </TabPanel>
-            <TabPanel tabKey="internal-users" className="pt-4">
-              <InternalUsersPanel />
-            </TabPanel>
-            {isManager ? (
+            {canManageInternal ? (
+              <TabPanel tabKey="internal-users" className="pt-4">
+                <InternalUsersPanel />
+              </TabPanel>
+            ) : null}
+            {canManageInternal ? (
               <TabPanel tabKey="recycle-bin" className="pt-4">
                 <RecycleBinPanel />
               </TabPanel>

@@ -17,6 +17,7 @@ import {
   type UserSummary,
 } from '@/lib/api-users';
 import { describeError, useSession } from '@/lib/session';
+import { canDeleteActor, useCan } from '@/lib/use-can';
 import { AddUserDialog } from '@/components/add-user-dialog';
 import { ResetPasswordDialog } from '@/components/users-list-nested';
 
@@ -51,9 +52,10 @@ export function InternalUsersPanel() {
   const [confirm, setConfirm] = useState<ConfirmAction | null>(null);
 
   // Only super_admin / internal_manager manage platform staff.
-  const canManage =
-    session?.effectiveRole === 'super_admin' || session?.effectiveRole === 'internal_manager';
-  const isSelf = (u: UserSummary) => session?.userId === u.id;
+  // Capability mirrors the backend canManageInternalUsers guard
+  // (apps/api/src/lib/permissions.ts) — never reach for effectiveRole
+  // inline here.
+  const canManage = useCan('manage-internal-users');
 
   const rows = useMemo(
     () => [...(usersQ.data ?? [])].sort((a, b) => a.displayName.localeCompare(b.displayName)),
@@ -79,15 +81,24 @@ export function InternalUsersPanel() {
         onSelect: () => setConfirm({ kind: 'reactivate', user: u }),
       });
     }
-    // The single super_admin row cannot be removed; nor can you remove
-    // yourself.
+    // Remove gating composes the canonical capability mirror in one
+    // call (apps/web/src/lib/use-can.ts canDeleteActor). The same
+    // rule is enforced server-side in users-service.removeUser;
+    // self-lockout, super_admin protection, manager-cannot-remove-
+    // manager, and org-scope all live there. Inline role checks would
+    // drift between the two layers.
     items.push({
       key: 'remove',
       label: 'Remove user',
       icon: Trash2,
       variant: 'danger',
       divider: items.length > 0,
-      disabled: isSelf(u) || u.internalRole === 'super_admin',
+      disabled: !canDeleteActor(session, {
+        id: u.id,
+        actorId: u.actorId,
+        internalRole: u.internalRole,
+        organizationId: u.organizationId,
+      }),
       onSelect: () => setConfirm({ kind: 'remove', user: u }),
     });
     return items;

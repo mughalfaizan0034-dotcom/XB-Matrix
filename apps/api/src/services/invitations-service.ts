@@ -3,6 +3,17 @@ import { randomBytes } from 'node:crypto';
 import { ulid } from 'ulid';
 import type { ActorContext, ActorId, OrganizationId } from '@xb/types';
 import { ForbiddenError } from '@xb/auth';
+import {
+  actorKindFor,
+  canCreateUserWithRole,
+  deriveIsInternalManager,
+  hasOrgScope,
+  internalRoleColumnFor,
+  isInternalCreatableRole,
+  orgRoleColumnFor,
+  userKindFor,
+  type CreatableRole,
+} from '../lib/permissions.js';
 import { hashPassword } from '../lib/password.js';
 import {
   ConflictError,
@@ -18,11 +29,7 @@ import {
 import { createSession } from './session-service.js';
 import { invitationEmail } from '../email/templates.js';
 
-export type InviteRole =
-  | 'internal_manager'
-  | 'internal_staff'
-  | 'organization_admin'
-  | 'organization_user';
+export type InviteRole = CreatableRole;
 
 export interface InviteUserInput {
   readonly email: string;
@@ -47,32 +54,35 @@ const PUBLIC_WEB_BASE =
   process.env.PUBLIC_WEB_BASE_URL ??
   'https://mughalfaizan0034-dotcom.github.io/XB-Matrix';
 
-function isInternal(role: InviteRole): boolean {
-  return role === 'internal_manager' || role === 'internal_staff';
-}
-
 function buildAcceptUrl(token: string): string {
   return `${PUBLIC_WEB_BASE}/accept-invite/?token=${encodeURIComponent(token)}`;
 }
 
 /**
- * Authorization for inviting:
- *   - internal_manager: invite anyone (any role, any org)
- *   - organization_admin: invite organization_admin or organization_user in OWN org
- *   - others: cannot invite
+ * Authorization for inviting composes the canonical capability guards:
+ *   - canCreateUserWithRole : who-can-make-what role-tier matrix
+ *   - hasOrgScope           : org-admin restricted to own org; internal
+ *                              manager-tier any org
+ *
+ * Inline role-string checks here would drift from createUser /
+ * useCan() / canDeleteActor, which all enforce the same rules.
  */
-function assertCanInvite(actor: ActorContext, role: InviteRole, organizationId: string | null): void {
-  if (actor.isInternalManager) return;
-  if (actor.effectiveRole === 'organization_admin') {
-    if (role !== 'organization_admin' && role !== 'organization_user') {
+function assertCanInvite(
+  actor: ActorContext,
+  role: InviteRole,
+  organizationId: string | null,
+): void {
+  if (!canCreateUserWithRole(actor, role)) {
+    if (isInternalCreatableRole(role)) {
       throw new ForbiddenError('only internal managers can invite internal users', 'role_scope');
     }
-    if (organizationId !== actor.organizationId) {
+    throw new ForbiddenError('only managers and org admins can invite users', 'not_authorized');
+  }
+  if (!isInternalCreatableRole(role)) {
+    if (organizationId === null || !hasOrgScope(actor, organizationId)) {
       throw new ForbiddenError('cannot invite users to another organization', 'org_scope');
     }
-    return;
   }
-  throw new ForbiddenError('only managers and org admins can invite users', 'not_authorized');
 }
 
 /**
@@ -93,8 +103,10 @@ export async function inviteUser(
   if (!email || !displayName) {
     throw new SemanticError('Email and display name are required.', 'invalid_input');
   }
-  const orgId = isInternal(input.role) ? null : input.organizationId ?? actor.organizationId ?? null;
-  if (!isInternal(input.role) && !orgId) {
+  const orgId = isInternalCreatableRole(input.role)
+    ? null
+    : input.organizationId ?? actor.organizationId ?? null;
+  if (!isInternalCreatableRole(input.role) && !orgId) {
     throw new SemanticError(
       'organization_admin and organization_user invites require an organizationId.',
       'invalid_input',
@@ -139,7 +151,7 @@ export async function inviteUser(
         [
           actorId,
           orgId,
-          isInternal(input.role) ? 'internal_user' : 'organization_user',
+          actorKindFor(input.role),
           displayName,
           actor.actorId,
         ],
@@ -155,22 +167,14 @@ export async function inviteUser(
         [
           userId,
           actorId,
-          isInternal(input.role) ? 'internal' : 'organization',
+          userKindFor(input.role),
           orgId,
           username,
           displayName,
           email,
           sentinel,
-          isInternal(input.role)
-            ? input.role === 'internal_manager'
-              ? 'manager'
-              : 'staff'
-            : null,
-          isInternal(input.role)
-            ? null
-            : input.role === 'organization_admin'
-              ? 'admin'
-              : 'user',
+          internalRoleColumnFor(input.role),
+          orgRoleColumnFor(input.role),
           actor.actorId,
         ],
       );
@@ -341,7 +345,11 @@ export async function acceptInvitation(
         : user.organization_user_role === 'admin'
           ? 'organization_admin'
           : 'organization_user';
-    const isInternalManager = effectiveRole === 'internal_manager';
+    // Accept-invite never elevates to super_admin (no creation path
+    // produces one), so deriveIsInternalManager returns false for the
+    // staff / org_* tiers — same outcome as the prior literal compare,
+    // but role-string knowledge stays inside the canonical module.
+    const isInternalManager = deriveIsInternalManager(effectiveRole);
     const jwt = await app.jwt.sign({
       sub: user.id,
       ses: session.id,

@@ -4,6 +4,7 @@ import { ulid } from 'ulid';
 import type { ActorContext, OrganizationId } from '@xb/types';
 import { isValidSlug, toSlug } from '@xb/types/slug';
 import { ForbiddenError } from '@xb/auth';
+import { canViewOrganizations } from '../lib/permissions.js';
 import { ConflictError, ConcurrencyError, NotFoundError, SemanticError } from '../lib/errors.js';
 
 export interface Organization {
@@ -122,7 +123,7 @@ export async function listOrganizations(
 
   // Org-scoped users see only their own org. No pagination needed — at
   // most one row — but we keep the same shape so the route is uniform.
-  if (!actor.isInternalManager && actor.effectiveRole !== 'internal_staff') {
+  if (!canViewOrganizations(actor)) {
     if (!actor.organizationId) return { items: [], total: 0, hasMore: false };
     const items = await app.withConnection(actor, async (client) =>
       listOrgsInTx(client, actor.organizationId!),
@@ -184,7 +185,7 @@ export async function getOrganization(
     action: 'view',
   });
 
-  if (actor.isInternalManager || actor.effectiveRole === 'internal_staff') {
+  if (canViewOrganizations(actor)) {
     const { rows } = await app.pg.query<OrgRow>(`${SELECT_ORG} AND id = $1`, [id]);
     return rows[0] ? rowToOrganization(rows[0]) : null;
   }

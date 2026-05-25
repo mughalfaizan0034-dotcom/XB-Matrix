@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import type { ActorContext, OrganizationId, WorkspaceId } from '@xb/types';
 import { ForbiddenError } from '@xb/auth';
+import { hasOrgScope, requiresExplicitWorkspaceGrant } from '../lib/permissions.js';
 import { ConcurrencyError, ConflictError, NotFoundError, SemanticError } from '../lib/errors.js';
 
 export interface Workspace {
@@ -133,7 +134,7 @@ export async function listAccessibleWorkspaces(
   // admins still see every workspace in their own org (they manage
   // permissions; otherwise they'd have to grant themselves access to
   // every workspace). Internal managers bypass via RLS.
-  const isOrgUser = actor.effectiveRole === 'organization_user';
+  const isOrgUser = requiresExplicitWorkspaceGrant(actor);
 
   const params: unknown[] = [];
   let orgFilter = '';
@@ -300,7 +301,7 @@ export async function loadActiveWorkspaceForSession(
   // are revoked the session's pinned workspace surfaces as null on the
   // next /me, so the user is bounced to the picker (which then shows
   // nothing). Internal/managers bypass; org_admin keeps implicit access.
-  const isOrgUser = actor.effectiveRole === 'organization_user';
+  const isOrgUser = requiresExplicitWorkspaceGrant(actor);
   const params: unknown[] = [sessionId];
   let permsFilter = '';
   if (isOrgUser) {
@@ -398,14 +399,11 @@ async function resolveWorkspaceAccessLevel(
   actor: ActorContext,
   workspace: { id: string; organization_id: string },
 ): Promise<WorkspaceAccessLevel | null> {
-  if (actor.isInternalManager) return 'edit';
-  if (
-    actor.effectiveRole === 'organization_admin' &&
-    actor.organizationId !== null &&
-    (actor.organizationId as string) === workspace.organization_id
-  ) {
-    return 'edit';
-  }
+  // super_admin + internal_manager (any org) and organization_admin
+  // (own org) get implicit edit access. internal_staff falls through
+  // to the workspace_permissions lookup so the platform-wide read
+  // boundary still applies.
+  if (hasOrgScope(actor, workspace.organization_id)) return 'edit';
   const { rows } = await client.query<{ access_level: string }>(
     `SELECT wp.access_level
        FROM xb_core.workspace_permissions wp

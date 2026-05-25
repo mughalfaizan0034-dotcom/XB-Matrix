@@ -8,6 +8,7 @@ import type {
   UserId,
 } from '@xb/types';
 import { UnauthenticatedError } from '@xb/auth';
+import { deriveIsInternalManager } from '../lib/permissions.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
 import { NotFoundError, SemanticError } from '../lib/errors.js';
 import {
@@ -121,8 +122,9 @@ function toAuthenticatedUser(row: UserRow): AuthenticatedUser {
   // Both super_admin AND internal_manager get the RLS/resolver bypass
   // flag. The role-tier distinction matters in createUser authorization
   // (super_admin can create managers; manager cannot), not in bypass.
-  const isInternalManager =
-    effectiveRole === 'super_admin' || effectiveRole === 'internal_manager';
+  // Derivation lives in lib/permissions.ts so role-string knowledge
+  // stays in one place (D-005).
+  const isInternalManager = deriveIsInternalManager(effectiveRole);
   return {
     userId: row.id as UserId,
     actorId: row.actor_id as ActorId,
