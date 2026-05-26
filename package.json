@@ -23,11 +23,11 @@
     "prepare": "echo 'monorepo root ready'"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
+    "@types/node": "^25.9.1",
     "prettier": "^3.3.3",
     "prettier-plugin-tailwindcss": "^0.6.6",
     "rimraf": "^6.0.1",
     "turbo": "^2.3.0",
-    "typescript": "^5.5.4"
+    "typescript": "^6.0.3"
   }
 }
